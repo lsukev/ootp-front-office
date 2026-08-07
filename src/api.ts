@@ -90,10 +90,32 @@ export const getSearchLocations = () =>
   json<{ platform: string; locations: SearchLocation[] }>('/api/search-locations');
 export const resolveFolder = (path: string) => apiPost<ResolveResult>('/api/resolve-folder', { path });
 
+/** Mirrors UpdateState in electron/updater.ts. */
+export type UpdateState =
+  | { status: 'unsupported'; version: string; reason: string }
+  | { status: 'idle'; version: string }
+  | { status: 'checking'; version: string }
+  | { status: 'current'; version: string; checkedAt: string }
+  | { status: 'available'; version: string; newVersion: string; notes: string | null; releaseUrl: string }
+  | { status: 'downloading'; version: string; newVersion: string; percent: number }
+  | { status: 'ready'; version: string; newVersion: string }
+  | { status: 'error'; version: string; message: string };
+
+export interface UpdateBridge {
+  state: () => Promise<UpdateState>;
+  check: () => Promise<UpdateState>;
+  download: () => Promise<UpdateState>;
+  install: () => Promise<void>;
+  openReleases: () => Promise<void>;
+  onState: (handler: (state: UpdateState) => void) => () => void;
+}
+
 export interface DesktopBridge {
   isDesktop: true;
   selectFolder: (defaultPath?: string) => Promise<string | null>;
   openPath: (target: string) => Promise<void>;
+  /** Absent in builds packaged before auto-update shipped. */
+  update?: UpdateBridge;
 }
 /** Present only inside the desktop app; the browser build falls back to typing a path. */
 export const desktopBridge = (): DesktopBridge | null =>

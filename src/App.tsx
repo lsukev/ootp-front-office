@@ -27,6 +27,7 @@ import { applyTeamTheme } from './theme';
 import { TeamLogo } from './TeamLogo';
 import { FolderPicker } from './FolderPicker';
 import { Settings, type AppSettings } from './pages/Settings';
+import { UpdateBadge } from './Updater';
 import { apiGet } from './api';
 
 type Page =
@@ -228,6 +229,7 @@ export function App() {
           <button onClick={hardRefresh} disabled={busy || !status.configured}>
             {busy ? 'Working…' : '↻ Refresh'}
           </button>
+          <UpdateBadge onOpenSettings={() => setPage('settings')} />
           {status.hasData && (
             <button
               className={`gear ${page === 'settings' ? 'active' : ''}`}

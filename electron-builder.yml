@@ -6,6 +6,14 @@ directories:
   output: release
   buildResources: build
 
+# Artifact names must not contain spaces. The release job uploads with
+# `gh release upload`, and GitHub rewrites spaces to dots in asset names —
+# so "OOTP Front Office-0.2.0.zip" becomes "OOTP.Front.Office-0.2.0.zip" on
+# the release while latest-mac.yml still points at the original name, and
+# every update download 404s. Naming from ${name} keeps the local file, the
+# published asset, and the manifest entry byte-identical.
+artifactName: ${name}-${version}-${arch}.${ext}
+
 files:
   - build/main.cjs
   - build/main.cjs.map
@@ -25,7 +33,12 @@ asarUnpack:
 mac:
   category: public.app-category.sports
   target:
+    # dmg is what people download by hand; zip is what Squirrel.Mac needs to
+    # apply an in-place update — it cannot install from a dmg. Both must be
+    # published or auto-update silently fails on macOS.
     - target: dmg
+      arch: [arm64, x64]
+    - target: zip
       arch: [arm64, x64]
   # Signing and notarization are picked up from environment variables in CI
   # (CSC_LINK / CSC_KEY_PASSWORD, APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /

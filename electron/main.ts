@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
 import path from 'node:path';
+import { initUpdater } from './updater.js';
 
 /**
  * Desktop shell. The Express server runs inside this process on a random free
@@ -129,6 +130,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     buildMenu();
+    initUpdater();
     void createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();

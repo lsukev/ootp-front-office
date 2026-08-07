@@ -911,3 +911,49 @@ table.mini th, table.mini td { padding: 3px 8px; font-size: 12.5px; }
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Auto-update */
+.update-badge {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.update-badge.ready {
+  background: var(--accent);
+  color: var(--plate);
+}
+button.cta {
+  background: var(--accent);
+  color: var(--plate);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.release-notes {
+  margin-top: 10px;
+}
+.release-notes summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+.release-notes pre {
+  white-space: pre-wrap;
+  font: inherit;
+  color: var(--muted);
+  margin: 8px 0 0;
+  max-height: 220px;
+  overflow-y: auto;
+}

@@ -48,12 +48,18 @@ jobs:
           # Fails the build if Gatekeeper would reject it on a user's machine
           spctl --assess --type execute --verbose=4 "$APP"
 
+      # latest-mac.yml is the update feed electron-updater reads; the zips are
+      # what Squirrel.Mac installs from (it cannot install from a dmg); the
+      # blockmaps let it download only the changed chunks. Omitting any of the
+      # three leaves auto-update broken while the release still looks complete.
       - uses: actions/upload-artifact@v4
         with:
           name: macos
           path: |
             release/*.dmg
             release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
           if-no-files-found: error
 
   windows:
@@ -80,7 +86,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
           if-no-files-found: error
 
   # Publishing happens once, after both builds, so the two jobs can't race each
@@ -99,11 +108,35 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" \) -print
+          # -name patterns are quoted so the shell never glob-expands them
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.zip' \
+            -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-mac.yml' \) \
+            -print0 > assets.zero
+          tr '\0' '\n' < assets.zero
+
+          # Asset names must survive upload byte-for-byte: electron-updater
+          # fetches exactly the filenames listed in latest*.yml, and GitHub
+          # rewrites spaces to dots. electron-builder's artifactName keeps them
+          # space-free, so fail loudly here rather than shipping dead updates.
+          if tr '\0' '\n' < assets.zero | grep -q ' '; then
+            echo "::error::Release asset names contain spaces; update manifests would 404"
+            exit 1
+          fi
+
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             || echo "Release already exists — uploading to it"
-          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" \) \
-            -exec gh release upload "${GITHUB_REF_NAME}" {} --repo "${GITHUB_REPOSITORY}" --clobber \;
+
+          xargs -0 -I{} gh release upload "${GITHUB_REF_NAME}" {} \
+            --repo "${GITHUB_REPOSITORY}" --clobber < assets.zero
+
+          # The manifests must be present or clients never learn a release exists
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            --json assets -q '.assets[].name' > published.txt
+          cat published.txt
+          for f in latest-mac.yml latest.yml; do
+            grep -qx "$f" published.txt \
+              || { echo "::error::$f missing from the release — auto-update will not work"; exit 1; }
+          done

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, desktopBridge, triggerImport, type Org, type SaveInfo, type Status } from '../api';
 import { FolderPicker } from '../FolderPicker';
+import { UpdatePanel } from '../Updater';
 
 interface ApiKeyStatus {
   configured: boolean;
@@ -232,6 +233,8 @@ export function Settings({
           </select>
         </div>
       </section>
+
+      <UpdatePanel />
     </div>
   );
 }

@@ -96,6 +96,23 @@ terminal, no npm. Then skip to [Export your league from OOTP](#3-export-your-lea
 Everything the app writes — the imported database, your watchlist, AI caches — lives in
 your OS user-data folder, not inside the app. **Help → Open Data Folder** takes you there.
 
+### Updates
+
+The desktop app checks GitHub for a new release each time it starts and shows an
+**↑ Update** button in the header when one is available. Nothing downloads until you ask
+it to, and nothing installs until you restart — the app will not swap itself out from
+under you mid-session. **Settings → Updates** has the same controls plus a **Check now**
+button and the release notes.
+
+Your imported database, watchlist, and settings live outside the app bundle, so updating
+never touches them.
+
+> Updating from **v0.2.0 or earlier requires one manual download**, because those builds
+> shipped before auto-update existed. From v0.3.0 onward it is automatic.
+
+On Windows the update runs the same unsigned installer as a fresh download, so
+SmartScreen will prompt again until the app is code-signed.
+
 The rest of this section is for running from source.
 
 ## Requirements
@@ -322,9 +339,14 @@ server/           Express API + import pipeline
   league.ts       Standings + league-wide player search
   storylines.ts   AI storylines
   ai.ts           AI briefing + trade evaluation
+electron/
+  main.ts         Desktop shell + IPC
+  updater.ts      GitHub auto-update (consent-first)
+  preload.ts      The renderer's only bridge to the shell
 src/
   pages/          One file per page
   playerModal.tsx Player dossier + tooltips
+  Updater.tsx     Update panel + header badge
 data/             Created at runtime (gitignored)
 ```
 
