@@ -77,7 +77,10 @@ export function initUpdater(): void {
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.logger = null;
+  // Silent by default. Launch with OOTP_FO_UPDATER_LOG=1 to get electron-updater's
+  // own trace on stdout — the only practical way to diagnose "it says no update
+  // available" reports, since the feed lives on GitHub rather than in the app.
+  autoUpdater.logger = process.env.OOTP_FO_UPDATER_LOG === '1' ? console : null;
 
   state = { status: 'idle', version: currentVersion() };
 
