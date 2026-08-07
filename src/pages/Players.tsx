@@ -164,7 +164,20 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
                 </tr>
               ))}
               {data.players.length === 0 && (
-                <tr><td colSpan={5 + columns.length} className="muted">No players match those filters.</td></tr>
+                <tr>
+                  <td colSpan={5 + columns.length} className="muted">
+                    No {group === 'batting' ? 'batters' : 'pitchers'} match those filters.
+                    {debounced.trim().length >= 2 && (
+                      <>
+                        {' '}Batters and pitchers are searched separately — try the{' '}
+                        <button className="link-button" onClick={() => { setGroup(group === 'batting' ? 'pitching' : 'batting'); setOffset(0); }}>
+                          {group === 'batting' ? 'Pitchers' : 'Batters'}
+                        </button>{' '}
+                        tab.
+                      </>
+                    )}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
