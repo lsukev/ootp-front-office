@@ -16,8 +16,18 @@ OOTP CSV export  →  importer (SQLite)  →  local server  →  browser UI
 ## What it does
 
 Pick your organization in the header and every page shows that club's world — the MLB
-team and every affiliate down to the DSL. The whole UI themes itself with your team's
-colors. Switch orgs any time to scout another system.
+team and every affiliate down to the DSL. Switch orgs any time to scout another system.
+
+**The app wears your team's colors.** Selecting a club re-themes the entire interface —
+backgrounds, panels, borders, and accent — from that team's actual colors in your save,
+and shows its logo. Team logos come from your own OOTP installation
+(`<save>.lg/news/html/images/team_logos`), so they work offline and are correct for
+custom and fictional leagues that have no logo anywhere on the internet.
+
+Every generated palette is checked against WCAG AA contrast so the interface stays
+readable no matter how bright or washed-out a club's colors are — a pure-white primary
+(the White Sox) falls back to a neutral slate, and a low-luminance accent gets brightened
+until it's legible. Run `npm run check:theme` to verify all 30 clubs.
 
 The navigation is grouped by front-office function:
 

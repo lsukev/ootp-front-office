@@ -8,7 +8,8 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "npm run build && NODE_ENV=production tsx server/index.ts"
+    "start": "npm run build && NODE_ENV=production tsx server/index.ts",
+    "check:theme": "tsx scripts/check-theme-contrast.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

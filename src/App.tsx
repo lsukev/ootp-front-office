@@ -21,6 +21,8 @@ import { Watchlist } from './pages/Watchlist';
 import { Draft } from './pages/Draft';
 import { PlayerModal } from './playerModal';
 import { Nav, type NavEntry } from './Nav';
+import { applyTeamTheme } from './theme';
+import { TeamLogo } from './TeamLogo';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
@@ -98,11 +100,9 @@ export function App() {
 
   const org = orgs.find((o) => o.team_id === orgId) ?? null;
 
-  // Theme the app with the selected organization's colors
+  // Re-theme the whole app around the selected organization's colors
   useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--team', org?.colors.bg || '#1a4a2e');
-    root.style.setProperty('--team-fg', org?.colors.fg || '#f5ead6');
+    applyTeamTheme(org?.colors ?? null);
   }, [org]);
 
   const waitForImport = useCallback(async () => {
@@ -162,6 +162,7 @@ export function App() {
 
         {status.hasData && orgs.length > 0 && (
           <div className="org-plate" title="Your organization view">
+            {orgId !== null && <TeamLogo teamId={orgId} className="org-logo" />}
             <select
               className="org-select"
               value={orgId ?? ''}

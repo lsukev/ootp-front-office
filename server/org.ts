@@ -17,18 +17,20 @@ orgRoutes.get('/orgs', (_req, res) => {
   const rows = db
     .prepare(
       `SELECT team_id, name, nickname, human_team,
-              background_color_id AS bg, text_color_id AS fg
+              background_color_id AS bg, text_color_id AS fg,
+              jersey_secondary_color_id AS secondary, ballcaps_main_color_id AS cap
        FROM teams WHERE level = 1 AND allstar_team = 0 ORDER BY name`
     )
     .all() as Array<{
-    team_id: number; name: string; nickname: string; human_team: number; bg: string | null; fg: string | null;
+    team_id: number; name: string; nickname: string; human_team: number;
+    bg: string | null; fg: string | null; secondary: string | null; cap: string | null;
   }>;
   res.json(
     rows.map((r) => ({
       team_id: r.team_id,
       label: r.name === r.nickname ? r.name : `${r.name} ${r.nickname}`,
       isHuman: r.human_team === 1,
-      colors: { bg: r.bg, fg: r.fg },
+      colors: { bg: r.bg, fg: r.fg, secondary: r.secondary, cap: r.cap },
     }))
   );
 });

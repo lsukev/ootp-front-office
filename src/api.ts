@@ -80,7 +80,7 @@ export interface Org {
   team_id: number;
   label: string;
   isHuman: boolean;
-  colors: { bg: string | null; fg: string | null };
+  colors: { bg: string | null; fg: string | null; secondary: string | null; cap: string | null };
 }
 
 export interface Storyline {
