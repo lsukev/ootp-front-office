@@ -19,6 +19,8 @@ import { Leaderboards } from './pages/Leaderboards';
 import { Staff } from './pages/Staff';
 import { Watchlist } from './pages/Watchlist';
 import { Draft } from './pages/Draft';
+import { Players } from './pages/Players';
+import { Standings } from './pages/Standings';
 import { PlayerModal } from './playerModal';
 import { Nav, type NavEntry } from './Nav';
 import { applyTeamTheme } from './theme';
@@ -30,7 +32,7 @@ import { apiGet } from './api';
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
-  | 'staff' | 'watchlist' | 'settings';
+  | 'staff' | 'watchlist' | 'players' | 'standings' | 'settings';
 
 /**
  * Grouped by front-office function: what you do daily (Dashboard, Storylines),
@@ -70,6 +72,8 @@ const NAV: Array<NavEntry<Page>> = [
   {
     kind: 'group', label: 'League', icon: '📊',
     items: [
+      { page: 'standings', label: 'Standings', hint: 'Every division, run differential' },
+      { page: 'players', label: 'Player Search', hint: 'Search anyone in the league' },
       { page: 'leaders', label: 'Leaderboards', hint: 'League top tens' },
       { page: 'watchlist', label: 'My Watchlist', hint: 'Starred players and notes' },
     ],
@@ -260,6 +264,8 @@ export function App() {
                 {page === 'trades' && <TradeCenter orgId={orgId} orgLabel={org.label} />}
                 {page === 'freeagents' && <FreeAgents orgId={orgId} />}
                 {page === 'lineup' && <Lineup teamId={orgId} />}
+                {page === 'standings' && <Standings orgId={orgId} />}
+                {page === 'players' && <Players orgs={orgs} orgId={orgId} />}
                 {page === 'leaders' && <Leaderboards orgId={orgId} />}
                 {page === 'staff' && <Staff orgId={orgId} />}
                 {page === 'watchlist' && <Watchlist />}

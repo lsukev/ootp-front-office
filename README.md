@@ -69,6 +69,8 @@ actual save data.
 
 | Page | What you get |
 |------|--------------|
+| Standings | Every division with run differential and current streaks |
+| Player Search | Search anyone in the league by name; filter by level, org, or free agency |
 | Leaderboards | League top-10s with your players highlighted |
 | My Watchlist | Star any player and keep your own scouting notes |
 
@@ -317,6 +319,7 @@ server/           Express API + import pipeline
   contracts.ts    Contract recommendations
   trade.ts        Trade analyzer + fit finder
   rosterops.ts    40-man, leaderboards, staff, draft
+  league.ts       Standings + league-wide player search
   storylines.ts   AI storylines
   ai.ts           AI briefing + trade evaluation
 src/

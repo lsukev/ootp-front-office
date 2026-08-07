@@ -1,6 +1,25 @@
 import { useEffect, useState } from 'react';
 import { apiGet, getLineup, type LineupResponse } from '../api';
-import { PlayerLink } from '../playerModal';
+import { PlayerLink, Tip } from '../playerModal';
+import { findStat, plusColor as statPlusColor } from '../stats';
+
+/** OOTP's own internal rating, which is what the ordering is actually built on. */
+const TIP_OFF_VALUE =
+  "OOTP's own offensive value for this batter against this hand of pitching, read straight from " +
+  "the save (players_value.offensive_value_vsr / _vsl). It is a projection built from the hitter's " +
+  'current ratings — contact, power, eye, gap — on an arbitrary scale where only the ranking ' +
+  'matters, not the number itself. The batting order is sorted by it, and switching between ' +
+  'vs RHP and vs LHP re-ranks everyone on their platoon split.\n\n' +
+  'It is NOT this season\'s production. A veteran whose ratings have slipped can rank low while ' +
+  'hitting well, and a highly rated young player can rank high during a slump — so read it ' +
+  'alongside the OPS+ and wRC+ columns, which are what actually happened.';
+const TIP_OPS_PLUS = findStat('batting', 'opsPlus')?.desc ?? '';
+const TIP_WRC_PLUS = findStat('batting', 'wrcPlus')?.desc ?? '';
+
+const plusColor = (value: number | null): string | undefined => {
+  const def = findStat('batting', 'opsPlus');
+  return def ? statPlusColor(def, value) : undefined;
+};
 
 interface NextGame {
   date: string;
@@ -97,7 +116,14 @@ export function Lineup({ teamId }: { teamId: number }) {
                 <th>Player</th>
                 <th>Pos</th>
                 <th>B</th>
-                <th>Off value</th>
+                <th>
+                  <Tip label="Off Value" tip={TIP_OFF_VALUE} />
+                </th>
+                <th>PA</th>
+                <th>OPS</th>
+                <th><Tip label="OPS+" tip={TIP_OPS_PLUS} /></th>
+                <th><Tip label="wRC+" tip={TIP_WRC_PLUS} /></th>
+                <th>WAR</th>
                 <th>Why here</th>
               </tr>
             </thead>
@@ -109,6 +135,11 @@ export function Lineup({ teamId }: { teamId: number }) {
                   <td>{l.positionName}</td>
                   <td>{l.bats}</td>
                   <td className="num">{Math.round(l.off)}</td>
+                  <td className="num">{l.pa ?? ''}</td>
+                  <td className="num">{l.ops !== null ? l.ops.toFixed(3).replace(/^0\./, '.') : ''}</td>
+                  <td className="num" style={{ color: plusColor(l.opsPlus) }}>{l.opsPlus ?? ''}</td>
+                  <td className="num" style={{ color: plusColor(l.wrcPlus) }}>{l.wrcPlus ?? ''}</td>
+                  <td className="num">{l.war !== null ? l.war.toFixed(1) : ''}</td>
                   <td className="reasons">{l.why}</td>
                 </tr>
               ))}

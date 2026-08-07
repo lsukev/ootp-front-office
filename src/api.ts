@@ -273,6 +273,11 @@ export interface LineupSlot {
   bats: string;
   off: number;
   why: string;
+  pa: number | null;
+  ops: number | null;
+  opsPlus: number | null;
+  wrcPlus: number | null;
+  war: number | null;
 }
 
 export interface LineupResponse {

@@ -20,10 +20,12 @@ import { tradeRoutes } from './trade.js';
 import { aiRoutes } from './ai.js';
 import { logoRoutes } from './logos.js';
 import { settingsRoutes } from './settings.js';
+import { leagueRoutes } from './league.js';
 
 export const api = Router();
 api.use(logoRoutes);
 api.use(settingsRoutes);
+api.use(leagueRoutes);
 api.use(playerRoutes);
 api.use(historyRoutes);
 api.use(dashboardRoutes);

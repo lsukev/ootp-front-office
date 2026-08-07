@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { valuesByPlayer } from './valuation.js';
+import { computeBatting, leagueBaseline } from './stats.js';
 
 export const lineupRoutes = Router();
 
@@ -134,6 +135,30 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     return res.status(400).json({ error: 'Not enough position players on this roster to fill a lineup' });
   }
 
+  // Season rate stats for the chosen nine, so the card can be judged on
+  // production as well as OOTP's internal offensive value
+  const teamRow = db.prepare(`SELECT league_id, level FROM teams WHERE team_id = ?`).get(teamId) as
+    | { league_id: number; level: number }
+    | undefined;
+  const statYear = tableExists('players_career_batting_stats')
+    ? (db.prepare(`SELECT MAX(year) AS y FROM players_career_batting_stats`).get() as { y: number }).y
+    : null;
+  const statsById = new Map<number, Record<string, number | null>>();
+  if (teamRow && statYear !== null) {
+    const base = leagueBaseline(teamRow.league_id, statYear, teamRow.level);
+    const rows = db
+      .prepare(
+        `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3,
+                SUM(hr) AS hr, SUM(bb) AS bb, SUM(ibb) AS ibb, SUM(hp) AS hp, SUM(sf) AS sf,
+                SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
+                SUM(war) AS war
+         FROM players_career_batting_stats
+         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+      )
+      .all(statYear) as Array<Record<string, number>>;
+    for (const row of rows) statsById.set(row.player_id, computeBatting(row, base, teamId));
+  }
+
   const lineup = style === 'saber' ? saberOrder(starters) : traditionalOrder(starters);
   const bench = candidates
     .filter((c) => !used.has(c.player_id))
@@ -143,17 +168,25 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
   res.json({
     vs,
     style,
-    lineup: lineup.map((l) => ({
-      slot: l.slot,
-      player_id: l.player.player_id,
-      name: l.player.name,
-      positionName: l.player.positionName,
-      bats: { 1: 'R', 2: 'L', 3: 'S' }[l.player.bats] ?? '?',
-      off: l.player.off,
-      speed: l.player.speed,
-      power: l.player.power,
-      why: l.why,
-    })),
+    lineup: lineup.map((l) => {
+      const s = statsById.get(l.player.player_id);
+      return {
+        slot: l.slot,
+        player_id: l.player.player_id,
+        name: l.player.name,
+        positionName: l.player.positionName,
+        bats: { 1: 'R', 2: 'L', 3: 'S' }[l.player.bats] ?? '?',
+        off: l.player.off,
+        speed: l.player.speed,
+        power: l.player.power,
+        why: l.why,
+        pa: s?.pa ?? null,
+        ops: s?.ops ?? null,
+        opsPlus: s?.opsPlus ?? null,
+        wrcPlus: s?.wrcPlus ?? null,
+        war: s?.war ?? null,
+      };
+    }),
     bench: bench.map((c) => ({
       player_id: c.player_id,
       name: c.name,
