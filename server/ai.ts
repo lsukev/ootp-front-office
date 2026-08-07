@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
+import { getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { summarizeSide } from './trade.js';
@@ -12,8 +13,7 @@ import { currentGameDate, seasonYear, teamFinances } from './valuation.js';
 export const aiRoutes = Router();
 
 const NO_KEY_MESSAGE =
-  'No Anthropic API key found. Create a file named .env in the project folder containing: ' +
-  'ANTHROPIC_API_KEY=your-key-here — then restart the app. Get a key at console.anthropic.com.';
+  'No Anthropic API key set. Open Settings and add your key — you can get one at console.claude.com.';
 
 function aiErrorStatus(e: Error & { status?: number }): { status: number; message: string } {
   if (e.status === 401 || /api key|authentication/i.test(e.message)) {
@@ -23,7 +23,9 @@ function aiErrorStatus(e: Error & { status?: number }): { status: number; messag
 }
 
 async function callOpus(system: string, user: string, maxTokens = 16000): Promise<string> {
-  const client = new Anthropic();
+  const key = getApiKey();
+  if (!key) throw Object.assign(new Error(NO_KEY_MESSAGE), { status: 401 });
+  const client = new Anthropic({ apiKey: key });
   const response = await client.messages.create({
     model: 'claude-opus-5',
     max_tokens: maxTokens,

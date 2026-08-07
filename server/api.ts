@@ -19,9 +19,11 @@ import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
 import { aiRoutes } from './ai.js';
 import { logoRoutes } from './logos.js';
+import { settingsRoutes } from './settings.js';
 
 export const api = Router();
 api.use(logoRoutes);
+api.use(settingsRoutes);
 api.use(playerRoutes);
 api.use(historyRoutes);
 api.use(dashboardRoutes);

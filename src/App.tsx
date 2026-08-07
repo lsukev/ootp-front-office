@@ -24,11 +24,13 @@ import { Nav, type NavEntry } from './Nav';
 import { applyTeamTheme } from './theme';
 import { TeamLogo } from './TeamLogo';
 import { FolderPicker } from './FolderPicker';
+import { Settings, type AppSettings } from './pages/Settings';
+import { apiGet } from './api';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
-  | 'staff' | 'watchlist';
+  | 'staff' | 'watchlist' | 'settings';
 
 /**
  * Grouped by front-office function: what you do daily (Dashboard, Storylines),
@@ -81,6 +83,7 @@ export function App() {
   const [orgId, setOrgId] = useState<number | null>(null);
   const [page, setPage] = useState<Page>('dashboard');
   const [switching, setSwitching] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -89,7 +92,14 @@ export function App() {
     if (s.hasData) {
       const os = await getOrgs();
       setOrgs(os);
-      setOrgId((prev) => prev ?? (os.find((o) => o.isHuman) ?? os[0])?.team_id ?? null);
+      const prefs = await apiGet<{ settings: AppSettings }>('/api/settings')
+        .then((r) => r.settings)
+        .catch(() => null);
+      if (prefs) setAppSettings(prefs);
+      const preferred = prefs?.defaultOrgId != null
+        ? os.find((o) => o.team_id === prefs.defaultOrgId)
+        : undefined;
+      setOrgId((prev) => prev ?? (preferred ?? os.find((o) => o.isHuman) ?? os[0])?.team_id ?? null);
     }
     return s;
   }, []);
@@ -103,8 +113,8 @@ export function App() {
 
   // Re-theme the whole app around the selected organization's colors
   useEffect(() => {
-    applyTeamTheme(org?.colors ?? null);
-  }, [org]);
+    applyTeamTheme(appSettings?.useTeamColors === false ? null : org?.colors ?? null);
+  }, [org, appSettings?.useTeamColors]);
 
   const waitForImport = useCallback(async () => {
     for (let i = 0; i < 120; i++) {
@@ -214,6 +224,15 @@ export function App() {
           <button onClick={hardRefresh} disabled={busy || !status.configured}>
             {busy ? 'Working…' : '↻ Refresh'}
           </button>
+          {status.hasData && (
+            <button
+              className={`gear ${page === 'settings' ? 'active' : ''}`}
+              onClick={() => setPage('settings')}
+              title="Settings"
+            >
+              ⚙
+            </button>
+          )}
         </div>
       </header>
 
@@ -244,6 +263,14 @@ export function App() {
                 {page === 'leaders' && <Leaderboards orgId={orgId} />}
                 {page === 'staff' && <Staff orgId={orgId} />}
                 {page === 'watchlist' && <Watchlist />}
+                {page === 'settings' && (
+                  <Settings
+                    status={status}
+                    orgs={orgs}
+                    onSettingsChanged={setAppSettings}
+                    onSaveChanged={switchSave}
+                  />
+                )}
               </>
             )}
           </main>

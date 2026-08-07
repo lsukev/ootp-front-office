@@ -7,6 +7,13 @@ let debounce: ReturnType<typeof setTimeout> | null = null;
  * Watch the CSV export directory and re-import when OOTP writes a fresh
  * export. Debounced because OOTP writes ~60 files over several seconds.
  */
+export function stopWatcher(): void {
+  if (debounce) clearTimeout(debounce);
+  void watcher?.close();
+  watcher = null;
+  console.log('[watch] stopped — auto re-import is off');
+}
+
 export function startWatcher(csvDir: string): void {
   void watcher?.close();
   // Imported lazily at call time to avoid a circular import with api.ts

@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('desktop', {
   isDesktop: true,
   selectFolder: (defaultPath?: string): Promise<string | null> =>
     ipcRenderer.invoke('select-folder', defaultPath),
+  openPath: (target: string): Promise<void> => ipcRenderer.invoke('open-path', target),
 });

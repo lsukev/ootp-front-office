@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
+import { getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances } from './valuation.js';
@@ -142,7 +143,9 @@ const STORYLINE_SCHEMA = {
 
 async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const context = assembleContext(orgId);
-  const client = new Anthropic();
+  const key = getApiKey();
+  if (!key) throw Object.assign(new Error('missing-api-key'), { status: 401 });
+  const client = new Anthropic({ apiKey: key });
 
   const response = await client.messages.create({
     model: 'claude-opus-5',
@@ -204,8 +207,7 @@ storylineRoutes.post('/storylines/:orgId', async (req, res) => {
     if (e.status === 401 || /api key|authentication/i.test(e.message)) {
       return res.status(401).json({
         error:
-          'No Anthropic API key found. Create a file named .env in the project folder containing: ' +
-          'ANTHROPIC_API_KEY=your-key-here — then restart the app. Get a key at console.anthropic.com.',
+          'No Anthropic API key set. Open Settings and add your key — you can get one at console.claude.com.',
       });
     }
     console.error('[storylines] generation failed:', e);

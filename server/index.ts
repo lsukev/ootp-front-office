@@ -7,13 +7,14 @@ import { APP_ROOT, loadConfig } from './config.js';
 import { startWatcher } from './watcher.js';
 import { tableExists } from './db.js';
 import { snapshotDates, takeSnapshot } from './history.js';
+import { loadSettings } from './settings.js';
 
 /** Import on boot if needed, then watch for fresh OOTP exports. */
 function bootstrapData(): void {
   const config = loadConfig();
   if (!config.csvDir || !fs.existsSync(config.csvDir)) return;
   if (!tableExists('players')) runImport(config.csvDir);
-  startWatcher(config.csvDir);
+  if (loadSettings().autoImport) startWatcher(config.csvDir);
   try {
     // Ensure development tracking has a baseline for already-imported data
     if (tableExists('players') && snapshotDates().length === 0) takeSnapshot();

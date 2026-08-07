@@ -90,10 +90,14 @@ export const getSearchLocations = () =>
   json<{ platform: string; locations: SearchLocation[] }>('/api/search-locations');
 export const resolveFolder = (path: string) => apiPost<ResolveResult>('/api/resolve-folder', { path });
 
+export interface DesktopBridge {
+  isDesktop: true;
+  selectFolder: (defaultPath?: string) => Promise<string | null>;
+  openPath: (target: string) => Promise<void>;
+}
 /** Present only inside the desktop app; the browser build falls back to typing a path. */
-export const desktopBridge = (): { isDesktop: true; selectFolder: (d?: string) => Promise<string | null> } | null =>
-  (window as unknown as { desktop?: { isDesktop: true; selectFolder: (d?: string) => Promise<string | null> } })
-    .desktop ?? null;
+export const desktopBridge = (): DesktopBridge | null =>
+  (window as unknown as { desktop?: DesktopBridge }).desktop ?? null;
 
 export const getSaves = () => json<SaveInfo[]>('/api/saves');
 export const getStatus = () => json<Status>('/api/status');

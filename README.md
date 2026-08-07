@@ -176,16 +176,16 @@ a key.
 
 1. Get an API key at [console.claude.com](https://console.claude.com) (you'll need to add
    a small amount of credit — each storyline generation costs a few cents)
-2. Create a file named `.env` in the project folder:
+2. Open **⚙ Settings** in the app, paste the key, and hit **Verify and save**
 
-   ```
-   ANTHROPIC_API_KEY=sk-ant-your-key-here
-   ```
+The key is checked against the API before it's stored, so a typo is caught immediately.
+In the desktop app it's encrypted against your OS keychain (Keychain on macOS, DPAPI on
+Windows); running from source without a keychain available, it falls back to a
+permission-restricted file and Settings tells you so.
 
-3. Restart the app (`Ctrl+C`, then `npm run dev`)
-
-`.env` is gitignored and never leaves your machine. If no key is present, the AI buttons
-simply explain how to set one up instead of failing.
+An `ANTHROPIC_API_KEY` environment variable (or a `.env` file) still works and takes
+priority, so existing setups are unchanged. If no key is present, the AI buttons explain
+how to set one up instead of failing.
 
 **What gets sent to Anthropic when you use these features:** your team's standings,
 recent results, stat leaders, prospect and contract summaries, and finances — all

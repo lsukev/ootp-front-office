@@ -45,6 +45,19 @@ async function createWindow(): Promise<void> {
   try {
     // Lazy import so the env vars above are set first
     const { startServer } = await import('../server/index.js');
+
+    // Let the server encrypt the stored API key against the OS keychain
+    // (Keychain on macOS, DPAPI on Windows) instead of writing it in plain text.
+    const { safeStorage } = await import('electron');
+    if (safeStorage.isEncryptionAvailable()) {
+      const { setSecretCrypto } = await import('../server/settings.js');
+      setSecretCrypto({
+        encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+        decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+        label: process.platform === 'darwin' ? 'your macOS Keychain' : 'Windows Credential storage (DPAPI)',
+      });
+    }
+
     const port = await startServer(0);
     await mainWindow.loadURL(`http://127.0.0.1:${port}`);
   } catch (err) {
@@ -104,6 +117,14 @@ if (!app.requestSingleInstanceLock()) {
       message: 'Pick the save folder (ends in .lg), the folder holding your saves, or the csv export folder.',
     });
     return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+  });
+
+  // Reveal a folder in Finder/Explorer. Restricted to the app's own data
+  // directory so the renderer can't ask the shell to open arbitrary paths.
+  ipcMain.handle('open-path', async (_event, target: string) => {
+    const dataDir = process.env.OOTP_FO_DATA_DIR ?? '';
+    if (!dataDir || path.resolve(target) !== path.resolve(dataDir)) return;
+    await shell.openPath(dataDir);
   });
 
   app.whenReady().then(() => {
