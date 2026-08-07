@@ -1,0 +1,63 @@
+name: Build desktop apps
+
+# Push a version tag to cut a release:  git tag v0.1.0 && git push origin v0.1.0
+# Or trigger manually from the Actions tab to get installers without a release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS
+            command: dist:mac
+          - os: windows-latest
+            name: Windows
+            command: dist:win
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Match Electron's bundled Node so the native module ABI lines up
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        run: npm run ${{ matrix.command }}
+        env:
+          # Provided automatically so electron-builder can attach to a release
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple signing + notarization. If these secrets are absent the build
+          # still succeeds, just unsigned — so forks and first runs work.
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-installers
+          path: |
+            release/*.dmg
+            release/*.exe
+            release/*.zip
+          if-no-files-found: error
+          retention-days: 14

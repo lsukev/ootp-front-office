@@ -1,0 +1,58 @@
+appId: com.lsukev.ootpfrontoffice
+productName: OOTP Front Office
+copyright: Copyright © 2026 Kevin Ivy
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - build/main.cjs
+  - build/main.cjs.map
+  - package.json
+
+# The built frontend lives outside the asar archive so Express can serve it
+# from a real path, and so APP_ROOT (= resourcesPath) resolves ./dist.
+extraResources:
+  - from: dist
+    to: dist
+
+# Native modules cannot be loaded from inside an asar archive
+asarUnpack:
+  - node_modules/better-sqlite3/**
+
+mac:
+  category: public.app-category.sports
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  # Signing and notarization are picked up from environment variables in CI
+  # (CSC_LINK / CSC_KEY_PASSWORD, APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
+  # APPLE_TEAM_ID). Builds run fine unsigned when they are absent.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  title: ${productName}
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: OOTP Front Office
+
+linux:
+  target: [AppImage]
+  category: Game
+
+publish:
+  provider: github
+  releaseType: release

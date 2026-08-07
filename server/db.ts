@@ -1,9 +1,8 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PROJECT_ROOT } from './config.js';
+import { DATA_DIR } from './config.js';
 
-const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 export const db = new Database(path.join(DATA_DIR, 'league.db'));

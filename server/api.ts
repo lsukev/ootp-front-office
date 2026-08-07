@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import fs from 'node:fs';
+import path from 'node:path';
 import { db, tableExists, tableColumns, locateColumn } from './db.js';
 import { detectSaves } from './paths.js';
-import { loadConfig, saveConfig } from './config.js';
+import { DATA_DIR, loadConfig, saveConfig } from './config.js';
 import { importCsvDir, type ImportResult } from './importer.js';
 import { startWatcher } from './watcher.js';
 import { orgRoutes } from './org.js';
@@ -33,7 +34,7 @@ api.use(freeAgentRoutes);
 api.use(lineupRoutes);
 api.use(storylineRoutes);
 
-const META_PATH = new URL('../data/last-import.json', import.meta.url);
+const META_PATH = path.join(DATA_DIR, 'last-import.json');
 
 function loadImportMeta(): ImportResult | null {
   try {

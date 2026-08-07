@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "build/main.cjs",
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm run dev:server\" \"npm run dev:web\"",
     "dev:server": "tsx watch server/index.ts",
@@ -10,16 +11,21 @@
     "build": "vite build",
     "start": "npm run build && NODE_ENV=production tsx server/index.ts",
     "check:theme": "tsx scripts/check-theme-contrast.ts",
-    "check:stats": "tsx scripts/check-stats.ts"
+    "check:stats": "tsx scripts/check-stats.ts",
+    "desktop:build": "npm run build && node scripts/build-desktop.mjs",
+    "desktop": "npm run abi:electron && npm run desktop:build && electron .",
+    "dist": "npm run abi:electron && npm run desktop:build && electron-builder",
+    "dist:mac": "npm run abi:electron && npm run desktop:build && electron-builder --mac",
+    "dist:win": "npm run abi:electron && npm run desktop:build && electron-builder --win",
+    "abi:electron": "electron-builder install-app-deps",
+    "abi:node": "npm rebuild better-sqlite3"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "better-sqlite3": "^11.8.0",
+    "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
     "csv-parse": "^5.6.0",
-    "express": "^4.21.2",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "express": "^4.21.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
@@ -29,6 +35,11 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

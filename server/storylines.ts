@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
-import { PROJECT_ROOT } from './config.js';
+import { DATA_DIR } from './config.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances } from './valuation.js';
@@ -23,7 +23,7 @@ interface StorylineCache {
   storylines: Storyline[];
 }
 
-const cachePath = (orgId: number) => path.join(PROJECT_ROOT, 'data', `storylines-${orgId}.json`);
+const cachePath = (orgId: number) => path.join(DATA_DIR, `storylines-${orgId}.json`);
 
 /** Everything the AI needs to write about this org, in one compact object. */
 function assembleContext(orgId: number) {

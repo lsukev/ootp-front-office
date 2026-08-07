@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+build/main.cjs
+build/main.cjs.map
+release/
 
 # Local data — imported league database, rating history, AI caches
 data/

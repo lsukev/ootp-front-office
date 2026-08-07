@@ -2,13 +2,13 @@ import Database from 'better-sqlite3';
 import { Router } from 'express';
 import path from 'node:path';
 import { db as leagueDb, tableExists } from './db.js';
-import { loadConfig, PROJECT_ROOT } from './config.js';
+import { DATA_DIR, loadConfig } from './config.js';
 
 /**
  * Persistent store that SURVIVES reimports (league.db is rebuilt on every
  * import). Holds rating snapshots for development tracking and the watchlist.
  */
-export const historyDb = new Database(path.join(PROJECT_ROOT, 'data', 'history.db'));
+export const historyDb = new Database(path.join(DATA_DIR, 'history.db'));
 historyDb.pragma('journal_mode = WAL');
 historyDb.exec(`
   CREATE TABLE IF NOT EXISTS rating_snapshots (

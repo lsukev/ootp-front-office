@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
-import { PROJECT_ROOT } from './config.js';
+import { DATA_DIR } from './config.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { summarizeSide } from './trade.js';
@@ -38,7 +38,7 @@ async function callOpus(system: string, user: string, maxTokens = 16000): Promis
 
 // ── GM Briefing ─────────────────────────────────────────────────────────
 
-const briefingPath = (orgId: number) => path.join(PROJECT_ROOT, 'data', `briefing-${orgId}.json`);
+const briefingPath = (orgId: number) => path.join(DATA_DIR, `briefing-${orgId}.json`);
 
 function briefingContext(orgId: number) {
   const team = db

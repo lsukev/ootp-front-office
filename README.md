@@ -78,6 +78,24 @@ and injury history.
 
 ---
 
+## Install
+
+**Most people want the desktop app.** Grab the installer for your platform from the
+[Releases page](https://github.com/lsukev/ootp-front-office/releases) — no Node, no
+terminal, no npm. Then skip to [Export your league from OOTP](#3-export-your-league-from-ootp).
+
+- **macOS** — open the `.dmg` and drag the app to Applications
+- **Windows** — run the `.exe` installer
+
+> **Windows SmartScreen warning:** the Windows build is not code-signed yet, so Windows
+> will say "Windows protected your PC." Click **More info → Run anyway**. (Signing costs
+> a few hundred dollars a year; it'll be added if the project gets enough users.)
+
+Everything the app writes — the imported database, your watchlist, AI caches — lives in
+your OS user-data folder, not inside the app. **Help → Open Data Folder** takes you there.
+
+The rest of this section is for running from source.
+
 ## Requirements
 
 - **OOTP Baseball 27** with at least one save
@@ -220,6 +238,53 @@ It needs at least two snapshots from two different in-game dates. Sim a few days
 again, and it'll populate.
 
 ---
+
+## Building the desktop apps
+
+```bash
+npm run dist:mac    # → release/*.dmg
+npm run dist:win    # → release/*.exe
+```
+
+Releases are normally built by CI instead. Push a version tag and GitHub Actions builds
+both platforms on real macOS and Windows runners:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+You can also trigger the workflow manually from the Actions tab to get installers without
+cutting a release.
+
+**Apple signing (optional).** With an Apple Developer account, add these repository
+secrets and macOS builds are signed and notarized automatically — without them the build
+still succeeds, just unsigned:
+
+| Secret | What it is |
+|---|---|
+| `APPLE_CERTIFICATE_P12` | Developer ID Application cert, exported as `.p12`, base64-encoded |
+| `APPLE_CERTIFICATE_PASSWORD` | Password you set on that `.p12` |
+| `APPLE_ID` | Your Apple ID email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from appleid.apple.com |
+| `APPLE_TEAM_ID` | Team ID from your Apple Developer account |
+
+> Use **Developer ID** distribution, not the Mac App Store. App Store apps must be
+> sandboxed, and a sandboxed app can't read OOTP's save folders — automatic save
+> detection would break.
+
+### The one wrinkle: native module ABI
+
+`better-sqlite3` is a compiled native module, and Electron bundles its own Node with a
+different ABI than your system Node. The same binary can't serve both, so the desktop
+scripts rebuild it for Electron automatically. **After building the desktop app, run this
+before going back to browser development:**
+
+```bash
+npm run abi:node
+```
+
+If you run Node 24 locally (matching Electron's bundled Node), the ABIs line up and you
+can ignore this entirely. CI never hits it, since each run starts from a clean checkout.
 
 ## How it works
 
