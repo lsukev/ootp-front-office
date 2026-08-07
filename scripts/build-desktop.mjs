@@ -13,6 +13,19 @@ import { readFileSync } from 'node:fs';
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const external = ['electron', ...Object.keys(pkg.dependencies ?? {})];
 
+// The preload bridge is a separate entry: it runs in the renderer's isolated
+// context, not the main process.
+await build({
+  entryPoints: ['electron/preload.ts'],
+  outfile: 'build/preload.cjs',
+  bundle: true,
+  platform: 'node',
+  target: 'node20',
+  format: 'cjs',
+  external: ['electron'],
+  logLevel: 'info',
+});
+
 await build({
   entryPoints: ['electron/main.ts'],
   outfile: 'build/main.cjs',

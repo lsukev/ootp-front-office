@@ -569,6 +569,40 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 }
 .injury-note { color: var(--bad); margin-top: 4px; }
 
+/* ── Manual folder picker ─────────────────────────────────── */
+
+.folder-picker {
+  margin-top: 24px;
+  max-width: 720px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 18px 16px;
+}
+.folder-picker h3 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 14px;
+}
+.folder-picker code {
+  background: var(--bg-deep);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+}
+.folder-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+.folder-input { flex: 1; min-width: 240px; margin-bottom: 0; }
+.folder-error { white-space: pre-line; margin-top: 10px; }
+.folder-choices { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.folder-searched { margin-top: 14px; font-size: 12px; }
+.folder-searched summary { color: var(--muted); cursor: pointer; }
+.folder-searched ul { list-style: none; padding: 8px 0 0; margin: 0; }
+.folder-searched li { padding: 3px 0; color: var(--muted); }
+.folder-searched li code { display: block; margin-top: 2px; word-break: break-all; color: var(--muted); }
+
 /* ── Column picker ────────────────────────────────────────── */
 
 .col-picker-wrap { position: relative; }

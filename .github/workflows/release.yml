@@ -10,54 +10,100 @@ on:
 permissions:
   contents: write
 
+# Mac and Windows are separate jobs rather than a matrix on purpose: the Apple
+# signing credentials must reach ONLY the macOS job. electron-builder's CSC_LINK
+# is a generic code-signing variable, so a Windows job that can see it will sign
+# .exe files with the Apple certificate — producing an invalid Authenticode
+# signature that is worse for users than shipping unsigned.
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            name: macOS
-            command: dist:mac
-          - os: windows-latest
-            name: Windows
-            command: dist:win
-
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.name }}
-
+  macos:
+    name: macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Match Electron's bundled Node so the native module ABI lines up
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24 # match Electron's bundled Node so the native ABI lines up
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm run abi:electron
+      - run: npm run desktop:build
 
-      - name: Build and package
-        run: npm run ${{ matrix.command }}
+      - name: Package (signed and notarized when secrets are present)
+        run: npx electron-builder --mac --publish never
         env:
-          # Provided automatically so electron-builder can attach to a release
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Apple signing + notarization. If these secrets are absent the build
-          # still succeeds, just unsigned — so forks and first runs work.
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Upload installers
-        uses: actions/upload-artifact@v4
+      - name: Verify the app is signed and notarized
+        run: |
+          APP=$(find release -maxdepth 2 -name "*.app" -print -quit)
+          if [ -z "$APP" ]; then echo "No .app produced"; exit 1; fi
+          echo "Checking $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          # Fails the build if Gatekeeper would reject it on a user's machine
+          spctl --assess --type execute --verbose=4 "$APP"
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}-installers
+          name: macos
           path: |
             release/*.dmg
-            release/*.exe
             release/*.zip
           if-no-files-found: error
-          retention-days: 14
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run abi:electron
+      - run: npm run desktop:build
+
+      # No signing credentials in scope here — see the note above. Unsigned
+      # builds show a SmartScreen prompt, which the README documents.
+      - name: Package
+        run: npx electron-builder --win --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: release/*.exe
+          if-no-files-found: error
+
+  # Publishing happens once, after both builds, so the two jobs can't race each
+  # other and drop assets from the release.
+  release:
+    name: Publish release
+    needs: [macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach installers to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" \) -print
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            || echo "Release already exists — uploading to it"
+          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" \) \
+            -exec gh release upload "${GITHUB_REF_NAME}" {} --repo "${GITHUB_REPOSITORY}" --clobber \;

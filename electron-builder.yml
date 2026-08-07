@@ -9,6 +9,7 @@ directories:
 files:
   - build/main.cjs
   - build/main.cjs.map
+  - build/preload.cjs
   - package.json
 
 # The built frontend lives outside the asar archive so Express can serve it

@@ -67,7 +67,7 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
         <div className="hint">
           <h3>No storylines yet</h3>
           <p>
-            Hit <strong>Write Storylines</strong> and Claude will read your org's standings, recent results, stat
+            Hit <strong>Write Storylines</strong> and the AI will read your org's standings, recent results, stat
             leaders, prospect signals, and contract situations — then write the stories. Regenerate any time after
             you sim and re-export.
           </p>

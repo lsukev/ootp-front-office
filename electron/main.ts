@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
 import path from 'node:path';
 
 /**
@@ -30,6 +30,7 @@ async function createWindow(): Promise<void> {
       // The renderer is our own local UI and needs no Node access
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 
@@ -92,6 +93,17 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+  });
+
+  // Native folder picker, for when auto-detection can't find the user's save
+  ipcMain.handle('select-folder', async (_event, defaultPath?: string) => {
+    const result = await dialog.showOpenDialog({
+      title: 'Choose your OOTP save or CSV export folder',
+      defaultPath: defaultPath && defaultPath.length > 0 ? defaultPath : app.getPath('home'),
+      properties: ['openDirectory', 'createDirectory'],
+      message: 'Pick the save folder (ends in .lg), the folder holding your saves, or the csv export folder.',
+    });
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
   });
 
   app.whenReady().then(() => {

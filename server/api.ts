@@ -2,7 +2,7 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists, tableColumns, locateColumn } from './db.js';
-import { detectSaves } from './paths.js';
+import { detectSaves, resolveChosenFolder, searchLocations } from './paths.js';
 import { DATA_DIR, loadConfig, saveConfig } from './config.js';
 import { importCsvDir, type ImportResult } from './importer.js';
 import { startWatcher } from './watcher.js';
@@ -76,6 +76,18 @@ export function runImport(csvDir: string): void {
 
 api.get('/saves', (_req, res) => {
   res.json(detectSaves());
+});
+
+/** Where we looked, so the user can see why auto-detection came up empty. */
+api.get('/search-locations', (_req, res) => {
+  res.json({ platform: process.platform, locations: searchLocations() });
+});
+
+/** Checks a folder the user picked or typed, before committing to it. */
+api.post('/resolve-folder', (req, res) => {
+  const { path: chosen } = req.body as { path?: string };
+  if (!chosen?.trim()) return res.status(400).json({ ok: false, error: 'No folder given.' });
+  res.json(resolveChosenFolder(chosen));
 });
 
 function csvExportedAt(csvDir: string): string | null {

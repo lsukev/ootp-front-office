@@ -23,6 +23,7 @@ import { PlayerModal } from './playerModal';
 import { Nav, type NavEntry } from './Nav';
 import { applyTeamTheme } from './theme';
 import { TeamLogo } from './TeamLogo';
+import { FolderPicker } from './FolderPicker';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
@@ -280,6 +281,8 @@ function SavePicker({ saves, onPick, busy }: { saves: SaveInfo[]; onPick: (s: Sa
           changes automatically.
         </p>
       </div>
+
+      <FolderPicker onResolved={onPick} />
     </main>
   );
 }

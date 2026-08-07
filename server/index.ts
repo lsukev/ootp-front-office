@@ -52,7 +52,7 @@ export function startServer(port = 5178): Promise<number> {
 
 // Running directly (npm run dev / npm start) rather than embedded in Electron
 if (!process.env.OOTP_FO_EMBEDDED) {
-  startServer().catch((err) => {
+  startServer(Number(process.env.PORT) || 5178).catch((err) => {
     console.error('[server] failed to start:', err);
     process.exit(1);
   });
