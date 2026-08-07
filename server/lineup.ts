@@ -1,0 +1,164 @@
+import { Router } from 'express';
+import { db, tableExists } from './db.js';
+import { valuesByPlayer } from './valuation.js';
+
+export const lineupRoutes = Router();
+
+const POSITION_NAMES: Record<number, string> = {
+  2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
+};
+
+interface Candidate {
+  player_id: number;
+  name: string;
+  age: number;
+  position: number;
+  positionName: string;
+  bats: number;
+  off: number; // offensive value for the chosen platoon side
+  contact: number;
+  power: number;
+  eye: number;
+  speed: number;
+}
+
+/**
+ * Tango/The Book ordering: your best three hitters bat 1-2-4, with the single
+ * best in the 2-hole. Slot fill priority: 2, 4, 1, 5, 3, then 6-9 descending.
+ */
+const SABER_PRIORITY: Array<{ slot: number; why: string }> = [
+  { slot: 2, why: 'best hitter — The Book: the 2-hole gets prime situations AND more PA than 3rd' },
+  { slot: 4, why: '2nd-best bat — cleanup drives in the top of the order' },
+  { slot: 1, why: '3rd-best bat — most plate appearances over a season' },
+  { slot: 5, why: '4th-best bat' },
+  { slot: 3, why: '5th-best bat — the 3-hole bats with two outs and bases empty more than any other slot' },
+  { slot: 6, why: 'descending offense' },
+  { slot: 7, why: 'descending offense' },
+  { slot: 8, why: 'descending offense' },
+  { slot: 9, why: 'descending offense' },
+];
+
+function saberOrder(nine: Candidate[]): Array<{ slot: number; player: Candidate; why: string }> {
+  const sorted = [...nine].sort((a, b) => b.off - a.off);
+  return SABER_PRIORITY.map((p, i) => ({ slot: p.slot, player: sorted[i], why: p.why })).sort(
+    (a, b) => a.slot - b.slot
+  );
+}
+
+function traditionalOrder(nine: Candidate[]): Array<{ slot: number; player: Candidate; why: string }> {
+  const pool = new Set(nine);
+  const take = (score: (c: Candidate) => number): Candidate => {
+    let best: Candidate | null = null;
+    let bestScore = -Infinity;
+    for (const c of pool) {
+      const s = score(c);
+      if (s > bestScore) {
+        best = c;
+        bestScore = s;
+      }
+    }
+    pool.delete(best!);
+    return best!;
+  };
+  const result: Array<{ slot: number; player: Candidate; why: string }> = [];
+  result.push({ slot: 1, player: take((c) => c.speed * 2 + c.eye + c.contact), why: 'table-setter — speed and on-base' });
+  result.push({ slot: 2, player: take((c) => c.contact * 2 + c.eye), why: 'bat control — moves the runner' });
+  result.push({ slot: 3, player: take((c) => c.off), why: 'best all-around hitter' });
+  result.push({ slot: 4, player: take((c) => c.power * 2 + c.off), why: 'cleanup power' });
+  result.push({ slot: 5, player: take((c) => c.power + c.off), why: 'protection behind cleanup' });
+  for (let slot = 6; slot <= 9; slot++) {
+    result.push({ slot, player: take((c) => c.off), why: 'descending offense' });
+  }
+  return result;
+}
+
+lineupRoutes.get('/lineup/:teamId', (req, res) => {
+  const teamId = Number(req.params.teamId);
+  const vs = req.query.vs === 'l' ? 'l' : 'r';
+  const style = req.query.style === 'trad' ? 'trad' : 'saber';
+  if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
+
+  const values = valuesByPlayer();
+  const raw = db
+    .prepare(
+      `SELECT p.player_id, p.first_name, p.last_name, p.age, p.position, p.bats,
+              b.batting_ratings_overall_contact AS contact,
+              b.batting_ratings_overall_power AS power,
+              b.batting_ratings_overall_eye AS eye,
+              b.running_ratings_speed AS speed
+       FROM players p
+       LEFT JOIN players_batting b ON b.player_id = p.player_id
+       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1`
+    )
+    .all(teamId) as Array<{
+    player_id: number; first_name: string; last_name: string; age: number; position: number;
+    bats: number; contact: number | null; power: number | null; eye: number | null; speed: number | null;
+  }>;
+
+  const candidates: Candidate[] = raw.map((p) => {
+    const v = values.get(p.player_id);
+    return {
+      player_id: p.player_id,
+      name: `${p.first_name} ${p.last_name}`,
+      age: p.age,
+      position: p.position,
+      positionName: POSITION_NAMES[p.position] ?? '?',
+      bats: p.bats,
+      off: (vs === 'r' ? v?.offenseVsR : v?.offenseVsL) ?? v?.offense ?? 0,
+      contact: p.contact ?? 0,
+      power: p.power ?? 0,
+      eye: p.eye ?? 0,
+      speed: p.speed ?? 0,
+    };
+  });
+
+  // Starting nine: best bat at each fielding position, best remaining bat DHs
+  const starters: Candidate[] = [];
+  const used = new Set<number>();
+  for (const pos of [2, 3, 4, 5, 6, 7, 8, 9]) {
+    const atPos = candidates
+      .filter((c) => c.position === pos && !used.has(c.player_id))
+      .sort((a, b) => b.off - a.off);
+    if (atPos[0]) {
+      starters.push(atPos[0]);
+      used.add(atPos[0].player_id);
+    }
+  }
+  const remaining = candidates.filter((c) => !used.has(c.player_id)).sort((a, b) => b.off - a.off);
+  while (starters.length < 9 && remaining.length) {
+    const dh = remaining.shift()!;
+    starters.push({ ...dh, positionName: starters.length === 8 ? 'DH' : dh.positionName });
+    used.add(dh.player_id);
+  }
+  if (starters.length < 9) {
+    return res.status(400).json({ error: 'Not enough position players on this roster to fill a lineup' });
+  }
+
+  const lineup = style === 'saber' ? saberOrder(starters) : traditionalOrder(starters);
+  const bench = candidates
+    .filter((c) => !used.has(c.player_id))
+    .sort((a, b) => b.off - a.off)
+    .slice(0, 8);
+
+  res.json({
+    vs,
+    style,
+    lineup: lineup.map((l) => ({
+      slot: l.slot,
+      player_id: l.player.player_id,
+      name: l.player.name,
+      positionName: l.player.positionName,
+      bats: { 1: 'R', 2: 'L', 3: 'S' }[l.player.bats] ?? '?',
+      off: l.player.off,
+      speed: l.player.speed,
+      power: l.player.power,
+      why: l.why,
+    })),
+    bench: bench.map((c) => ({
+      player_id: c.player_id,
+      name: c.name,
+      positionName: c.positionName,
+      off: c.off,
+    })),
+  });
+});

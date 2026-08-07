@@ -1,0 +1,126 @@
+import { useEffect, useState } from 'react';
+import { apiGet, getLineup, type LineupResponse } from '../api';
+import { PlayerLink } from '../playerModal';
+
+interface NextGame {
+  date: string;
+  isHome: boolean;
+  opponent: string;
+  ourStarter: { player_id: number; name: string; throws: string } | null;
+  theirStarter: { player_id: number; name: string; throws: string } | null;
+}
+
+export function Lineup({ teamId }: { teamId: number }) {
+  const [vs, setVs] = useState<'r' | 'l'>('r');
+  const [style, setStyle] = useState<'saber' | 'trad'>('saber');
+  const [data, setData] = useState<LineupResponse | null>(null);
+  const [next, setNext] = useState<NextGame | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiGet<NextGame | null>(`/api/next-game/${teamId}`)
+      .then((g) => {
+        setNext(g);
+        // Default the platoon side to tonight's actual opposing starter
+        if (g?.theirStarter?.throws === 'L') setVs('l');
+      })
+      .catch(() => {});
+  }, [teamId]);
+
+  useEffect(() => {
+    setData(null);
+    setError(null);
+    getLineup(teamId, vs, style).then(setData).catch((e) => setError(e.message));
+  }, [teamId, vs, style]);
+
+  return (
+    <div>
+      {next && (
+        <div className="next-game-banner">
+          <span className="story-category">Tonight · {next.date}</span>
+          <span>
+            {next.isHome ? 'vs' : '@'} <strong>{next.opponent}</strong>
+            {next.theirStarter && (
+              <>
+                {' — their probable: '}
+                <PlayerLink id={next.theirStarter.player_id}>{next.theirStarter.name}</PlayerLink>{' '}
+                ({next.theirStarter.throws}HP)
+              </>
+            )}
+            {next.ourStarter && (
+              <>
+                {' · ours: '}
+                <PlayerLink id={next.ourStarter.player_id}>{next.ourStarter.name}</PlayerLink>
+              </>
+            )}
+          </span>
+          {next.theirStarter && vs !== (next.theirStarter.throws === 'L' ? 'l' : 'r') && (
+            <button onClick={() => setVs(next.theirStarter!.throws === 'L' ? 'l' : 'r')}>
+              Build vs {next.theirStarter.name}
+            </button>
+          )}
+        </div>
+      )}
+      <div className="toolbar">
+        <div className="tabs">
+          <button className={style === 'saber' ? 'active' : ''} onClick={() => setStyle('saber')}>
+            Sabermetric
+          </button>
+          <button className={style === 'trad' ? 'active' : ''} onClick={() => setStyle('trad')}>
+            Traditional
+          </button>
+        </div>
+        <div className="tabs">
+          <button className={vs === 'r' ? 'active' : ''} onClick={() => setVs('r')}>
+            vs RHP
+          </button>
+          <button className={vs === 'l' ? 'active' : ''} onClick={() => setVs('l')}>
+            vs LHP
+          </button>
+        </div>
+      </div>
+      {error && <div className="banner error">{error}</div>}
+      {!data && !error && <p className="muted">Building lineup…</p>}
+      {data && (
+        <>
+          <p className="muted hint-line">
+            {style === 'saber'
+              ? 'Ordering per The Book (Tango et al.): your three best hitters bat 1, 2, and 4 — not 3-4-5.'
+              : 'Classic ordering: speed leads off, bat control 2nd, best hitter 3rd, power cleanup.'}{' '}
+            Platoon-aware: ranked by each player's offensive value {vs === 'r' ? 'vs right-handed' : 'vs left-handed'}{' '}
+            pitching.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Player</th>
+                <th>Pos</th>
+                <th>B</th>
+                <th>Off value</th>
+                <th>Why here</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.lineup.map((l) => (
+                <tr key={l.slot}>
+                  <td className="slot-num">{l.slot}</td>
+                  <td className="name"><PlayerLink id={l.player_id}>{l.name}</PlayerLink></td>
+                  <td>{l.positionName}</td>
+                  <td>{l.bats}</td>
+                  <td className="num">{Math.round(l.off)}</td>
+                  <td className="reasons">{l.why}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data.bench.length > 0 && (
+            <p className="muted">
+              Bench: {data.bench.map((b) => `${b.name} (${b.positionName})`).join(', ')}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

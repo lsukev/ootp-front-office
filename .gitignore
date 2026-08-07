@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local data — imported league database, rating history, AI caches
+data/
+
+# Local configuration — points at YOUR save on YOUR machine
+config.json
+
+# Secrets — your Anthropic API key lives here. NEVER commit this.
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
