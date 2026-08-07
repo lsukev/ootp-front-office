@@ -12,6 +12,7 @@ import { lineupRoutes } from './lineup.js';
 import { storylineRoutes } from './storylines.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
+import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
 import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
@@ -55,6 +56,7 @@ export function runImport(csvDir: string): void {
   try {
     importState.lastImport = importCsvDir(csvDir);
     fs.writeFileSync(META_PATH, JSON.stringify(importState.lastImport));
+    clearStatCaches(); // league baselines are per-import
     try {
       takeSnapshot(); // development-tracking snapshot, keyed by in-game date
     } catch (err) {
@@ -231,55 +233,52 @@ api.get('/roster/:teamId', (req, res) => {
     }
   }
 
-  // Current-season batting stats (split_id 1 = overall, latest year in export)
-  const battingByPlayer = new Map<number, Record<string, number>>();
-  const bt = 'players_career_batting_stats';
-  if (tableExists(bt)) {
-    const bcols = tableColumns(bt);
-    const year = bcols.includes('year')
-      ? (db.prepare(`SELECT MAX(year) AS y FROM "${bt}"`).get() as { y: number }).y
+  // Current-season stats. Rate and league-relative stats (OPS+, wRC+, ERA+)
+  // are computed server-side so every page shares one source of truth.
+  const teamRow = db.prepare(`SELECT league_id, level FROM teams WHERE team_id = ?`).get(teamId) as
+    | { league_id: number; level: number }
+    | undefined;
+  const statYear = tableExists('players_career_batting_stats')
+    ? (db.prepare(`SELECT MAX(year) AS y FROM players_career_batting_stats`).get() as { y: number }).y
+    : null;
+  // League-relative stats are only meaningful against a baseline from the same
+  // league and level, so minor-league clubs are compared to their own league.
+  const baseline =
+    teamRow && statYear !== null
+      ? leagueBaseline(teamRow.league_id, statYear, teamRow.level)
       : null;
-    const statCols = ['ab', 'h', 'd', 't', 'hr', 'bb', 'hp', 'k', 'sf', 'sb', 'cs', 'r', 'rbi', 'pa'].filter(
-      (c) => bcols.includes(c)
-    );
-    if (statCols.length && bcols.includes('player_id')) {
-      const sums = statCols.map((c) => `SUM("${c}") AS "${c}"`).join(', ');
-      const where = [
-        year !== null ? `year = ${year}` : null,
-        bcols.includes('split_id') ? `split_id = 1` : null,
-      ]
-        .filter(Boolean)
-        .join(' AND ');
-      const rows = db
-        .prepare(`SELECT player_id, ${sums} FROM "${bt}" ${where ? `WHERE ${where}` : ''} GROUP BY player_id`)
-        .all() as Array<Record<string, number>>;
-      for (const row of rows) battingByPlayer.set(row.player_id, row);
+
+  const battingByPlayer = new Map<number, Record<string, number | null>>();
+  if (tableExists('players_career_batting_stats') && statYear !== null && baseline) {
+    const rows = db
+      .prepare(
+        `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3,
+                SUM(hr) AS hr, SUM(bb) AS bb, SUM(ibb) AS ibb, SUM(hp) AS hp, SUM(sf) AS sf,
+                SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
+                SUM(war) AS war
+         FROM players_career_batting_stats
+         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+      )
+      .all(statYear) as Array<Record<string, number>>;
+    for (const row of rows) {
+      battingByPlayer.set(row.player_id, computeBatting(row, baseline, teamId));
     }
   }
 
-  // Current-season pitching stats
-  const pitchingByPlayer = new Map<number, Record<string, number>>();
-  const pt = 'players_career_pitching_stats';
-  if (tableExists(pt)) {
-    const pcols = tableColumns(pt);
-    const year = pcols.includes('year')
-      ? (db.prepare(`SELECT MAX(year) AS y FROM "${pt}"`).get() as { y: number }).y
-      : null;
-    const statCols = ['ip', 'ipf', 'outs', 'er', 'bb', 'k', 'ha', 'hra', 'g', 'gs', 'w', 'l', 's'].filter((c) =>
-      pcols.includes(c)
-    );
-    if (statCols.length && pcols.includes('player_id')) {
-      const sums = statCols.map((c) => `SUM("${c}") AS "${c}"`).join(', ');
-      const where = [
-        year !== null ? `year = ${year}` : null,
-        pcols.includes('split_id') ? `split_id = 1` : null,
-      ]
-        .filter(Boolean)
-        .join(' AND ');
-      const rows = db
-        .prepare(`SELECT player_id, ${sums} FROM "${pt}" ${where ? `WHERE ${where}` : ''} GROUP BY player_id`)
-        .all() as Array<Record<string, number>>;
-      for (const row of rows) pitchingByPlayer.set(row.player_id, row);
+  const pitchingByPlayer = new Map<number, Record<string, number | null>>();
+  if (tableExists('players_career_pitching_stats') && statYear !== null && baseline) {
+    const rows = db
+      .prepare(
+        `SELECT player_id, SUM(outs) AS outs, SUM(er) AS er, SUM(ra) AS ra, SUM(ha) AS ha,
+                SUM(bb) AS bb, SUM(k) AS k, SUM(hra) AS hra, SUM(bf) AS bf, SUM(g) AS g,
+                SUM(gs) AS gs, SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld,
+                SUM(war) AS war
+         FROM players_career_pitching_stats
+         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+      )
+      .all(statYear) as Array<Record<string, number>>;
+    for (const row of rows) {
+      pitchingByPlayer.set(row.player_id, computePitching(row, baseline, teamId));
     }
   }
 

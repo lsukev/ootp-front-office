@@ -569,6 +569,64 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 }
 .injury-note { color: var(--bad); margin-top: 4px; }
 
+/* ── Column picker ────────────────────────────────────────── */
+
+.col-picker-wrap { position: relative; }
+.col-picker {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: min(560px, 88vw);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6);
+}
+.col-picker-head,
+.col-picker-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+.col-picker-head { border-bottom: 1px solid var(--border); font-family: var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; font-size: 13px; }
+.col-picker-foot { border-top: 1px solid var(--border); }
+.col-picker-body { max-height: 58vh; overflow-y: auto; padding: 8px 6px; }
+
+.col-section { margin-bottom: 10px; }
+.col-section-label {
+  display: block;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  color: var(--accent);
+  padding: 4px 10px;
+}
+.col-option {
+  display: grid;
+  grid-template-columns: 18px 62px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.col-option:hover { background: var(--panel); }
+.col-option input { accent-color: var(--accent); cursor: pointer; }
+.col-option-label { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.05em; }
+.col-option-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-option:hover .col-option-desc { white-space: normal; }
+
 /* ── Player links & tooltips ──────────────────────────────── */
 
 .player-link {

@@ -43,7 +43,7 @@ actual save data.
 | Page | What you get |
 |------|--------------|
 | Lineup | Sabermetric (Tango's *The Book*) or traditional ordering, platoon-aware, auto-built against tonight's probable opposing starter |
-| Rosters | Any team in your org with scout ratings and sortable stat lines |
+| Rosters | Any team in your org with scout ratings and sortable stat lines. **Pick your own columns** — 24 batting and 23 pitching stats to choose from, including OPS+, wRC+, ERA+, FIP, wOBA, and BABIP |
 | Depth Chart | Positions × affiliates grid, each player with age and current→potential |
 | Injury Report | Org-wide trainer's report with estimated return dates |
 | Coaching Staff | Coaches, scouts, and farm managers with role-relevant ratings |
@@ -261,6 +261,30 @@ data/             Created at runtime (gitignored)
 ```
 
 ---
+
+## Configurable stat columns
+
+On the Rosters page, **⚙ Columns** opens a picker with every available stat, grouped
+into Counting, Rate, and Advanced, each with a plain-English description. Your selection
+is saved per batting/pitching and persists across sessions. Hovering any column header
+explains what the stat means.
+
+### About OPS+, wRC+, and ERA+
+
+OOTP computes these in-game but **does not include them in the CSV export**, so the app
+derives them from the raw counting stats:
+
+- **League baselines are computed from your save**, not hardcoded — per league *and* per
+  level, so a Double-A hitter is measured against Double-A rather than the majors.
+- **Park factors come from OOTP's own park ratings** (its AVG and HR ratings, blended),
+  with the deviation halved because a player only plays half his games at home — the
+  standard correction for park-adjusted rate stats.
+- **wRC+** uses wOBA linear weights with the run conversion those same weights imply.
+- **FIP** is scaled with a league constant so league FIP equals league ERA.
+
+`npm run check:stats` validates the whole engine: it confirms every league's aggregate
+line scores exactly 100, which is the definition these stats have to satisfy. A pitcher
+with a 0.00 ERA shows **∞** for ERA+, which is what it mathematically is.
 
 ## Notes and limitations
 

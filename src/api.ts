@@ -39,8 +39,8 @@ export interface RosterPlayer {
   throwsName: string;
   uniform_number: number | null;
   ratings: Record<string, number>;
-  batting: Record<string, number> | null;
-  pitching: Record<string, number> | null;
+  batting: Record<string, number | null> | null;
+  pitching: Record<string, number | null> | null;
 }
 
 export interface RosterResponse {

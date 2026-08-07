@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getRoster, getTeams, type RosterPlayer, type RosterResponse, type Team } from '../api';
-import { PlayerLink } from '../playerModal';
+import { PlayerLink, Tip } from '../playerModal';
+import { ColumnPicker } from '../ColumnPicker';
+import {
+  DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, loadColumns, plusColor, saveColumns,
+  type StatGroup,
+} from '../stats';
 
 const BATTER_RATINGS = ['contact', 'gap', 'power', 'eye', 'avoidK', 'speed'] as const;
 const PITCHER_RATINGS = ['stuff', 'movement', 'control'] as const;
@@ -9,8 +14,12 @@ export function RosterPage({ orgId }: { orgId: number }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamId, setTeamId] = useState<number | null>(null);
   const [roster, setRoster] = useState<RosterResponse | null>(null);
-  const [tab, setTab] = useState<'batting' | 'pitching'>('batting');
+  const [tab, setTab] = useState<StatGroup>('batting');
   const [error, setError] = useState<string | null>(null);
+
+  const [battingCols, setBattingCols] = useState<string[]>(() => loadColumns('batting'));
+  const [pitchingCols, setPitchingCols] = useState<string[]>(() => loadColumns('pitching'));
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     getTeams().then(setTeams).catch((e) => setError(e.message));
@@ -35,6 +44,13 @@ export function RosterPage({ orgId }: { orgId: number }) {
     getRoster(teamId).then(setRoster).catch((e) => setError(e.message));
   }, [teamId]);
 
+  const columns = tab === 'batting' ? battingCols : pitchingCols;
+  const setColumns = (keys: string[]) => {
+    if (tab === 'batting') setBattingCols(keys);
+    else setPitchingCols(keys);
+    saveColumns(tab, keys);
+  };
+
   return (
     <div>
       {error && <div className="banner error">{error}</div>}
@@ -47,38 +63,51 @@ export function RosterPage({ orgId }: { orgId: number }) {
           ))}
         </select>
         {roster && (
-          <div className="tabs">
-            <button className={tab === 'batting' ? 'active' : ''} onClick={() => setTab('batting')}>
-              Batting
-            </button>
-            <button className={tab === 'pitching' ? 'active' : ''} onClick={() => setTab('pitching')}>
-              Pitching
-            </button>
-          </div>
+          <>
+            <div className="tabs">
+              <button className={tab === 'batting' ? 'active' : ''} onClick={() => setTab('batting')}>
+                Batting
+              </button>
+              <button className={tab === 'pitching' ? 'active' : ''} onClick={() => setTab('pitching')}>
+                Pitching
+              </button>
+            </div>
+            <div className="col-picker-wrap">
+              <button onClick={() => setPickerOpen((v) => !v)}>⚙ Columns</button>
+              {pickerOpen && (
+                <ColumnPicker
+                  group={tab}
+                  selected={columns}
+                  onChange={setColumns}
+                  onClose={() => setPickerOpen(false)}
+                  onReset={() => setColumns(tab === 'batting' ? DEFAULT_BATTING : DEFAULT_PITCHING)}
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
       {teamId !== null && !roster && <p className="muted">Loading roster…</p>}
-      {roster && <RosterTable roster={roster} tab={tab} />}
+      {roster && <RosterTable roster={roster} group={tab} columns={columns} />}
     </div>
   );
 }
 
-function RosterTable({ roster, tab }: { roster: RosterResponse; tab: 'batting' | 'pitching' }) {
+function RosterTable({
+  roster, group, columns,
+}: { roster: RosterResponse; group: StatGroup; columns: string[] }) {
   const [sortKey, setSortKey] = useState<string>('position');
   const [sortDir, setSortDir] = useState<1 | -1>(1);
 
-  const isPitcherTab = tab === 'pitching';
+  const isPitching = group === 'pitching';
   const players = useMemo(() => {
-    const filtered = roster.players.filter((p) => (p.position === 1) === isPitcherTab);
-    return [...filtered].sort((a, b) => sortDir * compareBy(a, b, sortKey));
-  }, [roster, isPitcherTab, sortKey, sortDir]);
+    const filtered = roster.players.filter((p) => (p.position === 1) === isPitching);
+    return [...filtered].sort((a, b) => sortDir * compareBy(a, b, sortKey, group));
+  }, [roster, isPitching, sortKey, sortDir, group]);
 
-  const ratingCols = (isPitcherTab ? PITCHER_RATINGS : BATTER_RATINGS).filter((k) =>
+  const ratingCols = (isPitching ? PITCHER_RATINGS : BATTER_RATINGS).filter((k) =>
     roster.ratingKeys.includes(k)
   );
-  const statCols = isPitcherTab
-    ? (['g', 'gs', 'w', 'l', 's', 'ip', 'era', 'whip', 'k', 'bb'] as const)
-    : (['pa', 'ab', 'h', 'hr', 'rbi', 'sb', 'avg', 'obp', 'slg', 'ops'] as const);
 
   const setSort = (key: string) => {
     if (key === sortKey) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -87,56 +116,69 @@ function RosterTable({ roster, tab }: { roster: RosterResponse; tab: 'batting' |
       setSortDir(-1);
     }
   };
+  const arrow = (key: string) => (key === sortKey ? (sortDir === 1 ? ' ▲' : ' ▼') : '');
 
   return (
     <table>
       <thead>
         <tr>
-          <th onClick={() => setSort('name')}>Player</th>
-          <th onClick={() => setSort('age')}>Age</th>
-          <th onClick={() => setSort('position')}>Pos</th>
+          <th onClick={() => setSort('name')}>Player{arrow('name')}</th>
+          <th onClick={() => setSort('age')}>Age{arrow('age')}</th>
+          <th onClick={() => setSort('position')}>Pos{arrow('position')}</th>
           <th>B/T</th>
           {ratingCols.map((k) => (
             <th key={k} onClick={() => setSort(`r:${k}`)} title="Scout rating">
-              {labelFor(k)}
+              {labelFor(k)}{arrow(`r:${k}`)}
             </th>
           ))}
-          {statCols.map((k) => (
-            <th key={k} onClick={() => setSort(`s:${k}`)}>
-              {k.toUpperCase()}
-            </th>
-          ))}
+          {columns.map((key) => {
+            const def = findStat(group, key);
+            if (!def) return null;
+            return (
+              <th key={key} onClick={() => setSort(`s:${key}`)}>
+                <Tip label={`${def.label}${arrow(`s:${key}`)}`} tip={def.desc} />
+              </th>
+            );
+          })}
         </tr>
       </thead>
       <tbody>
-        {players.map((p) => (
-          <tr key={p.player_id}>
-            <td className="name">
-              <PlayerLink id={p.player_id}>
-                {p.first_name} {p.last_name}
-              </PlayerLink>
-            </td>
-            <td>{p.age ?? ''}</td>
-            <td>{p.positionName}</td>
-            <td>
-              {p.batsName}/{p.throwsName}
-            </td>
-            {ratingCols.map((k) => (
-              <td key={k}>
-                <RatingCell value={p.ratings[k]} max={roster.ratingMax} />
+        {players.map((p) => {
+          const stats = isPitching ? p.pitching : p.batting;
+          return (
+            <tr key={p.player_id}>
+              <td className="name">
+                <PlayerLink id={p.player_id}>
+                  {p.first_name} {p.last_name}
+                </PlayerLink>
               </td>
-            ))}
-            {statCols.map((k) => (
-              <td key={k} className="num">
-                {formatStat(p, k, isPitcherTab)}
+              <td>{p.age ?? ''}</td>
+              <td>{p.positionName}</td>
+              <td>
+                {p.batsName}/{p.throwsName}
               </td>
-            ))}
-          </tr>
-        ))}
+              {ratingCols.map((k) => (
+                <td key={k}>
+                  <RatingCell value={p.ratings[k]} max={roster.ratingMax} />
+                </td>
+              ))}
+              {columns.map((key) => {
+                const def = findStat(group, key);
+                if (!def) return null;
+                const value = stats?.[key] ?? null;
+                return (
+                  <td key={key} className="num" style={{ color: plusColor(def, value) }}>
+                    {stats ? formatStat(def, value, stats) : ''}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
         {players.length === 0 && (
           <tr>
-            <td colSpan={4 + ratingCols.length + statCols.length} className="muted">
-              No {isPitcherTab ? 'pitchers' : 'position players'} on this roster.
+            <td colSpan={4 + ratingCols.length + columns.length} className="muted">
+              No {isPitching ? 'pitchers' : 'position players'} on this roster.
             </td>
           </tr>
         )}
@@ -157,66 +199,17 @@ function RatingCell({ value, max }: { value: number | undefined; max: number }) 
   );
 }
 
-function ip(p: RosterPlayer): number {
-  const s = p.pitching;
-  if (!s) return 0;
-  // OOTP stores innings as whole innings + fractional outs (ipf)
-  if (s.outs !== undefined) return s.outs / 3;
-  return (s.ip ?? 0) + (s.ipf ?? 0) / 3;
-}
-
-function formatStat(p: RosterPlayer, key: string, pitcher: boolean): string {
-  if (pitcher) {
-    const s = p.pitching;
-    if (!s) return '';
-    const innings = ip(p);
-    switch (key) {
-      case 'ip':
-        return innings ? innings.toFixed(1) : '';
-      case 'era':
-        return innings ? (((s.er ?? 0) / innings) * 9).toFixed(2) : '';
-      case 'whip':
-        return innings ? (((s.bb ?? 0) + (s.ha ?? 0)) / innings).toFixed(2) : '';
-      default:
-        return s[key] !== undefined ? String(s[key]) : '';
-    }
-  }
-  const s = p.batting;
-  if (!s) return '';
-  const ab = s.ab ?? 0;
-  const h = s.h ?? 0;
-  const singles = h - (s.d ?? 0) - (s.t ?? 0) - (s.hr ?? 0);
-  const obpDen = ab + (s.bb ?? 0) + (s.hp ?? 0) + (s.sf ?? 0);
-  const avg = ab ? h / ab : null;
-  const obp = obpDen ? (h + (s.bb ?? 0) + (s.hp ?? 0)) / obpDen : null;
-  const slg = ab ? (singles + 2 * (s.d ?? 0) + 3 * (s.t ?? 0) + 4 * (s.hr ?? 0)) / ab : null;
-  switch (key) {
-    case 'avg':
-      return avg !== null ? fmt3(avg) : '';
-    case 'obp':
-      return obp !== null ? fmt3(obp) : '';
-    case 'slg':
-      return slg !== null ? fmt3(slg) : '';
-    case 'ops':
-      return obp !== null && slg !== null ? fmt3(obp + slg) : '';
-    default:
-      return s[key] !== undefined ? String(s[key]) : '';
-  }
-}
-
-const fmt3 = (n: number) => n.toFixed(3).replace(/^0/, '');
-
-function compareBy(a: RosterPlayer, b: RosterPlayer, key: string): number {
+function compareBy(a: RosterPlayer, b: RosterPlayer, key: string, group: StatGroup): number {
   const val = (p: RosterPlayer): string | number => {
     if (key === 'name') return `${p.last_name} ${p.first_name}`;
     if (key === 'age') return p.age ?? 0;
     if (key === 'position') return p.position ?? 99;
     if (key.startsWith('r:')) return p.ratings[key.slice(2)] ?? -1;
     if (key.startsWith('s:')) {
-      const k = key.slice(2);
-      const pitcher = p.position === 1;
-      const raw = formatStat(p, k, pitcher);
-      return raw === '' ? -Infinity : Number(raw) || 0;
+      const stats = group === 'pitching' ? p.pitching : p.batting;
+      const v = stats?.[key.slice(2)];
+      // Missing stats sort last regardless of direction
+      return v === null || v === undefined ? -Infinity : v;
     }
     return 0;
   };
