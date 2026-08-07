@@ -19,24 +19,48 @@ Pick your organization in the header and every page shows that club's world — 
 team and every affiliate down to the DSL. The whole UI themes itself with your team's
 colors. Switch orgs any time to scout another system.
 
+The navigation is grouped by front-office function:
+
+**🏟 Dashboard** — the morning check-in. Pending-decision chips that click through to
+the page that resolves them, division standings, last 5 results, upcoming games with
+probable starters, hot/cold hitters, the org injury list, and an AI GM briefing.
+
+**📰 Storylines** — AI-written beat coverage of your organization, grounded in your
+actual save data.
+
+**⚾ Clubhouse** — running the big-league club
+
 | Page | What you get |
 |------|--------------|
-| **Dashboard** | Pending-decision chips, division standings, last 5 results, upcoming games with probable starters, hot/cold hitters, org injury list, AI GM briefing |
-| **Storylines** | AI-written beat coverage of your organization, grounded in your actual save data |
-| **Lineup** | Sabermetric (Tango's *The Book*) or traditional ordering, platoon-aware, auto-built against tonight's probable opposing starter |
-| **Rosters** | Any team in your org with scout ratings and sortable stat lines |
-| **Depth Chart** | Positions × affiliates grid, each player with age and current→potential |
-| **Prospects** | Minor leaguers ranked by promotion signal, self-calibrated to your league's own level averages |
-| **Development** | Scout-rating changes over time — who's improving, who's declining, whose ceiling moved |
-| **Contracts** | Every deal sorted by urgency with re-sign / extend / let-walk recommendations |
-| **40-Man** | Roster counts, options used, out-of-options, Rule 5 exposure, DFA countdowns |
-| **Injuries** | Org-wide trainer's report with estimated return dates |
-| **Trade Center** | Trade analyzer with value/salary swings, AI verdict, plus league-wide fit finder |
-| **Free Agents** | Current market plus everyone hitting free agency after this season |
-| **Draft** | The scouted draft class ranked by ceiling |
-| **Leaders** | League top-10s with your players highlighted |
-| **Staff** | Coaches, scouts, and farm managers with role-relevant ratings |
-| **Watchlist** | Star any player and keep your own scouting notes |
+| Lineup | Sabermetric (Tango's *The Book*) or traditional ordering, platoon-aware, auto-built against tonight's probable opposing starter |
+| Rosters | Any team in your org with scout ratings and sortable stat lines |
+| Depth Chart | Positions × affiliates grid, each player with age and current→potential |
+| Injury Report | Org-wide trainer's report with estimated return dates |
+| Coaching Staff | Coaches, scouts, and farm managers with role-relevant ratings |
+
+**🌾 Farm System** — the pipeline
+
+| Page | What you get |
+|------|--------------|
+| Prospects | Minor leaguers ranked by promotion signal, self-calibrated to your league's own level averages |
+| Development | Scout-rating changes over time — who's improving, who's declining, whose ceiling moved |
+| Draft Board | The scouted draft class ranked by ceiling |
+
+**💼 Front Office** — transactions and money
+
+| Page | What you get |
+|------|--------------|
+| Contracts | Every deal sorted by urgency with re-sign / extend / let-walk recommendations |
+| Free Agents | Current market plus everyone hitting free agency after this season |
+| Trade Center | Trade analyzer with value/salary swings, AI verdict, plus league-wide fit finder |
+| 40-Man Roster | Roster counts, options used, out-of-options, Rule 5 exposure, DFA countdowns |
+
+**📊 League** — reference
+
+| Page | What you get |
+|------|--------------|
+| Leaderboards | League top-10s with your players highlighted |
+| My Watchlist | Star any player and keep your own scouting notes |
 
 Click any player name anywhere for a full dossier: bio, ratings with potential markers,
 pitch arsenal and velocity, contract schedule, career history by level, recent game logs,

@@ -20,29 +20,55 @@ import { Staff } from './pages/Staff';
 import { Watchlist } from './pages/Watchlist';
 import { Draft } from './pages/Draft';
 import { PlayerModal } from './playerModal';
+import { Nav, type NavEntry } from './Nav';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
   | 'staff' | 'watchlist';
 
-const PAGES: Array<[Page, string]> = [
-  ['dashboard', 'Dashboard'],
-  ['storylines', 'Storylines'],
-  ['lineup', 'Lineup'],
-  ['rosters', 'Rosters'],
-  ['depth', 'Depth Chart'],
-  ['prospects', 'Prospects'],
-  ['development', 'Development'],
-  ['contracts', 'Contracts'],
-  ['crunch', '40-Man'],
-  ['injuries', 'Injuries'],
-  ['trades', 'Trade Center'],
-  ['freeagents', 'Free Agents'],
-  ['draft', 'Draft'],
-  ['leaders', 'Leaders'],
-  ['staff', 'Staff'],
-  ['watchlist', 'Watchlist'],
+/**
+ * Grouped by front-office function: what you do daily (Dashboard, Storylines),
+ * running the big-league club (Clubhouse), the pipeline (Farm System),
+ * transactions (Front Office), and reference (League).
+ */
+const NAV: Array<NavEntry<Page>> = [
+  { kind: 'link', page: 'dashboard', label: 'Dashboard', hint: '🏟' },
+  { kind: 'link', page: 'storylines', label: 'Storylines', hint: '📰' },
+  {
+    kind: 'group', label: 'Clubhouse', icon: '⚾',
+    items: [
+      { page: 'lineup', label: 'Lineup', hint: "Tonight's card, platoon-aware" },
+      { page: 'rosters', label: 'Rosters', hint: 'Any team in the org' },
+      { page: 'depth', label: 'Depth Chart', hint: 'Positions across every level' },
+      { page: 'injuries', label: 'Injury Report', hint: 'Who is out and for how long' },
+      { page: 'staff', label: 'Coaching Staff', hint: 'Coaches, scouts, farm managers' },
+    ],
+  },
+  {
+    kind: 'group', label: 'Farm System', icon: '🌾',
+    items: [
+      { page: 'prospects', label: 'Prospects', hint: 'Promotion signals by level' },
+      { page: 'development', label: 'Development', hint: 'Rating changes over time' },
+      { page: 'draft', label: 'Draft Board', hint: 'Scouted class by ceiling' },
+    ],
+  },
+  {
+    kind: 'group', label: 'Front Office', icon: '💼',
+    items: [
+      { page: 'contracts', label: 'Contracts', hint: 'Re-sign, extend, or walk' },
+      { page: 'freeagents', label: 'Free Agents', hint: 'Now and after this season' },
+      { page: 'trades', label: 'Trade Center', hint: 'Analyzer and league-wide fits' },
+      { page: 'crunch', label: '40-Man Roster', hint: 'Options, Rule 5, DFA clocks' },
+    ],
+  },
+  {
+    kind: 'group', label: 'League', icon: '📊',
+    items: [
+      { page: 'leaders', label: 'Leaderboards', hint: 'League top tens' },
+      { page: 'watchlist', label: 'My Watchlist', hint: 'Starred players and notes' },
+    ],
+  },
 ];
 
 export function App() {
@@ -196,13 +222,7 @@ export function App() {
         <SavePicker saves={saves} onPick={switchSave} busy={busy} />
       ) : (
         <>
-          <nav className="nav">
-            {PAGES.map(([key, label]) => (
-              <button key={key} className={page === key ? 'active' : ''} onClick={() => setPage(key)}>
-                {label}
-              </button>
-            ))}
-          </nav>
+          <Nav entries={NAV} current={page} onNavigate={setPage} />
           <main>
             {orgId !== null && org && (
               <>
