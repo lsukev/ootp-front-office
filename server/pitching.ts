@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { computePitching, leagueBaseline } from './stats.js';
+import { ON_ROSTER } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
 
 export const pitchingRoutes = Router();
@@ -95,7 +96,7 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
        FROM players p
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE p.team_id = ? AND p.position = 1 AND p.retired = 0`
+       WHERE p.team_id = ? AND p.position = 1 AND p.retired = 0 AND ${ON_ROSTER}`
     )
     .all(teamId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; role: number;
@@ -119,13 +120,17 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
     const rows = db
       .prepare(
         `SELECT player_id, SUM(outs) AS outs, SUM(er) AS er, SUM(ha) AS ha, SUM(bb) AS bb,
-                SUM(k) AS k, SUM(hra) AS hra, SUM(bf) AS bf, SUM(g) AS g, SUM(gs) AS gs,
+                SUM(k) AS k, SUM(hra) AS hra, SUM(hp) AS hp, SUM(bf) AS bf, SUM(g) AS g, SUM(gs) AS gs,
                 SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld, SUM(war) AS war
          FROM players_career_pitching_stats
-         WHERE year = ? AND split_id = 1 AND player_id IN (${holes})
+         WHERE year = ? AND split_id = 1 AND level_id = ? AND player_id IN (${holes})
          GROUP BY player_id`
       )
-      .all(statYear, ...ids) as Array<Record<string, number>>;
+      .all(statYear, team.level, ...ids) as Array<Record<string, number>>;
+    // Scoped to this club's level. Summing a pitcher's whole season across
+    // levels blends AAA innings into a major-league line, which is why these
+    // numbers disagreed with OOTP's own pitching screen — relievers shuttle,
+    // so they were the worst affected.
     for (const row of rows) statsById.set(row.player_id, computePitching(row, base, teamId));
   }
 

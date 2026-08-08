@@ -5,6 +5,11 @@
  * If the PA/IP-weighted league mean drifts off 100, the baseline or the formula
  * is wrong — this catches that immediately after any change.
  *
+ * FIP is checked the same way, against its own defining property: the constant
+ * exists to make league FIP equal league ERA. That check was missing when the
+ * engine was written, and the formula was wrong the whole time — it used the
+ * textbook 3.10 constant instead of the league's own, inflating every FIP.
+ *
  * Run with: npm run check:stats
  */
 import Database from 'better-sqlite3';
@@ -108,5 +113,29 @@ console.log(
   `\nIdentity check — a league-average line scores: ` +
     `OPS+ ${lgBat.opsPlus}, wRC+ ${lgBat.wrcPlus}, ERA+ ${lgPitch.eraPlus} (all should be 100)`
 );
+
+// ── FIP: league FIP must equal league ERA, by definition of its constant ──
+for (const lg of leagues) {
+  const base = leagueBaseline(lg.id, year, lg.level);
+  if (base.lgERA === 0) continue;
+
+  const line = db
+    .prepare(
+      `SELECT SUM(outs) AS outs, SUM(er) AS er, SUM(ha) AS ha, SUM(bb) AS bb, SUM(k) AS k,
+              SUM(hra) AS hra, SUM(hp) AS hp, SUM(bf) AS bf
+       FROM players_career_pitching_stats
+       WHERE year = ? AND split_id = 1 AND level_id = ? AND league_id = ?`
+    )
+    .get(year, lg.level, lg.id) as Record<string, number>;
+
+  const agg = computePitching(line, base, null);
+  const fip = agg.fip ?? 0;
+  const drift = Math.abs(fip - base.lgERA);
+  const ok = drift < 0.02;
+  if (!ok) failures++;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'} ${lg.name} (level ${lg.level}): league FIP ${fip.toFixed(3)} vs league ERA ${base.lgERA.toFixed(3)}`
+  );
+}
 
 console.log(failures === 0 ? 'All leagues center on 100.' : `${failures} league(s) off-center — check the baseline.`);

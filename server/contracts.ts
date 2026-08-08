@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import {
-  contractsByPlayer, currentGameDate, mlbPercentiler, seasonYear, teamFinances, valuesByPlayer,
+  contractsByPlayer, currentGameDate, mlbPercentiler, ON_ROSTER, seasonYear, teamFinances,
+  valuesByPlayer,
 } from './valuation.js';
 
 export const contractRoutes = Router();
@@ -88,7 +89,7 @@ export function computeContracts(orgId: number) {
               rs.mlb_service_years AS service_years
        FROM players p
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE p.team_id = ? AND p.retired = 0`
+       WHERE p.team_id = ? AND p.retired = 0 AND ${ON_ROSTER}`
     )
     .all(orgId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; position: number;

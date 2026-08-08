@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { valuesByPlayer } from './valuation.js';
+import { ON_ROSTER, valuesByPlayer } from './valuation.js';
 import { computeBatting, leagueBaseline } from './stats.js';
 
 export const lineupRoutes = Router();
@@ -89,7 +89,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
               b.running_ratings_speed AS speed
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
-       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1`
+       LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
+       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1 AND ${ON_ROSTER}`
     )
     .all(teamId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; position: number;
@@ -153,9 +154,10 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
                 SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
                 SUM(war) AS war
          FROM players_career_batting_stats
-         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+         WHERE year = ? AND split_id = 1 AND level_id = ?
+         GROUP BY player_id`
       )
-      .all(statYear) as Array<Record<string, number>>;
+      .all(statYear, teamRow.level) as Array<Record<string, number>>;
     for (const row of rows) statsById.set(row.player_id, computeBatting(row, base, teamId));
   }
 

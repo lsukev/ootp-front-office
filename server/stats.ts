@@ -17,6 +17,8 @@ export interface LeagueBaseline {
   lgWOBA: number;
   lgRperPA: number;
   lgERA: number;
+  /** League's raw FIP numerator per inning; lgERA minus this is the FIP constant. */
+  lgFIPRaw: number;
   /** team_id → park run factor, already halved for a half-home schedule. */
   parkFactor: Map<number, number>;
 }
@@ -66,7 +68,8 @@ export function leagueBaseline(leagueId: number, year: number, level = 1): Leagu
 
   const pit = db
     .prepare(
-      `SELECT SUM(s.outs) AS outs, SUM(s.er) AS er
+      `SELECT SUM(s.outs) AS outs, SUM(s.er) AS er, SUM(s.hra) AS hra,
+              SUM(s.bb) AS bb, SUM(s.k) AS k, SUM(s.hp) AS hp
        FROM players_career_pitching_stats s
        WHERE s.year = ? AND s.split_id = 1 AND s.level_id = ? AND s.league_id = ?`
     )
@@ -90,6 +93,9 @@ export function leagueBaseline(leagueId: number, year: number, level = 1): Leagu
       : 0,
     lgRperPA: n(bat.pa) ? n(bat.r) / n(bat.pa) : 0,
     lgERA: lgInnings ? (n(pit.er) / lgInnings) * 9 : 0,
+    lgFIPRaw: lgInnings
+      ? (13 * n(pit.hra) + 3 * (n(pit.bb) + n(pit.hp)) - 2 * n(pit.k)) / lgInnings
+      : 0,
     parkFactor: parkFactors(leagueId),
   };
   baselineCache.set(key, baseline);
@@ -109,7 +115,7 @@ export interface RawBatting {
 
 export interface RawPitching {
   outs: number; er: number; ra: number; ha: number; bb: number; k: number;
-  hra: number; bf: number; g: number; gs: number; w: number; l: number;
+  hra: number; hp: number; bf: number; g: number; gs: number; w: number; l: number;
   sv: number; hld: number; war: number;
 }
 
@@ -180,8 +186,10 @@ export function computePitching(
   const era = ip ? (g('er') / ip) * 9 : null;
   // ERA+ : 100 × lgERA / ERA, with the park factor lifting pitchers in hitters' parks
   const eraPlus = era !== null && era > 0 && base.lgERA > 0 ? (100 * base.lgERA * pf) / era : null;
-  // FIP league constant makes league FIP equal league ERA
-  const fipConstant = base.lgERA > 0 ? base.lgERA - 3.1 : 0;
+  // FIP's constant is what makes league FIP equal league ERA, so it must be
+  // lgERA minus the league's own raw component — not lgERA minus the textbook
+  // 3.10. Using the textbook figure inflated every FIP by the difference.
+  const fipConstant = base.lgERA > 0 ? base.lgERA - base.lgFIPRaw : 0;
 
   return {
     g: g('g'), gs: g('gs'), w: g('w'), l: g('l'), sv: g('sv'), hld: g('hld'),
@@ -195,7 +203,11 @@ export function computePitching(
     kbb: g('bb') ? round(g('k') / g('bb'), 2) : g('k') > 0 ? null : null,
     kPct: g('bf') ? round((g('k') / g('bf')) * 100, 1) : null,
     bbPct: g('bf') ? round((g('bb') / g('bf')) * 100, 1) : null,
-    fip: ip ? round((13 * g('hra') + 3 * g('bb') - 2 * g('k')) / ip + 3.1 + fipConstant, 2) : null,
+    // Walks and hit batsmen both count: they are the batter reaching without
+    // the defense being involved, which is the whole point of the metric.
+    fip: ip
+      ? round((13 * g('hra') + 3 * (g('bb') + g('hp')) - 2 * g('k')) / ip + fipConstant, 2)
+      : null,
     eraPlus: round(eraPlus, 0),
     war: round(g('war'), 1),
   };

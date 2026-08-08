@@ -12,6 +12,19 @@ export interface ContractInfo {
   lastYearVestingOption: boolean;
 }
 
+/**
+ * SQL fragment restricting a `players p` query to men genuinely on the club.
+ *
+ * `players.team_id` is not the roster: OOTP parks newly signed international
+ * free agents on the parent club until they are assigned to an affiliate, so a
+ * bare `team_id = ?` sweeps 16-year-olds from the complex league in alongside
+ * the major-league staff. Roster status is the real signal — active, or on the
+ * injured list (Cole and Schmidt are inactive but very much on the roster).
+ *
+ * Requires the query to join `players_roster_status rs ON rs.player_id = p.player_id`.
+ */
+export const ON_ROSTER = '(rs.is_active = 1 OR rs.is_on_dl = 1 OR rs.is_on_dl60 = 1)';
+
 export function seasonYear(leagueId: number): number {
   const row = db.prepare(`SELECT season_year FROM leagues WHERE league_id = ?`).get(leagueId) as
     | { season_year: number }
@@ -138,7 +151,8 @@ export function teamFinances(teamId: number): TeamFinances | null {
   if (!tableExists('team_financials')) return null;
   const r = db
     .prepare(
-      `SELECT budget, player_payroll, player_payroll_next_season, cash, market, fan_interest
+      `SELECT budget, player_payroll, player_payroll_next_season, cash,
+              cash_trades_available, market, fan_interest
        FROM team_financials WHERE team_id = ?`
     )
     .get(teamId) as Record<string, number> | undefined;
@@ -147,7 +161,11 @@ export function teamFinances(teamId: number): TeamFinances | null {
     budget: r.budget ?? 0,
     payroll: r.player_payroll ?? 0,
     payrollNextSeason: r.player_payroll_next_season ?? 0,
-    cash: r.cash ?? 0,
+    // OOTP exports `cash` as zero for every team; the money a club can
+    // actually spend is cash_trades_available. Reporting the dead field made
+    // the GM briefing and storylines announce "zero cash on hand" to clubs
+    // sitting on millions.
+    cash: r.cash_trades_available ?? r.cash ?? 0,
     market: r.market ?? 0,
     fanInterest: r.fan_interest ?? 0,
   };
