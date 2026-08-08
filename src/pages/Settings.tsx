@@ -14,6 +14,7 @@ export interface AppSettings {
   autoImport: boolean;
   useTeamColors: boolean;
   defaultOrgId: number | null;
+  theme: 'system' | 'dark' | 'light';
 }
 interface SettingsResponse {
   settings: AppSettings;
@@ -215,6 +216,26 @@ export function Settings({
             />
             <span>{settings.useTeamColors ? 'On' : 'Off'}</span>
           </label>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <strong>Appearance</strong>
+            <div className="muted">
+              System follows your computer's setting and changes with it.
+            </div>
+          </div>
+          <div className="tabs">
+            {(['system', 'light', 'dark'] as const).map((m) => (
+              <button
+                key={m}
+                className={settings.theme === m ? 'active' : ''}
+                onClick={() => void update({ theme: m })}
+              >
+                {m[0].toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="settings-row">

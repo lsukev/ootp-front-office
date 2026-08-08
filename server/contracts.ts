@@ -7,6 +7,9 @@ import {
 
 export const contractRoutes = Router();
 
+/** Days of major-league service that make one service year. */
+const SERVICE_DAYS_PER_YEAR = 172;
+
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
@@ -78,22 +81,27 @@ export function computeContracts(orgId: number) {
   const contracts = contractsByPlayer();
   const values = valuesByPlayer();
   const { overallPct, talentPct } = mlbPercentiler(values);
-  const faMinYears =
-    (db.prepare(`SELECT rules_fa_minimum_years AS y FROM leagues WHERE league_id = ?`).get(org.league_id) as
-      | { y: number }
-      | undefined)?.y ?? 6;
+  const rules = db
+    .prepare(
+      `SELECT rules_fa_minimum_years AS fa, rules_salary_arbitration_minimum_years AS arb
+       FROM leagues WHERE league_id = ?`
+    )
+    .get(org.league_id) as { fa: number; arb: number } | undefined;
+  const faMinYears = rules?.fa ?? 6;
+  const arbMinYears = rules?.arb ?? 3;
 
   const players = db
     .prepare(
       `SELECT p.player_id, p.first_name, p.last_name, p.age, p.position,
-              rs.mlb_service_years AS service_years
+              rs.mlb_service_years AS service_years,
+              rs.mlb_service_days AS service_days
        FROM players p
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
        WHERE p.team_id = ? AND p.retired = 0 AND ${ON_ROSTER}`
     )
     .all(orgId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; position: number;
-    service_years: number | null;
+    service_years: number | null; service_days: number | null;
   }>;
 
   const rows = players
@@ -101,7 +109,19 @@ export function computeContracts(orgId: number) {
       const c = contracts.get(p.player_id);
       // Placeholder rows: zero-year deals or ones with no valid end year
       if (!c || c.totalYears < 1 || c.endYear < year) return null;
-      const reachingFA = (p.service_years ?? faMinYears) >= faMinYears - 1;
+      // mlb_service_years is truncated to whole years, so it cannot tell a
+      // player a week past a threshold from one most of a year past it. Service
+      // days are exact — 172 of them make an MLB service year.
+      const service =
+        p.service_days != null ? p.service_days / SERVICE_DAYS_PER_YEAR : p.service_years ?? 0;
+      // A full season adds one service year, so this is where he lands next winter
+      const projected = service + 1;
+      const reachingFA = projected >= faMinYears;
+      // Which arbitration trip this would be, when he is not yet a free agent
+      const arbYear =
+        !reachingFA && projected >= arbMinYears
+          ? Math.floor(projected - arbMinYears) + 1
+          : null;
       const oPct = overallPct(p.player_id);
       const tPct = talentPct(p.player_id);
       const rec = recommend({
@@ -114,7 +134,11 @@ export function computeContracts(orgId: number) {
       });
       const flags: string[] = [];
       if (c.yearsAfterThis === 0 && reachingFA) flags.push('expiring');
-      else if (c.yearsAfterThis === 0) flags.push('team control');
+      else if (c.yearsAfterThis === 0 && arbYear !== null) {
+        // Saying "team control" for an arbitration-eligible player hid the fact
+        // that he still has arbitration years left, which read as "expiring"
+        flags.push(`arbitration ${arbYear}`);
+      } else if (c.yearsAfterThis === 0) flags.push('pre-arbitration');
       if (c.lastYearTeamOption) flags.push('team option');
       if (c.lastYearPlayerOption) flags.push('player option');
       if (c.lastYearVestingOption) flags.push('vesting option');
@@ -129,7 +153,8 @@ export function computeContracts(orgId: number) {
         totalYears: c.totalYears,
         yearsAfterThis: c.yearsAfterThis,
         endYear: c.endYear,
-        serviceYears: p.service_years,
+        serviceYears: Number(service.toFixed(2)),
+        arbYear,
         overallPct: oPct,
         talentPct: tPct,
         flags,

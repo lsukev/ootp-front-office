@@ -79,10 +79,20 @@ const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a
  * surface it sits on. Blue and purple hues are inherently dark, so a fixed
  * lightness that works for gold leaves them unreadable.
  */
-function brightenUntilReadable(accent: HSL, against: HSL, target = 4.6): HSL {
-  let candidate = accent;
+/**
+ * Walks the accent's lightness until it clears AA against the surface it sits
+ * on. Direction depends on the surface: on a dark panel the accent has to get
+ * lighter, on a pale one it has to get darker.
+ */
+function shiftUntilReadable(accent: HSL, against: HSL, target = 4.6): HSL {
   const surface = hslLuminance(against);
-  for (let l = accent.l; l <= 86; l += 2) {
+  const goLighter = surface < 0.35;
+  let candidate = accent;
+  for (
+    let l = accent.l;
+    goLighter ? l <= 92 : l >= 8;
+    l += goLighter ? 2 : -2
+  ) {
     candidate = { ...accent, l };
     if (contrast(hslLuminance(candidate), surface) >= target) return candidate;
   }
@@ -117,7 +127,21 @@ function pickAccent(colors: TeamColors): { hsl: HSL; found: boolean } {
 }
 
 /** Pure palette derivation — exported so it can be tested without a DOM. */
-export function derivePalette(colors: TeamColors | null): Record<string, string> {
+export type ThemeMode = 'dark' | 'light';
+
+/**
+ * Surface lightness for each mode. The team's hue and accent are shared; only
+ * the surfaces flip, so a club still looks like itself in either mode.
+ */
+const SURFACES = {
+  dark: { bg: 8, deep: 5.5, glow: 13, panel: 13, raised: 17, border: 25, text: 93, muted: 66, ink: 12 },
+  light: { bg: 96, deep: 92, glow: 99, panel: 100, raised: 97, border: 78, text: 15, muted: 38, ink: 98 },
+} as const;
+
+export function derivePalette(
+  colors: TeamColors | null,
+  mode: ThemeMode = 'dark'
+): Record<string, string> {
   const out: Record<string, string> = {};
   const set = (k: string, v: string) => {
     out[k] = v;
@@ -174,27 +198,41 @@ export function derivePalette(colors: TeamColors | null): Record<string, string>
       ? 20
       : Math.min(38, Math.max(18, primaryHsl.s * 0.55));
 
-  const panel = { h: hue, s: tint * 0.8, l: 13 };
-  // The accent must clear AA against the lightest surface it appears on
-  const accent = brightenUntilReadable(baseAccent, { h: hue, s: tint * 0.8, l: 17 });
+  const s = SURFACES[mode];
+  // Pale surfaces need far less tint or the whole page reads as coloured paper
+  const surfaceTint = mode === 'light' ? Math.min(tint, 14) : tint;
 
-  set('--bg', hsl({ h: hue, s: tint, l: 8 }));
-  set('--bg-deep', hsl({ h: hue, s: tint, l: 5.5 }));
-  set('--bg-glow', hsl({ h: hue, s: tint, l: 13 }));
+  const panel = { h: hue, s: surfaceTint * 0.8, l: s.panel };
+  // The accent must clear AA against its worst-case surface, and which surface
+  // that is flips with the mode: a light accent on dark struggles against the
+  // lightest panel, a dark accent on light struggles against the darkest page.
+  const worstSurface = mode === 'light' ? s.bg : s.raised;
+  const accent = shiftUntilReadable(baseAccent, { h: hue, s: surfaceTint * 0.8, l: worstSurface });
+
+  set('--bg', hsl({ h: hue, s: surfaceTint, l: s.bg }));
+  set('--bg-deep', hsl({ h: hue, s: surfaceTint, l: s.deep }));
+  set('--bg-glow', hsl({ h: hue, s: surfaceTint, l: s.glow }));
   set('--panel', hsl(panel));
-  set('--panel-raised', hsl({ h: hue, s: tint * 0.8, l: 17 }));
-  set('--border', hsl({ h: hue, s: tint * 0.7, l: 25 }));
-  set('--text', hsl({ h: hue, s: 22, l: 93 }));
-  set('--muted', hsl({ h: hue, s: 14, l: 66 }));
+  set('--panel-raised', hsl({ h: hue, s: surfaceTint * 0.8, l: s.raised }));
+  set('--border', hsl({ h: hue, s: surfaceTint * 0.7, l: s.border }));
+  set('--text', hsl({ h: hue, s: mode === 'light' ? 18 : 22, l: s.text }));
+  set('--muted', hsl({ h: hue, s: 14, l: s.muted }));
   set('--accent', hsl(accent));
-  // Dark ink for text sitting on the accent; keep it readable on pale accents
-  set('--accent-ink', hsl({ h: accent.h, s: Math.min(60, accent.s), l: 12 }));
+  // Text sitting on the accent: dark ink in dark mode, near-white on the
+  // darkened accent light mode produces
+  set('--accent-ink', hsl({ h: accent.h, s: Math.min(60, accent.s), l: s.ink }));
+  // Good/bad need to flip too: pastel greens vanish on white
+  set('--good', mode === 'light' ? 'hsl(145, 55%, 28%)' : 'hsl(120, 40%, 64%)');
+  set('--bad', mode === 'light' ? 'hsl(2, 62%, 42%)' : 'hsl(5, 100%, 79%)');
   return out;
 }
 
-export function applyTeamTheme(colors: TeamColors | null): void {
+export function applyTeamTheme(colors: TeamColors | null, mode: ThemeMode = 'dark'): void {
   const root = document.documentElement;
-  for (const [key, value] of Object.entries(derivePalette(colors))) {
+  for (const [key, value] of Object.entries(derivePalette(colors, mode))) {
     root.style.setProperty(key, value);
   }
+  // Tells the browser which way to render scrollbars, form controls and inputs
+  root.style.setProperty('color-scheme', mode);
+  root.dataset.theme = mode;
 }

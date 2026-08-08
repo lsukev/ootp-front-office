@@ -27,13 +27,13 @@ import { Players } from './pages/Players';
 import { Standings } from './pages/Standings';
 import { PlayerModal } from './playerModal';
 import { Nav, type NavEntry } from './Nav';
-import { applyTeamTheme } from './theme';
+import { applyTeamTheme, type ThemeMode } from './theme';
 import { TeamLogo } from './TeamLogo';
 import { FolderPicker } from './FolderPicker';
 import { Settings, type AppSettings } from './pages/Settings';
 import { UpdateBadge } from './Updater';
 import { Chat } from './Chat';
-import { apiGet } from './api';
+import { apiGet, apiPost } from './api';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
@@ -128,10 +128,24 @@ export function App() {
 
   const org = orgs.find((o) => o.team_id === orgId) ?? null;
 
+  // Resolve the appearance preference; 'system' tracks the OS and updates live
+  const preference = appSettings?.theme ?? 'system';
+  const [systemMode, setSystemMode] = useState<ThemeMode>(() =>
+    window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  );
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: light)');
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemMode(e.matches ? 'light' : 'dark');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const mode: ThemeMode = preference === 'system' ? systemMode : preference;
+
   // Re-theme the whole app around the selected organization's colors
   useEffect(() => {
-    applyTeamTheme(appSettings?.useTeamColors === false ? null : org?.colors ?? null);
-  }, [org, appSettings?.useTeamColors]);
+    applyTeamTheme(appSettings?.useTeamColors === false ? null : org?.colors ?? null, mode);
+  }, [org, appSettings?.useTeamColors, mode]);
 
   const waitForImport = useCallback(async () => {
     for (let i = 0; i < 120; i++) {
@@ -242,6 +256,20 @@ export function App() {
             {busy ? 'Working…' : '↻ Refresh'}
           </button>
           <UpdateBadge onOpenSettings={() => setPage('settings')} />
+          {status.hasData && (
+            <button
+              className="theme-toggle"
+              title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`}
+              onClick={() => {
+                const next: ThemeMode = mode === 'dark' ? 'light' : 'dark';
+                setAppSettings((prev) => (prev ? { ...prev, theme: next } : prev));
+                void apiPost('/api/settings', { theme: next });
+              }}
+            >
+              {mode === 'dark' ? '☀' : '☾'}
+            </button>
+          )}
           {status.hasData && (
             <button
               className={`ask-button ${chatOpen ? 'active' : ''}`}

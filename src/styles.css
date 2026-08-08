@@ -1219,3 +1219,10 @@ button.cta {
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
+
+/* Appearance toggle */
+.theme-toggle {
+  padding: 6px 10px;
+  font-size: 15px;
+  line-height: 1;
+}

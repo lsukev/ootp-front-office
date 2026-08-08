@@ -55,8 +55,13 @@ const teams = db
 
 const AA = 4.5;
 let failures = 0;
+// Both modes are generated from the same team colors, so both have to be
+// checked — a palette that reads well on black can vanish on white.
+const MODES = ['dark', 'light'] as const;
+for (const mode of MODES) {
+console.log(`\n── ${mode} mode ──`);
 for (const t of teams) {
-  const p = derivePalette(t);
+  const p = derivePalette(t, mode);
   const checks: Record<string, number> = {
     text: ratio(p['--text'], p['--bg']),
     muted: ratio(p['--muted'], p['--bg']),
@@ -76,4 +81,7 @@ for (const t of teams) {
       `   accent=${p['--accent']}`
   );
 }
-console.log(`\n${teams.length - failures}/${teams.length} teams pass WCAG AA on every pair`);
+}
+const total = teams.length * MODES.length;
+console.log(`\n${total - failures}/${total} team/mode combinations pass WCAG AA on every pair`);
+if (failures > 0) process.exit(1);

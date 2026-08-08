@@ -19,9 +19,16 @@ export interface Settings {
   autoImport: boolean;
   useTeamColors: boolean;
   defaultOrgId: number | null;
+  /** 'system' follows the OS setting and changes with it. */
+  theme: 'system' | 'dark' | 'light';
 }
 
-const DEFAULTS: Settings = { autoImport: true, useTeamColors: true, defaultOrgId: null };
+const DEFAULTS: Settings = {
+  autoImport: true,
+  useTeamColors: true,
+  defaultOrgId: null,
+  theme: 'system',
+};
 
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 const KEY_PATH = path.join(DATA_DIR, 'credentials.json');
@@ -158,6 +165,9 @@ settingsRoutes.post('/settings', (req, res) => {
   if (typeof body.useTeamColors === 'boolean') next.useTeamColors = body.useTeamColors;
   if (body.defaultOrgId === null || typeof body.defaultOrgId === 'number') {
     next.defaultOrgId = body.defaultOrgId;
+  }
+  if (body.theme === 'system' || body.theme === 'dark' || body.theme === 'light') {
+    next.theme = body.theme;
   }
   writeSettings(next);
 
