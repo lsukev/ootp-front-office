@@ -11,7 +11,25 @@ interface Message {
   content: string;
   /** Tools the assistant called while producing this answer. */
   tools?: string[];
+  /** ISO send time. Absent on threads saved before timestamps existed. */
+  at?: string;
 }
+
+const clockTime = (iso?: string): string =>
+  iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+/** Day divider text, the way a messages app breaks up a long thread. */
+const dayLabel = (iso?: string): string | null => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return 'Today';
+  if (same(d, yesterday)) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
 
 const TOOL_LABELS: Record<string, string> = {
   search_players: 'searching players',
@@ -95,8 +113,9 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
       const text = question.trim();
       if (!text || busy) return;
 
-      const history: Message[] = [...messages, { role: 'user', content: text }];
-      setMessages([...history, { role: 'assistant', content: '', tools: [] }]);
+      const now = new Date().toISOString();
+      const history: Message[] = [...messages, { role: 'user', content: text, at: now }];
+      setMessages([...history, { role: 'assistant', content: '', tools: [], at: now }]);
       // Save the question now: if the answer errors or is stopped, the thread
       // still reflects what was asked
       saveHistory(orgId, history);
@@ -186,26 +205,30 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   }, [orgId]);
 
   return (
-    <div className="chat">
+    <div className="imsg">
       {messages.length > 0 && (
-        <div className="chat-bar">
-          <span className="muted">
+        <div className="imsg-bar">
+          <span>
             {messages.filter((m) => m.role === 'user').length} question
-            {messages.filter((m) => m.role === 'user').length === 1 ? '' : 's'} in this thread
+            {messages.filter((m) => m.role === 'user').length === 1 ? '' : 's'}
           </span>
           <button className="link-button" onClick={clear}>
             Start over
           </button>
         </div>
       )}
-      <div className="chat-log" ref={scrollRef}>
+
+      <div className="imsg-log" ref={scrollRef}>
         {messages.length === 0 && (
-          <div className="chat-empty">
-            <p className="muted">
-              Ask anything about {orgLabel} or the league. Answers come from your save, not from
-              general baseball knowledge — the assistant looks the numbers up before replying.
+          <div className="imsg-intro">
+            <div className="imsg-avatar imsg-avatar-lg" aria-hidden="true">
+              FO
+            </div>
+            <p>
+              Ask anything about {orgLabel} or the league. I look the numbers up in your save
+              before answering — I don&rsquo;t work from memory.
             </p>
-            <div className="chat-starters">
+            <div className="imsg-starters">
               {STARTERS.map((s) => (
                 <button key={s} onClick={() => void ask(s)} disabled={busy}>
                   {s}
@@ -215,55 +238,103 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <div key={i} className={`chat-msg chat-${m.role}`}>
-            {m.tools && m.tools.length > 0 && (
-              <div className="chat-tools">
-                {m.tools.map((t, j) => (
-                  <span key={`${t}-${j}`}>{TOOL_LABELS[t] ?? t}</span>
-                ))}
-              </div>
-            )}
-            {m.content ? (
-              <div className="chat-text">{m.content}</div>
-            ) : (
-              busy && i === messages.length - 1 && <span className="chat-thinking">Thinking…</span>
-            )}
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          const prev = messages[i - 1];
+          const next = messages[i + 1];
+          // Group consecutive messages from the same side, the way a
+          // messages app does: one tail and one timestamp per run.
+          const startsRun = !prev || prev.role !== m.role;
+          const endsRun = !next || next.role !== m.role;
+          const showDay =
+            !!m.at && (!prev?.at || dayLabel(prev.at) !== dayLabel(m.at)) && !!dayLabel(m.at);
+          const streaming = busy && i === messages.length - 1 && !m.content;
 
-        {error && <div className="banner error">{error}</div>}
+          return (
+            <div key={i}>
+              {showDay && <div className="imsg-day">{dayLabel(m.at)}</div>}
+              <div className={`imsg-row imsg-${m.role} ${endsRun ? 'imsg-run-end' : ''}`}>
+                {m.role === 'assistant' && (
+                  <div className="imsg-avatar" aria-hidden="true">
+                    {startsRun ? 'FO' : ''}
+                  </div>
+                )}
+                <div className="imsg-stack">
+                  {m.tools && m.tools.length > 0 && (
+                    <div className="imsg-activity">
+                      {m.tools.map((tool, j) => (
+                        <span key={`${tool}-${j}`}>{TOOL_LABELS[tool] ?? tool}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  {streaming ? (
+                    <div className="imsg-bubble imsg-typing" aria-label="Typing">
+                      <i />
+                      <i />
+                      <i />
+                    </div>
+                  ) : (
+                    m.content && (
+                      <div className={`imsg-bubble ${endsRun ? 'imsg-tail' : ''}`}>{m.content}</div>
+                    )
+                  )}
+
+                  {endsRun && m.at && !streaming && (
+                    <time className="imsg-time">{clockTime(m.at)}</time>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {error && <div className="imsg-error">{error}</div>}
       </div>
 
       <form
-        className="chat-input"
+        className="imsg-compose"
         onSubmit={(e) => {
           e.preventDefault();
           void ask(input);
         }}
       >
-        <textarea
-          value={input}
-          rows={1}
-          placeholder={`Ask about ${orgLabel}, a player, the standings…`}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends; Shift+Enter is a newline
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void ask(input);
-            }
-          }}
-        />
-        {busy ? (
-          <button type="button" onClick={() => abortRef.current?.abort()}>
-            Stop
-          </button>
-        ) : (
-          <button type="submit" className="cta" disabled={!input.trim()}>
-            Ask
-          </button>
-        )}
+        <div className="imsg-field">
+          <textarea
+            value={input}
+            rows={1}
+            placeholder="Message"
+            aria-label={`Ask about ${orgLabel}`}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends; Shift+Enter is a newline
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void ask(input);
+              }
+            }}
+          />
+          {busy ? (
+            <button
+              type="button"
+              className="imsg-send imsg-stop"
+              onClick={() => abortRef.current?.abort()}
+              aria-label="Stop"
+              title="Stop"
+            >
+              ■
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="imsg-send"
+              disabled={!input.trim()}
+              aria-label="Send"
+              title="Send"
+            >
+              ↑
+            </button>
+          )}
+        </div>
       </form>
     </div>
   );
