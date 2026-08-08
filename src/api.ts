@@ -16,6 +16,8 @@ export interface Status {
   lastImport: { tables: number; rows: number; finishedAt: string } | null;
   lastError: string | null;
   hasData: boolean;
+  /** ISO time a fresh export was spotted on disk but not yet imported. */
+  exportPending: string | null;
 }
 
 export interface Team {

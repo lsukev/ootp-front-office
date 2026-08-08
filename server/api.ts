@@ -5,7 +5,7 @@ import { db, tableExists, tableColumns, locateColumn } from './db.js';
 import { detectSaves, resolveChosenFolder, searchLocations } from './paths.js';
 import { DATA_DIR, loadConfig, saveConfig } from './config.js';
 import { importCsvDir, type ImportResult } from './importer.js';
-import { startWatcher } from './watcher.js';
+import { clearPendingExport, pendingExport, startWatcher } from './watcher.js';
 import { orgRoutes } from './org.js';
 import { contractRoutes } from './contracts.js';
 import { freeAgentRoutes } from './freeagents.js';
@@ -70,6 +70,8 @@ export function runImport(csvDir: string): void {
   importState.lastError = null;
   try {
     importState.lastImport = importCsvDir(csvDir);
+    // Whatever was waiting on disk has now been read
+    clearPendingExport();
     fs.writeFileSync(META_PATH, JSON.stringify(importState.lastImport));
     clearStatCaches(); // league baselines are per-import
     try {
@@ -130,6 +132,8 @@ api.get('/status', (_req, res) => {
     lastImport: importState.lastImport,
     lastError: importState.lastError,
     hasData: tableExists('players') && tableExists('teams'),
+    /** Set when OOTP has written a fresh export the app has not imported yet. */
+    exportPending: pendingExport(),
   });
 });
 

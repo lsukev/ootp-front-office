@@ -126,6 +126,18 @@ export function App() {
     getSaves().then(setSaves).catch(() => {});
   }, [refreshStatus]);
 
+  // Poll for a fresh export. Cheap, and the alternative is the user staring at
+  // stale numbers with no idea the game has moved on.
+  useEffect(() => {
+    if (!status?.hasData) return;
+    const id = setInterval(() => {
+      getStatus()
+        .then((s) => setStatus((prev) => (prev?.exportPending === s.exportPending ? prev : s)))
+        .catch(() => {});
+    }, 8000);
+    return () => clearInterval(id);
+  }, [status?.hasData]);
+
   const org = orgs.find((o) => o.team_id === orgId) ?? null;
 
   // Resolve the appearance preference; 'system' tracks the OS and updates live
@@ -296,6 +308,17 @@ export function App() {
 
       {error && <div className="banner error">{error}</div>}
       {status.lastError && <div className="banner error">Import failed: {status.lastError}</div>}
+      {status.exportPending && !busy && (
+        <div className="banner refresh-prompt">
+          <span>
+            <strong>A newer export is ready.</strong> OOTP wrote fresh data{' '}
+            {relativeTime(status.exportPending)} — refresh to load it.
+          </span>
+          <button className="cta" onClick={hardRefresh}>
+            Refresh now
+          </button>
+        </div>
+      )}
 
       {!status.hasData ? (
         <SavePicker saves={saves} onPick={switchSave} busy={busy} />

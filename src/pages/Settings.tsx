@@ -167,9 +167,10 @@ export function Settings({
 
         <div className="settings-row">
           <div>
-            <strong>Re-import automatically</strong>
+            <strong>Watch for new exports</strong>
             <div className="muted">
-              Watch the export folder and re-import within a few seconds of exporting from OOTP.
+              Notice when OOTP writes a fresh export and offer to load it. Importing a full league
+              takes a while, so the app asks rather than interrupting you.
             </div>
           </div>
           <label className="toggle">
