@@ -32,6 +32,8 @@ asarUnpack:
 
 mac:
   category: public.app-category.sports
+  # electron-builder renders the .icns from this single high-res source
+  icon: docs/icons/frontoffice.png
   target:
     # dmg is what people download by hand; zip is what Squirrel.Mac needs to
     # apply an in-place update — it cannot install from a dmg. Both must be
@@ -52,6 +54,8 @@ dmg:
   title: ${productName}
 
 win:
+  # and the .ico from the same file, so both platforms stay in sync
+  icon: docs/icons/frontoffice.png
   target:
     - target: nsis
       arch: [x64]
