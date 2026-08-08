@@ -49,15 +49,21 @@ async function createWindow(): Promise<void> {
 
     // Let the server encrypt the stored API key against the OS keychain
     // (Keychain on macOS, DPAPI on Windows) instead of writing it in plain text.
+    //
+    // Every call below is deferred. On macOS even isEncryptionAvailable() reads
+    // the app's Keychain entry, and macOS prompts for the login password when
+    // the requesting binary differs from the one that created the entry — which
+    // is every upgrade. Calling it at startup made a fresh install of a new
+    // version ask for a Keychain password before showing anything, including
+    // for the majority of users who never set an API key at all.
     const { safeStorage } = await import('electron');
-    if (safeStorage.isEncryptionAvailable()) {
-      const { setSecretCrypto } = await import('../server/settings.js');
-      setSecretCrypto({
-        encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
-        decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
-        label: process.platform === 'darwin' ? 'your macOS Keychain' : 'Windows Credential storage (DPAPI)',
-      });
-    }
+    const { setSecretCrypto } = await import('../server/settings.js');
+    setSecretCrypto({
+      available: () => safeStorage.isEncryptionAvailable(),
+      encrypt: (plain) => safeStorage.encryptString(plain).toString('base64'),
+      decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+      label: process.platform === 'darwin' ? 'your macOS Keychain' : 'Windows Credential storage (DPAPI)',
+    });
 
     const port = await startServer(0);
     await mainWindow.loadURL(`http://127.0.0.1:${port}`);

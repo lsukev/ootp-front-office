@@ -41,6 +41,12 @@ function writeSettings(next: Settings): void {
 // ── Secret storage ──────────────────────────────────────────────────────
 
 interface SecretCrypto {
+  /**
+   * Whether OS-backed encryption works. On macOS this reaches into the
+   * Keychain, which can raise a password prompt — so it must only be called
+   * when a secret is actually being written or read, never on startup.
+   */
+  available(): boolean;
   encrypt(plain: string): string;
   decrypt(cipher: string): string;
   label: string;
@@ -52,6 +58,16 @@ export function setSecretCrypto(impl: SecretCrypto): void {
   crypto = impl;
 }
 
+/** Resolves the crypto only when there is a secret to protect. */
+function activeCrypto(): SecretCrypto | null {
+  if (!crypto) return null;
+  try {
+    return crypto.available() ? crypto : null;
+  } catch {
+    return null;
+  }
+}
+
 interface StoredKey {
   encrypted: boolean;
   value: string;
@@ -61,8 +77,9 @@ interface StoredKey {
 
 export function saveApiKey(key: string): void {
   const trimmed = key.trim();
-  const record: StoredKey = crypto
-    ? { encrypted: true, value: crypto.encrypt(trimmed), hint: trimmed.slice(-4) }
+  const active = activeCrypto();
+  const record: StoredKey = active
+    ? { encrypted: true, value: active.encrypt(trimmed), hint: trimmed.slice(-4) }
     : { encrypted: false, value: trimmed, hint: trimmed.slice(-4) };
   fs.writeFileSync(KEY_PATH, JSON.stringify(record, null, 2), { mode: 0o600 });
 }
@@ -93,7 +110,8 @@ export function getApiKey(): string | null {
   if (!stored) return null;
   if (!stored.encrypted) return stored.value;
   try {
-    return crypto ? crypto.decrypt(stored.value) : null;
+    const active = activeCrypto();
+    return active ? active.decrypt(stored.value) : null;
   } catch {
     // Encrypted on another machine or by another user account
     return null;
