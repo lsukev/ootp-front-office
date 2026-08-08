@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
+import { Th } from '../Th';
 
 interface CrunchPlayer {
   player_id: number; name: string; age: number; positionName: string; levelName: string;
@@ -46,7 +47,7 @@ export function RosterCrunch({ orgId }: { orgId: number }) {
           <h2>⚠ Needs Attention</h2>
           <table>
             <thead>
-              <tr><th>Player</th><th>Pos</th><th>Age</th><th>Level</th><th>Issues</th></tr>
+              <tr><Th>Player</Th><Th>Pos</Th><Th>Age</Th><Th>Level</Th><Th>Issues</Th></tr>
             </thead>
             <tbody>
               {data.issues.map((p) => (
@@ -66,7 +67,7 @@ export function RosterCrunch({ orgId }: { orgId: number }) {
       <h2>40-Man Roster</h2>
       <table>
         <thead>
-          <tr><th>Player</th><th>Pos</th><th>Age</th><th>Level</th><th>Status</th><th>Options used</th></tr>
+          <tr><Th>Player</Th><Th>Pos</Th><Th>Age</Th><Th>Level</Th><Th>Status</Th><Th>Options used</Th></tr>
         </thead>
         <tbody>
           {data.fortyMan.map((p) => (

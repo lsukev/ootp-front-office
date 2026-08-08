@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink, Tip, TIP_CURPOT } from '../playerModal';
+import { Th } from '../Th';
 
 interface DraftProspect {
   player_id: number; name: string; age: number; positionName: string; bats: string; throws: string;
@@ -42,7 +43,7 @@ export function Draft() {
       <table>
         <thead>
           <tr>
-            <th>Rk</th><th>Player</th><th>Age</th><th>Pos</th><th>B/T</th>
+            <Th>Rk</Th><Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>B/T</Th>
             <th><Tip label="Cur→Pot" tip={TIP_CURPOT} /></th>
           </tr>
         </thead>

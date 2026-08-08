@@ -7,8 +7,12 @@ import { RosterPage } from './pages/Roster';
 import { DepthChart } from './pages/DepthChart';
 import { Prospects } from './pages/Prospects';
 import { Contracts } from './pages/Contracts';
+import { Payroll } from './pages/Payroll';
 import { FreeAgents } from './pages/FreeAgents';
 import { Lineup } from './pages/Lineup';
+import { Pitching } from './pages/Pitching';
+import { Schedule } from './pages/Schedule';
+import { Trends } from './pages/Trends';
 import { Storylines } from './pages/Storylines';
 import { Dashboard } from './pages/Dashboard';
 import { Development } from './pages/Development';
@@ -28,12 +32,13 @@ import { TeamLogo } from './TeamLogo';
 import { FolderPicker } from './FolderPicker';
 import { Settings, type AppSettings } from './pages/Settings';
 import { UpdateBadge } from './Updater';
+import { Chat } from './Chat';
 import { apiGet } from './api';
 
 type Page =
   | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
-  | 'staff' | 'watchlist' | 'players' | 'standings' | 'settings';
+  | 'staff' | 'watchlist' | 'players' | 'standings' | 'pitching' | 'schedule' | 'payroll' | 'trends' | 'settings';
 
 /**
  * Grouped by front-office function: what you do daily (Dashboard, Storylines),
@@ -46,7 +51,9 @@ const NAV: Array<NavEntry<Page>> = [
   {
     kind: 'group', label: 'Clubhouse', icon: '⚾',
     items: [
+      { page: 'schedule', label: 'Schedule', hint: 'Series by series, with probables' },
       { page: 'lineup', label: 'Lineup', hint: "Tonight's card, platoon-aware" },
+      { page: 'pitching', label: 'Pitching Staff', hint: 'Rotation, bullpen, who can throw tonight' },
       { page: 'rosters', label: 'Rosters', hint: 'Any team in the org' },
       { page: 'depth', label: 'Depth Chart', hint: 'Positions across every level' },
       { page: 'injuries', label: 'Injury Report', hint: 'Who is out and for how long' },
@@ -64,6 +71,7 @@ const NAV: Array<NavEntry<Page>> = [
   {
     kind: 'group', label: 'Front Office', icon: '💼',
     items: [
+      { page: 'payroll', label: 'Payroll & Budget', hint: 'Committed money by season' },
       { page: 'contracts', label: 'Contracts', hint: 'Re-sign, extend, or walk' },
       { page: 'freeagents', label: 'Free Agents', hint: 'Now and after this season' },
       { page: 'trades', label: 'Trade Center', hint: 'Analyzer and league-wide fits' },
@@ -74,6 +82,7 @@ const NAV: Array<NavEntry<Page>> = [
     kind: 'group', label: 'League', icon: '📊',
     items: [
       { page: 'standings', label: 'Standings', hint: 'Every division, run differential' },
+      { page: 'trends', label: 'Season Trends', hint: 'Run differential and scoring curves' },
       { page: 'players', label: 'Player Search', hint: 'Search anyone in the league' },
       { page: 'leaders', label: 'Leaderboards', hint: 'League top tens' },
       { page: 'watchlist', label: 'My Watchlist', hint: 'Starred players and notes' },
@@ -89,6 +98,7 @@ export function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [switching, setSwitching] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -232,6 +242,15 @@ export function App() {
           <UpdateBadge onOpenSettings={() => setPage('settings')} />
           {status.hasData && (
             <button
+              className={`ask-button ${chatOpen ? 'active' : ''}`}
+              onClick={() => setChatOpen((v) => !v)}
+              title="Ask about your league"
+            >
+              ✦ Ask
+            </button>
+          )}
+          {status.hasData && (
+            <button
               className={`gear ${page === 'settings' ? 'active' : ''}`}
               onClick={() => setPage('settings')}
               title="Settings"
@@ -261,12 +280,16 @@ export function App() {
                 {page === 'development' && <Development orgId={orgId} />}
                 {page === 'draft' && <Draft />}
                 {page === 'contracts' && <Contracts orgId={orgId} />}
+                {page === 'payroll' && <Payroll orgId={orgId} />}
                 {page === 'crunch' && <RosterCrunch orgId={orgId} />}
                 {page === 'injuries' && <Injuries orgId={orgId} />}
                 {page === 'trades' && <TradeCenter orgId={orgId} orgLabel={org.label} />}
                 {page === 'freeagents' && <FreeAgents orgId={orgId} />}
                 {page === 'lineup' && <Lineup teamId={orgId} />}
+                {page === 'pitching' && <Pitching teamId={orgId} />}
+                {page === 'schedule' && <Schedule teamId={orgId} />}
                 {page === 'standings' && <Standings orgId={orgId} />}
+                {page === 'trends' && <Trends teamId={orgId} />}
                 {page === 'players' && <Players orgs={orgs} orgId={orgId} />}
                 {page === 'leaders' && <Leaderboards orgId={orgId} />}
                 {page === 'staff' && <Staff orgId={orgId} />}
@@ -282,6 +305,21 @@ export function App() {
               </>
             )}
           </main>
+
+          {chatOpen && orgId !== null && org && (
+            <>
+              <div className="chat-scrim" onClick={() => setChatOpen(false)} />
+              <aside className="chat-drawer" aria-label="Ask about your league">
+                <header className="chat-head">
+                  <strong>Ask the front office</strong>
+                  <button className="chat-close" onClick={() => setChatOpen(false)} title="Close">
+                    ✕
+                  </button>
+                </header>
+                <Chat orgId={orgId} orgLabel={org.label} />
+              </aside>
+            </>
+          )}
         </>
       )}
     </div>

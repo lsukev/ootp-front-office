@@ -957,3 +957,250 @@ button.cta {
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* Pitching staff */
+.avail {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.avail-ok { background: rgba(80, 190, 120, 0.14); color: #6fcf90; }
+.avail-warn { background: rgba(230, 180, 70, 0.16); color: #e2b552; }
+.avail-bad { background: rgba(220, 90, 90, 0.16); color: #e07b7b; }
+.role-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.injury-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(220, 90, 90, 0.16);
+  color: #e07b7b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.subtle-count { font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+
+/* Schedule */
+.record-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: baseline;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.series-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 14px;
+}
+.series-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.series-card.series-done { opacity: 0.72; }
+.series-card.series-next {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  opacity: 1;
+}
+.series-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.series-head .logo-sm { width: 30px; height: 30px; object-fit: contain; flex: none; }
+.series-title { flex: 1; min-width: 0; }
+.series-dates { font-size: 12px; }
+.series-result { text-align: right; white-space: nowrap; font-weight: 600; }
+.next-tag {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+.series-games td { padding: 3px 6px; font-size: 13px; }
+.series-date { color: var(--muted); white-space: nowrap; }
+.series-score { white-space: nowrap; font-weight: 600; }
+.series-vs { text-align: center; font-size: 11px; }
+
+/* Payroll */
+.finance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.finance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.finance-card strong { font-size: 19px; }
+.commit-chart { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
+.commit-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.commit-year { width: 44px; color: var(--muted); }
+.commit-track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 120px;
+}
+.commit-bar { height: 100%; background: var(--accent); opacity: 0.75; }
+.commit-budget {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px dashed var(--fg);
+  opacity: 0.55;
+}
+.commit-value { width: 70px; text-align: right; font-weight: 600; }
+.commit-players { width: 78px; font-size: 12px; }
+.commit-room { width: 92px; text-align: right; font-size: 12px; }
+.two-col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.row-dead td { opacity: 0.6; }
+
+/* Charts */
+.chart-wrap { margin: 4px 0 6px; }
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-baseline { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.8; }
+.chart-cursor { stroke: var(--muted); stroke-width: 1; opacity: 0.6; }
+.chart-axis { fill: var(--muted); font-size: 11px; }
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding-left: 46px;
+}
+.chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.chart-legend strong { color: var(--fg); margin-left: 4px; }
+.sparkline { vertical-align: middle; color: var(--muted); }
+
+/* Ask — chat drawer */
+.ask-button {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ask-button.active { background: var(--accent); color: var(--plate); }
+.chat-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+.chat-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.35);
+  z-index: 41;
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.chat-close { border: none; background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
+.chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.chat-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.chat-empty { display: flex; flex-direction: column; gap: 12px; }
+.chat-starters { display: flex; flex-direction: column; gap: 8px; }
+.chat-starters button { text-align: left; font-size: 13px; }
+.chat-msg { display: flex; flex-direction: column; gap: 6px; }
+.chat-user .chat-text {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--plate);
+  padding: 8px 12px;
+  border-radius: 12px 12px 2px 12px;
+  max-width: 88%;
+  margin-left: auto;
+}
+.chat-assistant .chat-text {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 14px;
+}
+.chat-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-tools span {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--line);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.chat-thinking { color: var(--muted); font-size: 13px; }
+.chat-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+.chat-input textarea {
+  flex: 1;
+  resize: none;
+  min-height: 38px;
+  max-height: 140px;
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 10px;
+  border-radius: 8px;
+}

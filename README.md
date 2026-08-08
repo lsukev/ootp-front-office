@@ -65,6 +65,17 @@ actual save data.
 | Trade Center | Trade analyzer with value/salary swings, AI verdict, plus league-wide fit finder |
 | 40-Man Roster | Roster counts, options used, out-of-options, Rule 5 exposure, DFA countdowns |
 
+**✦ Ask** — the chat panel, from any page
+
+Ask questions about your league in plain English: "who should I call up?", "which
+contracts should I worry about?", "can Bednar pitch tonight?". The assistant answers by
+calling the app's own endpoints — the same ones the pages read — so it can never disagree
+with what you see on screen, and it is told plainly that its training data knows nothing
+about your simulated league. It shows which lookups it ran while answering.
+
+Requires an Anthropic API key (**Settings → AI Features**); everything else in the app
+works without one.
+
 **📊 League** — reference
 
 | Page | What you get |
@@ -337,6 +348,11 @@ server/           Express API + import pipeline
   trade.ts        Trade analyzer + fit finder
   rosterops.ts    40-man, leaderboards, staff, draft
   league.ts       Standings + league-wide player search
+  pitching.ts     Rotation, bullpen availability
+  schedule.ts     Series-by-series schedule
+  payroll.ts      Commitments, dead money
+  trends.ts       Season curves
+  chat.ts         Ask panel: tool-use loop over the app's own API
   storylines.ts   AI storylines
   ai.ts           AI briefing + trade evaluation
 electron/
@@ -347,6 +363,10 @@ src/
   pages/          One file per page
   playerModal.tsx Player dossier + tooltips
   Updater.tsx     Update panel + header badge
+  Chat.tsx        Ask panel (SSE streaming)
+  glossary.ts     One definition per stat, shared by every table
+  Th.tsx          Self-documenting table header
+  Chart.tsx       Inline SVG charts (no charting dependency)
 data/             Created at runtime (gitignored)
 ```
 

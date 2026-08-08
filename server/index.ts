@@ -44,6 +44,9 @@ export function startServer(port = 5178): Promise<number> {
     server.once('error', reject);
     server.once('listening', () => {
       const actual = (server.address() as AddressInfo).port;
+      // The chat tools read the app's own endpoints so the assistant sees
+      // exactly what the UI shows, rather than a second implementation.
+      process.env.OOTP_FO_PORT = String(actual);
       console.log(`[server] http://localhost:${actual}`);
       bootstrapData();
       resolve(actual);

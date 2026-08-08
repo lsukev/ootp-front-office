@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
+import { Th } from '../Th';
 
 interface DevChange {
   player_id: number; name: string; age: number; position: number; level: number;
@@ -80,7 +81,7 @@ function DevTable({ changes }: { changes: DevChange[] }) {
     <table>
       <thead>
         <tr>
-          <th>Player</th><th>Age</th><th>Level</th><th>Cur Δ</th><th>Pot Δ</th><th>What changed</th>
+          <Th>Player</Th><Th>Age</Th><Th>Level</Th><Th>Cur Δ</Th><Th>Pot Δ</Th><Th>What changed</Th>
         </tr>
       </thead>
       <tbody>

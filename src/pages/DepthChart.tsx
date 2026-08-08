@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getDepthChart, type DepthPlayer, type DepthTeam } from '../api';
 import { PlayerLink } from '../playerModal';
+import { Th } from '../Th';
 
 const ROWS: Array<{ label: string; match: (p: DepthPlayer) => boolean }> = [
   { label: 'SP', match: (p) => p.position === 1 && p.role === 11 },
@@ -45,7 +46,7 @@ export function DepthChart({ orgId }: { orgId: number }) {
       <table className="depth">
         <thead>
           <tr>
-            <th>Pos</th>
+            <Th>Pos</Th>
             {data.teams.map((t) => (
               <th key={t.team_id}>
                 <span className="level-tag">{t.levelName}</span> {t.label}

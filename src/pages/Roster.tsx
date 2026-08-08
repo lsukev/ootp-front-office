@@ -6,6 +6,7 @@ import {
   DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, loadColumns, plusColor, saveColumns,
   type StatGroup,
 } from '../stats';
+import { Th } from '../Th';
 
 const BATTER_RATINGS = ['contact', 'gap', 'power', 'eye', 'avoidK', 'speed'] as const;
 const PITCHER_RATINGS = ['stuff', 'movement', 'control'] as const;
@@ -125,7 +126,7 @@ function RosterTable({
           <th onClick={() => setSort('name')}>Player{arrow('name')}</th>
           <th onClick={() => setSort('age')}>Age{arrow('age')}</th>
           <th onClick={() => setSort('position')}>Pos{arrow('position')}</th>
-          <th>B/T</th>
+          <Th>B/T</Th>
           {ratingCols.map((k) => (
             <th key={k} onClick={() => setSort(`r:${k}`)} title="Scout rating">
               {labelFor(k)}{arrow(`r:${k}`)}

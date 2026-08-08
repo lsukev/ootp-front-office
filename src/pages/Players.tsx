@@ -6,6 +6,7 @@ import {
   DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, loadColumns, plusColor, saveColumns,
   type StatGroup,
 } from '../stats';
+import { Th } from '../Th';
 
 interface LeaguePlayer {
   player_id: number;
@@ -134,7 +135,7 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
           <table>
             <thead>
               <tr>
-                <th>Player</th><th>Age</th><th>Pos</th><th>B/T</th><th>Team</th>
+                <Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>B/T</Th><Th>Team</Th>
                 {columns.map((key) => {
                   const def = findStat(group, key);
                   return def ? <th key={key}><Tip label={def.label} tip={def.desc} /></th> : null;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiGet, getLineup, type LineupResponse } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
 import { findStat, plusColor as statPlusColor } from '../stats';
+import { Th } from '../Th';
 
 /** OOTP's own internal rating, which is what the ordering is actually built on. */
 const TIP_OFF_VALUE =
@@ -113,18 +114,18 @@ export function Lineup({ teamId }: { teamId: number }) {
             <thead>
               <tr>
                 <th></th>
-                <th>Player</th>
-                <th>Pos</th>
-                <th>B</th>
+                <Th>Player</Th>
+                <Th>Pos</Th>
+                <Th>B</Th>
                 <th>
                   <Tip label="Off Value" tip={TIP_OFF_VALUE} />
                 </th>
-                <th>PA</th>
-                <th>OPS</th>
+                <Th>PA</Th>
+                <Th>OPS</Th>
                 <th><Tip label="OPS+" tip={TIP_OPS_PLUS} /></th>
                 <th><Tip label="wRC+" tip={TIP_WRC_PLUS} /></th>
-                <th>WAR</th>
-                <th>Why here</th>
+                <Th>WAR</Th>
+                <Th>Why here</Th>
               </tr>
             </thead>
             <tbody>

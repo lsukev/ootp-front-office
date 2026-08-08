@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
+import { Th } from '../Th';
 
 interface Injury {
   player_id: number; name: string; age: number; positionName: string; levelName: string;
@@ -27,7 +28,7 @@ export function Injuries({ orgId }: { orgId: number }) {
       </p>
       <table>
         <thead>
-          <tr><th>Player</th><th>Age</th><th>Pos</th><th>Team</th><th>Status</th><th>Est. return</th><th>IL days this yr</th></tr>
+          <tr><Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>Team</Th><Th>Status</Th><Th>Est. return</Th><Th>IL days this yr</Th></tr>
         </thead>
         <tbody>
           {data.map((p) => (

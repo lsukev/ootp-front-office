@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiDelete, apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
+import { Th } from '../Th';
 
 interface WatchEntry {
   player_id: number; name: string; note: string; added_at: string;
@@ -44,7 +45,7 @@ export function Watchlist() {
     <div>
       <table>
         <thead>
-          <tr><th>Player</th><th>Age</th><th>Pos</th><th>Team</th><th>Your notes</th><th></th></tr>
+          <tr><Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>Team</Th><Th>Your notes</Th><th></th></tr>
         </thead>
         <tbody>
           {entries.map((w) => (

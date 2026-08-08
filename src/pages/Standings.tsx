@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { TeamLogo } from '../TeamLogo';
+import { Th } from '../Th';
 
 interface StandingsTeam {
   team_id: number;
@@ -51,8 +52,8 @@ export function Standings({ orgId }: { orgId: number }) {
                 <table className="mini">
                   <thead>
                     <tr>
-                      <th>Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th>
-                      <th>RS</th><th>RA</th><th>DIFF</th><th>STRK</th>
+                      <Th>Team</Th><Th>W</Th><Th>L</Th><Th>PCT</Th><Th>GB</Th>
+                      <Th>RS</Th><Th>RA</Th><Th>DIFF</Th><Th>STRK</Th>
                     </tr>
                   </thead>
                   <tbody>

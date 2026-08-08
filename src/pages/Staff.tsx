@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
+import { Th } from '../Th';
 
 interface StaffMember {
   role: string; coach_id: number; name: string; age: number; experience: number;
@@ -64,7 +65,7 @@ export function Staff({ orgId }: { orgId: number }) {
       <h2>Farm System Managers</h2>
       <table>
         <thead>
-          <tr><th>Team</th><th>Manager</th><th>Age</th><th>Teach Hitting</th><th>Teach Pitching</th><th>Handle Rookies</th></tr>
+          <tr><Th>Team</Th><Th>Manager</Th><Th>Age</Th><Th>Teach Hitting</Th><Th>Teach Pitching</Th><Th>Handle Rookies</Th></tr>
         </thead>
         <tbody>
           {data.farmManagers.map((m, i) => (

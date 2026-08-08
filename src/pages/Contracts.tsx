@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getContracts, type ContractsResponse, type TeamFinances } from '../api';
 import { PlayerLink, Tip, TIP_TALENT, TIP_VALUE } from '../playerModal';
+import { Th } from '../Th';
 
 export const money = (n: number | null | undefined): string => {
   if (n === null || n === undefined) return '—';
@@ -61,17 +62,17 @@ export function Contracts({ orgId }: { orgId: number }) {
       <table>
         <thead>
           <tr>
-            <th>Player</th>
-            <th>Pos</th>
-            <th>Age</th>
-            <th>Salary</th>
-            <th>Thru</th>
-            <th>Yrs left</th>
-            <th>Svc</th>
+            <Th>Player</Th>
+            <Th>Pos</Th>
+            <Th>Age</Th>
+            <Th>Salary</Th>
+            <Th>Thru</Th>
+            <Th>Yrs left</Th>
+            <Th>Svc</Th>
             <th><Tip label="Value" tip={TIP_VALUE} /></th>
             <th><Tip label="Talent" tip={TIP_TALENT} /></th>
-            <th>Flags</th>
-            <th>Recommendation</th>
+            <Th>Flags</Th>
+            <Th>Recommendation</Th>
           </tr>
         </thead>
         <tbody>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getProspects, type Prospect, type ProspectsResponse } from '../api';
 import { PlayerLink, Tip, TIP_CURPOT } from '../playerModal';
+import { Th } from '../Th';
 
 export function Prospects({ orgId }: { orgId: number }) {
   const [data, setData] = useState<ProspectsResponse | null>(null);
@@ -36,27 +37,27 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
     <table>
       <thead>
         <tr>
-          <th>Signal</th>
-          <th>Player</th>
-          <th>Age</th>
-          <th>Team</th>
+          <Th>Signal</Th>
+          <Th>Player</Th>
+          <Th>Age</Th>
+          <Th>Team</Th>
           {kind === 'batter' ? (
             <>
-              <th>PA</th>
-              <th>OPS</th>
-              <th>HR</th>
-              <th>SB</th>
+              <Th>PA</Th>
+              <Th>OPS</Th>
+              <Th>HR</Th>
+              <Th>SB</Th>
             </>
           ) : (
             <>
-              <th>IP</th>
-              <th>ERA</th>
-              <th>K%</th>
+              <Th>IP</Th>
+              <Th>ERA</Th>
+              <Th>K%</Th>
             </>
           )}
-          <th>WAR</th>
+          <Th>WAR</Th>
           <th><Tip label="Cur→Pot" tip={TIP_CURPOT} /></th>
-          <th>Why</th>
+          <Th>Why</Th>
         </tr>
       </thead>
       <tbody>

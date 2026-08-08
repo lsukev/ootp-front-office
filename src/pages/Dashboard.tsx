@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
+import { Th } from '../Th';
 
 interface DashboardData {
   standings: Array<{ team_id: number; team: string; w: number; l: number; gb: number; streak: number }>;
@@ -64,7 +65,7 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
           <h3>Division</h3>
           <table className="mini">
             <thead>
-              <tr><th></th><th>W</th><th>L</th><th>GB</th></tr>
+              <tr><th></th><Th>W</Th><Th>L</Th><Th>GB</Th></tr>
             </thead>
             <tbody>
               {data.standings.map((s) => (

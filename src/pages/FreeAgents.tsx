@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getFreeAgents, type FreeAgentRow, type FreeAgentsResponse } from '../api';
 import { FinanceCards, money, Pct } from './Contracts';
 import { PlayerLink, Tip, TIP_TALENT, TIP_VALUE } from '../playerModal';
+import { Th } from '../Th';
 
 export function FreeAgents({ orgId }: { orgId: number }) {
   const [data, setData] = useState<FreeAgentsResponse | null>(null);
@@ -60,14 +61,14 @@ function FATable({
     <table>
       <thead>
         <tr>
-          <th>Pos</th>
-          <th>Player</th>
-          <th>Age</th>
+          <Th>Pos</Th>
+          <Th>Player</Th>
+          <Th>Age</Th>
           <th><Tip label="Value" tip={TIP_VALUE} /></th>
           <th><Tip label="Talent" tip={TIP_TALENT} /></th>
-          <th>Current salary</th>
-          <th>Team</th>
-          <th>Fit</th>
+          <Th>Current salary</Th>
+          <Th>Team</Th>
+          <Th>Fit</Th>
         </tr>
       </thead>
       <tbody>
