@@ -8,7 +8,7 @@ import { getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { summarizeSide } from './trade.js';
-import { currentGameDate, seasonYear, teamFinances } from './valuation.js';
+import { currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valuation.js';
 
 export const aiRoutes = Router();
 
@@ -79,6 +79,7 @@ function briefingContext(orgId: number) {
     contractSituations: contracts,
     injuries,
     finances: teamFinances(orgId),
+    leagueRules: rulesBriefing(team.league_id as number),
   };
 }
 
@@ -97,7 +98,8 @@ aiRoutes.post('/briefing/:orgId', async (req, res) => {
     const context = briefingContext(orgId);
     const markdown = await callOpus(
       `You are the assistant GM of the ${context.organization} in an OOTP Baseball save, writing the weekly ` +
-      `briefing for the GM. Be direct and decision-oriented: what happened, what needs a decision now, what to ` +
+      `briefing for the GM. LEAGUE RULES: ${context.leagueRules} Everything you advise must fit these rules ` +
+      `rather than the modern game. Be direct and decision-oriented: what happened, what needs a decision now, what to ` +
       `watch. Ground everything in the provided data with real numbers. Structure with short markdown headers ` +
       `(## Status, ## Decisions Needed, ## Watch List, ## Recommendation of the Week). Keep it under 500 words.`,
       `Today is ${context.gameDate}, ${context.seasonYear} season. Organizational data:\n\n` +

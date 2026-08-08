@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import {
-  contractsByPlayer, currentGameDate, mlbPercentiler, ON_ROSTER, seasonYear, teamFinances,
-  valuesByPlayer,
+  contractsByPlayer, currentGameDate, leagueRules, mlbPercentiler, ON_ROSTER, seasonYear,
+  teamFinances, valuesByPlayer,
 } from './valuation.js';
 
 export const contractRoutes = Router();
@@ -23,13 +23,30 @@ function recommend(args: {
   age: number;
   yearsAfterThis: number;
   reachingFA: boolean;
+  hasFreeAgency: boolean;
   overallPct: number | null;
   talentPct: number | null;
   salaryNow: number;
 }): Recommendation | null {
-  const { age, yearsAfterThis, reachingFA, overallPct, talentPct, salaryNow } = args;
+  const { age, yearsAfterThis, reachingFA, hasFreeAgency, overallPct, talentPct, salaryNow } = args;
   if (overallPct === null) return null;
   const declining = talentPct !== null && overallPct - talentPct >= 15;
+
+  // Under the reserve clause there is no market to lose a player to, so the
+  // question is never "extend before he walks" — it is whether he is worth
+  // keeping and what he will hold out for.
+  if (!hasFreeAgency) {
+    if (overallPct >= 70 && age <= 29) {
+      return { action: 'Core keeper', reasons: [`top ${100 - overallPct}% value, prime years ahead — renew`] };
+    }
+    if (declining && age >= 32) {
+      return { action: 'Consider moving', reasons: ['talent slipping below production — sell while value holds'] };
+    }
+    if (overallPct < 30) {
+      return { action: 'Release candidate', reasons: [`bottom ${overallPct}% value`] };
+    }
+    return null;
+  }
 
   if (yearsAfterThis === 0 && !reachingFA) {
     // Deal ends but the player lacks the service time to leave — auto-renews
@@ -81,14 +98,8 @@ export function computeContracts(orgId: number) {
   const contracts = contractsByPlayer();
   const values = valuesByPlayer();
   const { overallPct, talentPct } = mlbPercentiler(values);
-  const rules = db
-    .prepare(
-      `SELECT rules_fa_minimum_years AS fa, rules_salary_arbitration_minimum_years AS arb
-       FROM leagues WHERE league_id = ?`
-    )
-    .get(org.league_id) as { fa: number; arb: number } | undefined;
-  const faMinYears = rules?.fa ?? 6;
-  const arbMinYears = rules?.arb ?? 3;
+  const rules = leagueRules(org.league_id);
+  const { faMinYears, arbMinYears, hasFreeAgency, hasArbitration } = rules;
 
   const players = db
     .prepare(
@@ -116,10 +127,12 @@ export function computeContracts(orgId: number) {
         p.service_days != null ? p.service_days / SERVICE_DAYS_PER_YEAR : p.service_years ?? 0;
       // A full season adds one service year, so this is where he lands next winter
       const projected = service + 1;
-      const reachingFA = projected >= faMinYears;
+      // With no free agency the reserve clause binds him regardless of service,
+      // so nobody is ever "reaching" a market
+      const reachingFA = hasFreeAgency && projected >= faMinYears;
       // Which arbitration trip this would be, when he is not yet a free agent
       const arbYear =
-        !reachingFA && projected >= arbMinYears
+        hasArbitration && !reachingFA && projected >= arbMinYears
           ? Math.floor(projected - arbMinYears) + 1
           : null;
       const oPct = overallPct(p.player_id);
@@ -128,12 +141,16 @@ export function computeContracts(orgId: number) {
         age: p.age,
         yearsAfterThis: c.yearsAfterThis,
         reachingFA,
+        hasFreeAgency,
         overallPct: oPct,
         talentPct: tPct,
         salaryNow: c.salaryNow,
       });
       const flags: string[] = [];
-      if (c.yearsAfterThis === 0 && reachingFA) flags.push('expiring');
+      if (c.yearsAfterThis === 0 && !hasFreeAgency) {
+        // The deal ends but he cannot leave — the club simply renews him
+        flags.push('reserve clause');
+      } else if (c.yearsAfterThis === 0 && reachingFA) flags.push('expiring');
       else if (c.yearsAfterThis === 0 && arbYear !== null) {
         // Saying "team control" for an arbitration-eligible player hid the fact
         // that he still has arbitration years left, which read as "expiring"
@@ -168,6 +185,9 @@ export function computeContracts(orgId: number) {
   return {
     seasonYear: year,
     gameDate: currentGameDate(org.league_id),
+    // Surfaced so the page can explain why it is talking about a reserve
+    // clause instead of free agency
+    rules,
     finances: teamFinances(orgId),
     players: rows,
   };

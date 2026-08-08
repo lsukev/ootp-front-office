@@ -25,6 +25,85 @@ export interface ContractInfo {
  */
 export const ON_ROSTER = '(rs.is_active = 1 OR rs.is_on_dl = 1 OR rs.is_on_dl60 = 1)';
 
+export interface LeagueRules {
+  /** Service years needed for free agency; 0 means the league has none. */
+  faMinYears: number;
+  /** Service years needed for arbitration; 0 means the league has none. */
+  arbMinYears: number;
+  /** False in reserve-clause leagues, where a player cannot reach a market. */
+  hasFreeAgency: boolean;
+  hasArbitration: boolean;
+  minimumSalary: number;
+  /** OOTP's money scale. Historical leagues run far below 1.0. */
+  financialCoefficient: number;
+}
+
+/**
+ * A league's own contract rules, rather than the modern CBA.
+ *
+ * Historical and reserve-clause leagues export a free-agency threshold of 0,
+ * meaning "never". Read naively that turns into "everyone qualifies", which
+ * flagged an entire 1910s roster as expiring and had the AI warning about an
+ * open market that would not exist for another sixty years.
+ */
+export function leagueRules(leagueId: number): LeagueRules {
+  const r = db
+    .prepare(
+      `SELECT rules_fa_minimum_years AS fa, rules_salary_arbitration_minimum_years AS arb,
+              rules_minimum_salary AS minSalary, financial_coefficient AS coef
+       FROM leagues WHERE league_id = ?`
+    )
+    .get(leagueId) as
+    | { fa: number | null; arb: number | null; minSalary: number | null; coef: number | null }
+    | undefined;
+
+  const faMinYears = r?.fa ?? 6;
+  const arbMinYears = r?.arb ?? 3;
+  return {
+    faMinYears,
+    arbMinYears,
+    hasFreeAgency: faMinYears > 0,
+    hasArbitration: arbMinYears > 0,
+    minimumSalary: r?.minSalary ?? 0,
+    financialCoefficient: r?.coef ?? 1,
+  };
+}
+
+/**
+ * A plain-language note about the league's contract rules, for the AI prompts.
+ *
+ * Without this the model assumes the modern CBA. In a reserve-clause league it
+ * would urge a GM to extend a player "before he reaches the open market" that
+ * will not exist for another sixty years.
+ */
+export function rulesBriefing(leagueId: number): string {
+  const r = leagueRules(leagueId);
+  const parts: string[] = [];
+  if (!r.hasFreeAgency) {
+    parts.push(
+      'This league has NO FREE AGENCY — the reserve clause binds players to the club indefinitely. ' +
+        'Contracts run a year at a time and simply renew. A player cannot leave for another team, so ' +
+        'never advise extending someone "before he reaches the market", and never treat an ending ' +
+        'contract as a risk of losing him. The real pressures are salary demands, holdouts, sales and ' +
+        'trades between clubs.'
+    );
+  } else {
+    parts.push(`Free agency requires ${r.faMinYears} years of major-league service.`);
+  }
+  if (r.hasArbitration) parts.push(`Salary arbitration begins at ${r.arbMinYears} years of service.`);
+  else if (r.hasFreeAgency) parts.push('This league has no salary arbitration.');
+  if (r.minimumSalary > 0) {
+    parts.push(`The league minimum salary is ${Math.round(r.minimumSalary).toLocaleString()}.`);
+  }
+  if (r.financialCoefficient !== 1) {
+    parts.push(
+      `Money in this league runs at a coefficient of ${r.financialCoefficient} versus a modern league — ` +
+        'judge every salary against this league\'s own scale, not modern figures.'
+    );
+  }
+  return parts.join(' ');
+}
+
 export function seasonYear(leagueId: number): number {
   const row = db.prepare(`SELECT season_year FROM leagues WHERE league_id = ?`).get(leagueId) as
     | { season_year: number }

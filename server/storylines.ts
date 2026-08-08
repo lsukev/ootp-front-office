@@ -7,7 +7,7 @@ import { DATA_DIR } from './config.js';
 import { getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
-import { currentGameDate, seasonYear, teamFinances } from './valuation.js';
+import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
 
 export const storylineRoutes = Router();
 
@@ -111,9 +111,13 @@ function assembleContext(orgId: number) {
     })),
     topProspects: { batters: prospects.batters.slice(0, 6), pitchers: prospects.pitchers.slice(0, 6) },
     contractSituations: (contracts.players as unknown as Array<{ flags: string[]; recommendation: unknown }>)
-      .filter((p) => p.flags.includes('expiring') || p.recommendation)
+      .filter(
+        (p) =>
+          p.flags.includes('expiring') || p.flags.includes('reserve clause') || p.recommendation
+      )
       .slice(0, 12),
     finances: teamFinances(orgId),
+    leagueRules: rulesBriefing(team.league_id as number),
   };
 }
 
@@ -156,7 +160,8 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
       `team-site feature page. Ground every claim in the provided data (records, stats, prospects, contracts). ` +
       `Reference real numbers. Be opinionated where the data supports it: call out who is earning a promotion, ` +
       `which contract decisions loom, what the recent results mean. It is early in the season, so treat small ` +
-      `samples with appropriate caution. Write 6-8 storylines covering a mix of categories.`,
+      `samples with appropriate caution. Write 6-8 storylines covering a mix of categories. ` +
+      `LEAGUE RULES: ${context.leagueRules} Write within these rules — this may not be the modern game.`,
     messages: [
       {
         role: 'user',
