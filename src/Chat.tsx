@@ -34,8 +34,44 @@ const STARTERS = [
   'Who can pitch tonight?',
 ];
 
+/**
+ * Conversations are kept per organization and survive closing the panel, a
+ * reload, and a restart. Losing the thread on close made the assistant useless
+ * for anything that took more than one question, since every follow-up arrived
+ * with no idea what had already been said.
+ */
+const storageKey = (orgId: number) => `ootp-chat-${orgId}`;
+
+/** Keeps the tail of the conversation — enough for context, bounded for storage. */
+const KEEP = 40;
+
+function loadHistory(orgId: number): Message[] {
+  try {
+    const raw = localStorage.getItem(storageKey(orgId));
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (m): m is Message =>
+        !!m && typeof m === 'object' && 'role' in m && 'content' in m &&
+        typeof (m as Message).content === 'string'
+    );
+  } catch {
+    // Corrupt or unavailable storage should never break the panel
+    return [];
+  }
+}
+
+function saveHistory(orgId: number, messages: Message[]): void {
+  try {
+    localStorage.setItem(storageKey(orgId), JSON.stringify(messages.slice(-KEEP)));
+  } catch {
+    // Quota exceeded or storage disabled — the panel still works in memory
+  }
+}
+
 export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => loadHistory(orgId));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +82,9 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
-  // A new organization is a different conversation
+  // Each organization keeps its own thread, restored when you switch back
   useEffect(() => {
-    setMessages([]);
+    setMessages(loadHistory(orgId));
     setError(null);
   }, [orgId]);
 
@@ -61,6 +97,9 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
 
       const history: Message[] = [...messages, { role: 'user', content: text }];
       setMessages([...history, { role: 'assistant', content: '', tools: [] }]);
+      // Save the question now: if the answer errors or is stopped, the thread
+      // still reflects what was asked
+      saveHistory(orgId, history);
       setInput('');
       setBusy(true);
       setError(null);
@@ -129,16 +168,36 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         // Drop the placeholder if the request produced nothing at all
         setMessages((prev) => {
           const last = prev[prev.length - 1];
-          if (last?.role === 'assistant' && !last.content.trim()) return prev.slice(0, -1);
-          return prev;
+          const next =
+            last?.role === 'assistant' && !last.content.trim() ? prev.slice(0, -1) : prev;
+          saveHistory(orgId, next);
+          return next;
         });
       }
     },
     [busy, messages, orgId]
   );
 
+  const clear = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setError(null);
+    saveHistory(orgId, []);
+  }, [orgId]);
+
   return (
     <div className="chat">
+      {messages.length > 0 && (
+        <div className="chat-bar">
+          <span className="muted">
+            {messages.filter((m) => m.role === 'user').length} question
+            {messages.filter((m) => m.role === 'user').length === 1 ? '' : 's'} in this thread
+          </span>
+          <button className="link-button" onClick={clear}>
+            Start over
+          </button>
+        </div>
+      )}
       <div className="chat-log" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="chat-empty">

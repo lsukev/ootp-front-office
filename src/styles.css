@@ -1204,3 +1204,18 @@ button.cta {
   padding: 9px 10px;
   border-radius: 8px;
 }
+
+/* Hidden rather than unmounted, so the conversation and any in-flight answer survive */
+.chat-drawer.chat-hidden {
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(100%);
+}
+.chat-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}

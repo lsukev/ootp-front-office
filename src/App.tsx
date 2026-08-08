@@ -99,6 +99,8 @@ export function App() {
   const [switching, setSwitching] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  // Once opened, the panel stays mounted for the rest of the session
+  const [chatUsed, setChatUsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -243,7 +245,10 @@ export function App() {
           {status.hasData && (
             <button
               className={`ask-button ${chatOpen ? 'active' : ''}`}
-              onClick={() => setChatOpen((v) => !v)}
+              onClick={() => {
+                setChatUsed(true);
+                setChatOpen((v) => !v);
+              }}
               title="Ask about your league"
             >
               ✦ Ask
@@ -306,10 +311,18 @@ export function App() {
             )}
           </main>
 
-          {chatOpen && orgId !== null && org && (
+          {/* The panel stays mounted once opened. Unmounting it would discard the
+              conversation and abort any answer still streaming, so closing it
+              only hides it. */}
+          {orgId !== null && org && (chatOpen || chatUsed) && (
             <>
-              <div className="chat-scrim" onClick={() => setChatOpen(false)} />
-              <aside className="chat-drawer" aria-label="Ask about your league">
+              {chatOpen && <div className="chat-scrim" onClick={() => setChatOpen(false)} />}
+              <aside
+                className={`chat-drawer ${chatOpen ? '' : 'chat-hidden'}`}
+                aria-label="Ask about your league"
+                aria-hidden={!chatOpen}
+                {...(chatOpen ? {} : { inert: '' })}
+              >
                 <header className="chat-head">
                   <strong>Ask the front office</strong>
                   <button className="chat-close" onClick={() => setChatOpen(false)} title="Close">
