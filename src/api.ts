@@ -369,3 +369,11 @@ export interface SiteExportResult {
 }
 export const exportStaticSite = (orgId: number) =>
   apiPost<SiteExportResult>(`/api/export-site/${orgId}`);
+
+export interface ExportProgress {
+  running: boolean;
+  phase: string;
+  done: number;
+  total: number;
+}
+export const getExportProgress = () => apiGet<ExportProgress>('/api/export-site/progress');

@@ -27,6 +27,38 @@ function decodeCsv(filePath: string): string {
 }
 
 /**
+ * Works out which character separates the fields.
+ *
+ * OOTP has an "Export Field Delimiter" setting, and it is not always a comma —
+ * semicolon is common on European locales, where a comma is the decimal
+ * separator. Reading a semicolon file as comma-delimited produces one giant
+ * column per row, so the table ends up with a single column named
+ * `team_id;name;abbr;...` and every query fails with "no such column: team_id".
+ *
+ * The header row decides it: whichever candidate appears most often outside
+ * quotes is the separator. A one-column file legitimately has none of them, in
+ * which case the choice does not matter and comma is as good as any.
+ */
+function detectDelimiter(text: string): string {
+  const header = text.slice(0, text.indexOf('\n') === -1 ? undefined : text.indexOf('\n'));
+  let best = ',';
+  let bestCount = 0;
+  for (const candidate of [',', ';', '\t', '|']) {
+    let count = 0;
+    let inQuotes = false;
+    for (const ch of header) {
+      if (ch === '"') inQuotes = !inQuotes;
+      else if (ch === candidate && !inQuotes) count += 1;
+    }
+    if (count > bestCount) {
+      best = candidate;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
  * Import every CSV in the export directory into SQLite, one table per file,
  * columns taken from each file's header row. Values that look numeric are
  * stored as numbers so comparisons and math work in SQL.
@@ -48,6 +80,7 @@ export function importCsvDir(csvDir: string): ImportResult {
     let records: string[][];
     try {
       records = parse(text, {
+        delimiter: detectDelimiter(text),
         relax_column_count: true,
         relax_quotes: true,
         skip_empty_lines: true,
@@ -107,8 +140,15 @@ export function importCsvDir(csvDir: string): ImportResult {
  * deliberately schema-tolerant: OOTP adds and renames fields between versions,
  * and a hardcoded list would quietly stop covering new tables.
  */
-function buildIndexes(): void {
+export function buildIndexes(): void {
   const started = Date.now();
+  // Startup calls this on every launch; once the indexes exist there is nothing
+  // to do and the check costs a single query
+  const existing = (
+    db.prepare(`SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_%'`)
+      .get() as { n: number }
+  ).n;
+  if (existing > 0) return;
   const tables = (
     db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>
   ).map((t) => t.name);

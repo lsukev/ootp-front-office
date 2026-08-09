@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  apiDelete, apiGet, apiPost, desktopBridge, exportStaticSite, triggerImport,
-  type Org, type SaveInfo, type SiteExportResult, type Status,
+  apiDelete, apiGet, apiPost, desktopBridge, exportStaticSite, getExportProgress, triggerImport,
+  type ExportProgress, type Org, type SaveInfo, type SiteExportResult, type Status,
 } from '../api';
 import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
@@ -56,6 +56,7 @@ export function Settings({
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState<SiteExportResult | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const desktop = desktopBridge();
 
   const loadModels = () => {
@@ -109,11 +110,21 @@ export function Settings({
     setExporting(true);
     setExported(null);
     setExportError(null);
+    setProgress(null);
+    // The request does not return until the export finishes, so progress comes
+    // from a second endpoint rather than leaving the button looking stuck
+    const poll = setInterval(() => {
+      getExportProgress()
+        .then((p) => setProgress(p.running ? p : null))
+        .catch(() => {});
+    }, 600);
     try {
       setExported(await exportStaticSite(orgId));
     } catch (e) {
       setExportError((e as Error).message);
     } finally {
+      clearInterval(poll);
+      setProgress(null);
       setExporting(false);
     }
   };
@@ -290,6 +301,15 @@ export function Settings({
             {exporting ? 'Exporting…' : 'Export website'}
           </button>
         </div>
+        {exporting && (
+          <div className="settings-row">
+            <div className="muted">
+              {progress
+                ? `${progress.phase}${progress.total ? ` — ${progress.done} of ${progress.total}` : '…'}`
+                : 'Starting…'}
+            </div>
+          </div>
+        )}
         {exportError && <div className="banner error">{exportError}</div>}
         {exported && (
           <div className="banner success">

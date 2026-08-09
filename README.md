@@ -131,6 +131,40 @@ never touches them.
 On Windows the update runs the same unsigned installer as a fresh download, so
 SmartScreen will prompt again until the app is code-signed.
 
+### Reaching it from another computer
+
+The server listens on `127.0.0.1` and answers only to localhost, so by default
+nothing else on your network can see it. To open it to your own LAN:
+
+```bash
+OOTP_FO_BIND=0.0.0.0 npm start
+```
+
+It prints the address to use, e.g. `http://192.168.1.50:5178`. Open that on the
+other computer.
+
+> **There is no password.** Anyone who can reach that address can read the whole
+> save, change settings, and spend your Anthropic credits through the assistant.
+> Use it on a network you trust and never forward the port from your router.
+
+Opening the bind address does not disable the protection against malicious web
+pages: the server still answers only to its own names and addresses, which it
+reads from the machine's network interfaces. If you reach it by some other name
+(a DNS alias, a reverse proxy), add it:
+
+```bash
+OOTP_FO_BIND=0.0.0.0 OOTP_FO_ALLOWED_HOSTS=baseball.lan npm start
+```
+
+For access from outside your home, don't open a port — tunnel instead:
+
+```bash
+ssh -N -L 5178:127.0.0.1:5178 you@your-home-machine
+```
+
+Then browse `http://localhost:5178` on the remote computer. Or use
+**Settings → Share** to export a static copy and host that anywhere.
+
 The rest of this section is for running from source.
 
 ## Requirements
@@ -173,6 +207,9 @@ reads the game's own CSV database export, which you generate from inside OOTP:
 
 The export lands inside your save folder at `<your save>.lg/import_export/csv/`. You
 don't need to remember that path; the app finds it automatically.
+
+The field delimiter does not matter — OOTP's **Export Field Delimiter** setting can be a
+comma, a semicolon, a tab or a pipe, and the importer works out which one each file uses.
 
 ### 4. Start the app
 

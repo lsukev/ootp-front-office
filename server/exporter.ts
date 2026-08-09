@@ -54,10 +54,24 @@ async function pooled<T>(items: T[], limit: number, fn: (item: T) => Promise<voi
     Array.from({ length: Math.min(limit, items.length) }, async () => {
       while (next < items.length) {
         await fn(items[next++]);
+        // The server shares a process with the desktop window, and every query
+        // is synchronous, so a tight loop starves the UI until the export ends.
+        // Handing the event loop back between items keeps the app usable.
+        await new Promise((resolve) => setImmediate(resolve));
       }
     })
   );
 }
+
+/** Progress for the Settings page to poll, since an export is not instant. */
+export interface ExportProgress {
+  running: boolean;
+  phase: string;
+  done: number;
+  total: number;
+}
+let progress: ExportProgress = { running: false, phase: '', done: 0, total: 0 };
+export const exportProgress = (): ExportProgress => progress;
 
 /** Every player_id anywhere in an exported payload, so no card 404s. */
 function collectPlayerIds(json: unknown, into: Set<number>): void {
@@ -120,34 +134,31 @@ export async function exportSite(orgId: number): Promise<ExportResult> {
     }
   };
 
-  // ── Org-wide pages ────────────────────────────────────────────────────
-  for (const p of [
+  // ── Org-wide pages, the lineup's variants, and every affiliate ────────
+  const teams = db
+    .prepare(`SELECT team_id FROM teams WHERE team_id = ? OR parent_team_id = ?`)
+    .all(orgId, orgId) as Array<{ team_id: number }>;
+
+  const pages = [
     'orgs', `dashboard/${orgId}`, `standings/${orgId}`, `contracts/${orgId}`, `payroll/${orgId}`,
     `depth-chart/${orgId}`, `prospects/${orgId}`, `development/${orgId}`, `draft/${orgId}`,
     `injuries/${orgId}`, `leaderboards/${orgId}`, `roster-crunch/${orgId}`, `staff/${orgId}`,
     `free-agents/${orgId}`, `storylines/${orgId}`, `briefing/${orgId}`, `trade/fits/${orgId}`,
     `next-game/${orgId}`, `pitching/${orgId}`, `schedule/${orgId}`, `trends/${orgId}`,
-  ]) {
+    // A static host drops query strings, so each lineup combination is its own file
+    ...['r', 'l'].flatMap((vs) =>
+      ['saber', 'trad'].flatMap((style) =>
+        ['auto', 'on', 'off'].map((dh) => `lineup/${orgId}?vs=${vs}&style=${style}&dh=${dh}`)
+      )
+    ),
+    ...teams.flatMap((t) => [`roster/${t.team_id}`, `pitching/${t.team_id}`]),
+  ];
+
+  progress = { running: true, phase: 'Reading pages', done: 0, total: pages.length };
+  for (const p of pages) {
     await grab(p);
-  }
-
-  // Lineup is the one page with options, and a static host drops query strings,
-  // so every combination gets its own file
-  for (const vs of ['r', 'l']) {
-    for (const style of ['saber', 'trad']) {
-      for (const dh of ['auto', 'on', 'off']) {
-        await grab(`lineup/${orgId}?vs=${vs}&style=${style}&dh=${dh}`);
-      }
-    }
-  }
-
-  // ── Every team in the organization ────────────────────────────────────
-  const teams = db
-    .prepare(`SELECT team_id FROM teams WHERE team_id = ? OR parent_team_id = ?`)
-    .all(orgId, orgId) as Array<{ team_id: number }>;
-  for (const t of teams) {
-    await grab(`roster/${t.team_id}`);
-    await grab(`pitching/${t.team_id}`);
+    progress.done += 1;
+    await new Promise((resolve) => setImmediate(resolve));
   }
 
   // ── Logos for anything that might be shown ────────────────────────────
@@ -157,7 +168,9 @@ export async function exportSite(orgId: number): Promise<ExportResult> {
          (SELECT league_id FROM teams WHERE team_id = ?) OR parent_team_id = ?`
     )
     .all(orgId, orgId) as Array<{ team_id: number }>;
+  progress = { running: true, phase: 'Team logos', done: 0, total: logoTeams.length };
   await pooled(logoTeams, 8, async (t) => {
+    progress.done += 1;
     const { ok, buf } = await fetchApi(port, `logo/${t.team_id}`);
     if (ok && buf.length > 0) write(path.join('api', exportPath(`logo/${t.team_id}`)), buf);
   });
@@ -165,7 +178,11 @@ export async function exportSite(orgId: number): Promise<ExportResult> {
   // ── Player cards for everyone named anywhere in the export ────────────
   const ids = new Set<number>();
   for (const p of payloads) collectPlayerIds(p, ids);
-  await pooled([...ids], 8, (id) => grab(`player/${id}`, false));
+  progress = { running: true, phase: 'Player cards', done: 0, total: ids.size };
+  await pooled([...ids], 6, async (id) => {
+    await grab(`player/${id}`, false);
+    progress.done += 1;
+  });
 
   // ── Status, flagged so the app knows it is a snapshot ─────────────────
   const { buf: statusBuf } = await fetchApi(port, 'status');
@@ -174,6 +191,8 @@ export async function exportSite(orgId: number): Promise<ExportResult> {
   status.exportedAt = new Date().toISOString();
   write(path.join('api', 'status'), Buffer.from(JSON.stringify(status)));
 
+  progress = { running: true, phase: 'Writing the site', done: 0, total: 0 };
+
   // ── The frontend itself ───────────────────────────────────────────────
   for (const entry of fs.readdirSync(dist, { withFileTypes: true, recursive: true }) as fs.Dirent[]) {
     if (!entry.isFile()) continue;
@@ -181,14 +200,20 @@ export async function exportSite(orgId: number): Promise<ExportResult> {
     write(path.relative(dist, from), fs.readFileSync(from));
   }
 
+  progress = { running: false, phase: '', done: 0, total: 0 };
   return { outDir, files, bytes, players: ids.size, warnings };
 }
+
+exportRoutes.get('/export-site/progress', (_req, res) => {
+  res.json(exportProgress());
+});
 
 exportRoutes.post('/export-site/:orgId', async (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
   try {
     res.json(await exportSite(Number(req.params.orgId)));
   } catch (err) {
+    progress = { running: false, phase: '', done: 0, total: 0 };
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
