@@ -356,6 +356,44 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 /* A signed extension is settled business, not a decision to make */
 .flag-locked { border-color: var(--good); color: var(--good); }
 
+/* ── Player hover card ────────────────────────────────────────── */
+
+/* inline-flex keeps the anchor from adding a line box of its own inside prose */
+.phover-anchor { display: inline; position: relative; }
+
+.phover {
+  position: fixed;
+  z-index: 90;
+  width: 290px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg-deep);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 1.45;
+  /* The card must never eat the pointer, or leaving the name toward it would
+     flicker between open and closed */
+  pointer-events: none;
+}
+.phover-head { display: flex; flex-direction: column; gap: 1px; }
+.phover-head strong { font-size: 13px; }
+.phover-team { margin-top: 2px; }
+.phover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+.phover-grid b { color: var(--accent); }
+.phover-line { margin-top: 6px; font-variant-numeric: tabular-nums; }
+.phover-injury { margin-top: 6px; color: var(--bad); }
+.phover-hint { margin-top: 8px; font-size: 11px; opacity: 0.7; }
+
+
 /* Draft board filter bar: wraps rather than pushing controls off a narrow window */
 .draft-filters {
   display: flex;

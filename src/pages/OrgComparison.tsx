@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
-import { Tip } from '../playerModal';
+import { PlayerLink, Tip } from '../playerModal';
 
 interface Club {
   team_id: number;
@@ -12,6 +12,8 @@ interface Club {
   farmTalent: number;
   farmCount: number;
   topProspect: number;
+  topProspectId: number | null;
+  topProspectName: string | null;
   youngTalent: number;
   w: number | null;
   l: number | null;
@@ -32,6 +34,17 @@ const TIP_MLB =
 const TIP_YOUNG =
   'Ceiling held by players aged 21 and under. The same talent is worth more the younger it is, ' +
   'and this separates a system built on teenagers from one built on 25-year-old Triple-A depth.';
+
+/**
+ * Named rather than numbered: the underlying figure is OOTP's own talent value
+ * on an internal scale that means nothing on its own, and "who is it" is the
+ * question the column was really being asked.
+ */
+const TIP_TOP_PROSPECT =
+  'The single highest-ceiling player in the organization below the majors, by OOTP\'s own scouted ' +
+  'talent value. Sorting this column ranks clubs by their best individual prospect rather than by ' +
+  'the depth of the system — a club can sit high here and still have a thin farm, which is exactly ' +
+  'the difference between this column and Farm system.';
 
 export function OrgComparison({ orgId }: { orgId: number }) {
   const [clubs, setClubs] = useState<Club[] | null>(null);
@@ -104,7 +117,9 @@ export function OrgComparison({ orgId }: { orgId: number }) {
             <th className="num" onClick={() => setSort('youngRank')}>
               <Tip label="Under 22" tip={TIP_YOUNG} />
             </th>
-            <th className="num" onClick={() => setSort('topProspect')}>Best prospect</th>
+            <th onClick={() => setSort('topProspect')}>
+              <Tip label="Best prospect" tip={TIP_TOP_PROSPECT} />
+            </th>
             <Th className="num">In system</Th>
           </tr>
         </thead>
@@ -126,7 +141,13 @@ export function OrgComparison({ orgId }: { orgId: number }) {
                 </div>
               </td>
               <td className="num">#{c.youngRank}</td>
-              <td className="num muted">{c.topProspect.toLocaleString()}</td>
+              <td className="name">
+                {c.topProspectId !== null && c.topProspectName ? (
+                  <PlayerLink id={c.topProspectId}>{c.topProspectName}</PlayerLink>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </td>
               <td className="num muted">{c.farmCount}</td>
             </tr>
           ))}

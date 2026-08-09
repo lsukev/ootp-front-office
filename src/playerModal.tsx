@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
+import { PlayerHover } from './playerHover';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -11,9 +12,11 @@ export function openPlayer(id: number): void {
 /** Clickable player name — use anywhere a player appears. */
 export function PlayerLink({ id, children }: { id: number; children: ReactNode }) {
   return (
-    <button className="player-link" onClick={() => openPlayer(id)} title="Open player card">
-      {children}
-    </button>
+    <PlayerHover id={id}>
+      <button className="player-link" onClick={() => openPlayer(id)} title="Open player card">
+        {children}
+      </button>
+    </PlayerHover>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPut } from './api';
+import { PlayerNames } from './PlayerNames';
 
 /**
  * Ask-the-save chat. The server streams the answer over SSE and announces each
@@ -307,7 +308,16 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                     </div>
                   ) : (
                     m.content && (
-                      <div className={`imsg-bubble ${endsRun ? 'imsg-tail' : ''}`}>{m.content}</div>
+                      <div className={`imsg-bubble ${endsRun ? 'imsg-tail' : ''}`}>
+                        {/* Names are linked once the reply is complete. Re-running
+                            the match on every streamed token would be wasted work
+                            on a sentence that is still being written. */}
+                        {busy && i === messages.length - 1 ? (
+                          m.content
+                        ) : (
+                          <PlayerNames orgId={orgId}>{m.content}</PlayerNames>
+                        )}
+                      </div>
                     )
                   )}
 

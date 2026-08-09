@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { generateStorylines, getStorylines, type StorylineCache } from '../api';
+import { PlayerNames } from '../PlayerNames';
 
 const CATEGORY_ICONS: Record<string, string> = {
   'The Club': '⚾',
@@ -82,7 +83,7 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
                 {CATEGORY_ICONS[s.category] ?? '📰'} {s.category}
               </span>
               <h3 className="story-headline">{s.headline}</h3>
-              <p className="story-body">{s.body}</p>
+              <p className="story-body"><PlayerNames orgId={orgId}>{s.body}</PlayerNames></p>
             </article>
           ))}
         </div>

@@ -107,6 +107,30 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
  * League-wide player browser. Filters run in SQL so only the returned page has
  * its stats computed — the players table holds 130k rows.
  */
+/**
+ * Every name the AI features are likely to mention, so plain prose can be
+ * turned into hoverable links.
+ *
+ * Scoped to major-league rosters plus this organization's own minor leaguers:
+ * that is who a briefing or a storyline actually writes about, and shipping the
+ * whole 12,000-player league to the browser to underline a handful of names
+ * would cost more than the feature is worth.
+ */
+leagueRoutes.get('/name-index/:orgId', (req, res) => {
+  if (!tableExists('players')) return res.json({ names: [] });
+  const orgId = Number(req.params.orgId);
+  const rows = db
+    .prepare(
+      `SELECT p.player_id AS id, p.first_name || ' ' || p.last_name AS name
+       FROM players p
+       JOIN teams t ON t.team_id = p.team_id
+       WHERE p.retired = 0 AND p.first_name IS NOT NULL AND p.last_name IS NOT NULL
+         AND (t.level = 1 OR p.organization_id = ?)`
+    )
+    .all(orgId) as Array<{ id: number; name: string }>;
+  res.json({ names: rows.map((r) => [r.id, r.name] as const) });
+});
+
 leagueRoutes.get('/players', (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
 

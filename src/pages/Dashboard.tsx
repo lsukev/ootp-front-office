@@ -3,6 +3,7 @@ import { apiGet, apiPost } from '../api';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
+import { PlayerNames } from '../PlayerNames';
 
 interface DashboardData {
   streaks?: Array<{ player_id: number; name: string; positionName: string; games: number; kind: string; since: string }>;
@@ -187,7 +188,7 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
           {briefingError && <div className="banner error">{briefingError}</div>}
           {briefing ? (
             <>
-              <div className="briefing-body">{renderMarkdown(briefing.markdown)}</div>
+              <div className="briefing-body"><PlayerNames orgId={orgId}>{renderMarkdown(briefing.markdown)}</PlayerNames></div>
               <span className="muted">As of {briefing.gameDate} · {new Date(briefing.generatedAt).toLocaleString()}</span>
             </>
           ) : (

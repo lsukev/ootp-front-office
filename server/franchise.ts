@@ -130,28 +130,50 @@ franchiseRoutes.get('/org-comparison/:orgId', (req, res) => {
   // One pass over the league rather than a query per club
   const rows = db
     .prepare(
-      `SELECT p.organization_id AS org, t.level AS level, v.overall_value AS overall, v.talent_value AS talent,
-              p.age AS age
+      `SELECT p.player_id, p.organization_id AS org, t.level AS level,
+              v.overall_value AS overall, v.talent_value AS talent, p.age AS age
        FROM players p
        JOIN teams t ON t.team_id = p.team_id
        JOIN players_value v ON v.player_id = p.player_id
        WHERE p.retired = 0 AND p.organization_id > 0`
     )
-    .all() as Array<{ org: number; level: number; overall: number; talent: number; age: number }>;
+    .all() as Array<{
+    player_id: number; org: number; level: number; overall: number; talent: number; age: number;
+  }>;
 
-  const acc = new Map<number, { mlb: number; farm: number; farmCount: number; topFarm: number; young: number }>();
+  const acc = new Map<
+    number,
+    { mlb: number; farm: number; farmCount: number; topFarm: number; topId: number | null; young: number }
+  >();
   for (const r of rows) {
-    const cur = acc.get(r.org) ?? { mlb: 0, farm: 0, farmCount: 0, topFarm: 0, young: 0 };
+    const cur = acc.get(r.org) ?? { mlb: 0, farm: 0, farmCount: 0, topFarm: 0, topId: null, young: 0 };
     if (r.level === 1) {
       cur.mlb += r.overall ?? 0;
     } else {
       cur.farm += r.talent ?? 0;
       cur.farmCount += 1;
-      if ((r.talent ?? 0) > cur.topFarm) cur.topFarm = r.talent ?? 0;
+      if ((r.talent ?? 0) > cur.topFarm) {
+        cur.topFarm = r.talent ?? 0;
+        cur.topId = r.player_id;
+      }
       // Talent that is also young is worth more than the same talent at 26
       if (r.age <= 21) cur.young += r.talent ?? 0;
     }
     acc.set(r.org, cur);
+  }
+
+  // One name lookup for the handful of players actually shown
+  const topIds = [...acc.values()].map((a) => a.topId).filter((id): id is number => id !== null);
+  const names = new Map<number, string>();
+  if (topIds.length > 0) {
+    const holes = topIds.map(() => '?').join(',');
+    for (const r of db
+      .prepare(
+        `SELECT player_id, first_name || ' ' || last_name AS name FROM players WHERE player_id IN (${holes})`
+      )
+      .all(...topIds) as Array<{ player_id: number; name: string }>) {
+      names.set(r.player_id, r.name);
+    }
   }
 
   const records = new Map<number, { w: number; l: number }>();
@@ -164,7 +186,7 @@ franchiseRoutes.get('/org-comparison/:orgId', (req, res) => {
   }
 
   const list = clubs.map((c) => {
-    const a = acc.get(c.team_id) ?? { mlb: 0, farm: 0, farmCount: 0, topFarm: 0, young: 0 };
+    const a = acc.get(c.team_id) ?? { mlb: 0, farm: 0, farmCount: 0, topFarm: 0, topId: null, young: 0 };
     const rec = records.get(c.team_id) ?? null;
     return {
       team_id: c.team_id,
@@ -174,6 +196,8 @@ franchiseRoutes.get('/org-comparison/:orgId', (req, res) => {
       farmTalent: Math.round(a.farm),
       farmCount: a.farmCount,
       topProspect: Math.round(a.topFarm),
+      topProspectId: a.topId,
+      topProspectName: a.topId !== null ? (names.get(a.topId) ?? null) : null,
       youngTalent: Math.round(a.young),
       w: rec?.w ?? null,
       l: rec?.l ?? null,
