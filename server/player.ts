@@ -363,6 +363,8 @@ playerRoutes.get('/player/:id', (req, res) => {
     serviceYears: rosterStatus?.mlb_service_years ?? null,
     overallPct: overallPct(id),
     talentPct: talentPct(id),
+    oaRating: values.get(id)?.oaRating ?? null,
+    potRating: values.get(id)?.potRating ?? null,
     isPitcher,
     battingRatings: batting
       ? {

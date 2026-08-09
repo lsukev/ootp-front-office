@@ -14,7 +14,7 @@ import { storylineRoutes } from './storylines.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
-import { clearValuationCaches } from './valuation.js';
+import { clearValuationCaches, valuesByPlayer } from './valuation.js';
 import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
@@ -304,6 +304,9 @@ api.get('/roster/:teamId', (req, res) => {
     }
   }
 
+  // OOTP's own 20-80 grades, for cross-checking against the game's own screens
+  const playerValues = valuesByPlayer();
+
   const pitchingByPlayer = new Map<number, Record<string, number | null>>();
   if (tableExists('players_career_pitching_stats') && statYear !== null && baseline) {
     const rows = db
@@ -338,6 +341,8 @@ api.get('/roster/:teamId', (req, res) => {
       batsName: BATS[p.bats as number] ?? String(p.bats ?? '?'),
       throwsName: THROWS[p.throws as number] ?? String(p.throws ?? '?'),
       ratings: ratingsByPlayer.get(id) ?? {},
+      oaRating: playerValues.get(id)?.oaRating ?? null,
+      potRating: playerValues.get(id)?.potRating ?? null,
       batting: battingByPlayer.get(id) ?? null,
       pitching: pitchingByPlayer.get(id) ?? null,
     };

@@ -238,6 +238,14 @@ export function contractsByPlayer(): Map<number, ContractInfo> {
 export interface PlayerValue {
   overall: number;
   talent: number;
+  /**
+   * OOTP's own Overall and Potential on the 20-80 scouting scale — the numbers
+   * printed on the player's page in the game. Coarse by design (five-point
+   * steps, twelve grades in all), so they are shown for cross-reference and
+   * never used for ranking; overall/talent are continuous and role-relative.
+   */
+  oaRating: number | null;
+  potRating: number | null;
   offense: number;
   offenseVsL: number;
   offenseVsR: number;
@@ -251,7 +259,8 @@ export function valuesByPlayer(): Map<number, PlayerValue> {
   const rows = db
     .prepare(
       `SELECT player_id, overall_value, talent_value, offensive_value,
-              offensive_value_vsl, offensive_value_vsr, pitching_value
+              offensive_value_vsl, offensive_value_vsr, pitching_value,
+              oa_rating, pot_rating
        FROM players_value`
     )
     .all() as Array<Record<string, number>>;
@@ -263,6 +272,8 @@ export function valuesByPlayer(): Map<number, PlayerValue> {
       offenseVsL: r.offensive_value_vsl ?? 0,
       offenseVsR: r.offensive_value_vsr ?? 0,
       pitching: r.pitching_value ?? 0,
+      oaRating: r.oa_rating ?? null,
+      potRating: r.pot_rating ?? null,
     });
   }
   valueCache = out;

@@ -94,6 +94,14 @@ function Card({ id, anchor }: { id: number; anchor: DOMRect }) {
           {data.team && <div className="muted phover-team">{data.team}</div>}
 
           <div className="phover-grid">
+            {data.oaRating !== null && (
+              <span>
+                OA <b>{data.oaRating}</b>
+                {data.potRating !== null && data.potRating !== data.oaRating && (
+                  <>→{data.potRating}</>
+                )}
+              </span>
+            )}
             {data.overallPct !== null && (
               <span>
                 Value <b>{data.overallPct}</b>

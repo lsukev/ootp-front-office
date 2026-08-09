@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getRoster, getTeams, type RosterPlayer, type RosterResponse, type Team } from '../api';
-import { PlayerLink, Tip } from '../playerModal';
+import { PlayerLink, Tip, TIP_OA } from '../playerModal';
 import { ColumnPicker } from '../ColumnPicker';
 import {
   DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, loadColumns, plusColor, saveColumns,
@@ -127,6 +127,9 @@ function RosterTable({
           <th onClick={() => setSort('age')}>Age{arrow('age')}</th>
           <th onClick={() => setSort('position')}>Pos{arrow('position')}</th>
           <Th>B/T</Th>
+          <th onClick={() => setSort('oa')}>
+            <Tip label={`OA→POT${arrow('oa')}`} tip={TIP_OA} />
+          </th>
           {ratingCols.map((k) => (
             <th key={k} onClick={() => setSort(`r:${k}`)} title="Scout rating">
               {labelFor(k)}{arrow(`r:${k}`)}
@@ -157,6 +160,11 @@ function RosterTable({
               <td>{p.positionName}</td>
               <td>
                 {p.batsName}/{p.throwsName}
+              </td>
+              <td className="num muted">
+                {p.oaRating !== null
+                  ? `${p.oaRating}${p.potRating !== null && p.potRating !== p.oaRating ? `→${p.potRating}` : ''}`
+                  : ''}
               </td>
               {ratingCols.map((k) => (
                 <td key={k}>
@@ -205,6 +213,9 @@ function compareBy(a: RosterPlayer, b: RosterPlayer, key: string, group: StatGro
     if (key === 'name') return `${p.last_name} ${p.first_name}`;
     if (key === 'age') return p.age ?? 0;
     if (key === 'position') return p.position ?? 99;
+    // Ties on the coarse grade are broken by ceiling, so a 60 with room to grow
+    // sorts above a finished 60
+    if (key === 'oa') return (p.oaRating ?? -1) * 100 + (p.potRating ?? 0);
     if (key.startsWith('r:')) return p.ratings[key.slice(2)] ?? -1;
     if (key.startsWith('s:')) {
       const stats = group === 'pitching' ? p.pitching : p.batting;

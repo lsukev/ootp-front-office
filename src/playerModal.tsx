@@ -30,6 +30,14 @@ export function Tip({ label, tip }: { label: ReactNode; tip: string }) {
   );
 }
 
+export const TIP_OA =
+  "OOTP's own Overall and Potential, on the 20-80 scouting scale — the same numbers printed on the " +
+  "player's page in the game, so you can cross-check the app against it.\n\n" +
+  'Deliberately coarse: it moves in five-point steps and the whole league fits into twelve grades, ' +
+  'so dozens of players share any given number. Value and Talent beside it are continuous and are ' +
+  'compared against others in the same role, which is why those — not this — drive the rankings and ' +
+  'recommendations elsewhere in the app.';
+
 export const TIP_VALUE =
   "OOTP's evaluation of the player's current worth to a club, shown as a percentile against others " +
   'in his own role — position players, starters and relievers are ranked separately. 86 means better ' +
@@ -180,6 +188,15 @@ function Dossier({ d }: { d: PlayerDossier }) {
           <WatchControls playerId={d.player_id} name={d.name} />
         </div>
         <div className="dossier-pcts">
+          {d.oaRating !== null && (
+            <div className="card">
+              <span className="card-label"><Tip label="OA → POT" tip={TIP_OA} /></span>
+              <span className="card-value">
+                {d.oaRating}
+                {d.potRating !== null && d.potRating !== d.oaRating ? ` → ${d.potRating}` : ''}
+              </span>
+            </div>
+          )}
           <div className="card">
             <span className="card-label"><Tip label="Value" tip={TIP_VALUE} /></span>
             <span className="card-value"><Pct v={d.overallPct} /></span>

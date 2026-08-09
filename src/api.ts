@@ -44,6 +44,8 @@ export interface RosterPlayer {
   throwsName: string;
   uniform_number: number | null;
   ratings: Record<string, number>;
+  oaRating: number | null;
+  potRating: number | null;
   batting: Record<string, number | null> | null;
   pitching: Record<string, number | null> | null;
 }
@@ -192,6 +194,9 @@ export interface PlayerDossier {
   serviceYears: number | null;
   overallPct: number | null;
   talentPct: number | null;
+  /** OOTP's own Overall / Potential on the 20-80 scale, for cross-reference. */
+  oaRating: number | null;
+  potRating: number | null;
   isPitcher: boolean;
   battingRatings: Record<string, [number, number]> | null;
   pitchingRatings: Record<string, [number, number]> | null;
