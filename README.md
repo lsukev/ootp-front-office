@@ -131,6 +131,30 @@ never touches them.
 On Windows the update runs the same unsigned installer as a fresh download, so
 SmartScreen will prompt again until the app is code-signed.
 
+### Running from source alongside the desktop app
+
+They are two separate installs and keep **separate data**. The desktop app writes to
+your OS user-data folder; running from source writes to the project's `data/` folder.
+Each has its own database, settings, API key, GM briefing, and chat history — so a
+briefing you generated in the app will not appear in the from-source copy, and vice
+versa.
+
+To make the from-source server use the desktop app's data instead, point it there:
+
+```bash
+# macOS
+OOTP_FO_DATA_DIR="$HOME/Library/Application Support/ootp-front-office" npm start
+
+# Windows (PowerShell)
+$env:OOTP_FO_DATA_DIR="$env:APPDATA\ootp-front-office"; npm start
+```
+
+Now both see the same league, briefing, conversation, and key.
+
+> **Run one at a time.** Both write the same SQLite database and settings file, and
+> re-importing from one while the other is reading it will end badly. Quit the desktop
+> app before starting the server this way.
+
 ### Reaching it from another computer
 
 The server listens on `127.0.0.1` and answers only to localhost, so by default

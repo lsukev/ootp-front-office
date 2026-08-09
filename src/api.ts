@@ -64,6 +64,13 @@ export async function apiPost<T>(url: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+export async function apiPut<T>(url: string, body?: unknown): Promise<T> {
+  return json<T>(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
 export async function apiDelete<T>(url: string): Promise<T> {
   return json<T>(url, { method: 'DELETE' });
 }

@@ -1,11 +1,49 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
+import fs from 'node:fs';
+import path from 'node:path';
 import { db, tableExists } from './db.js';
+import { DATA_DIR } from './config.js';
 import { aiModel, getApiKey } from './settings.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
 
 export const chatRoutes = Router();
+
+/**
+ * The conversation lives on disk beside the rest of the app's data.
+ *
+ * It used to live in the browser's localStorage, which is scoped to the
+ * window's origin — and the desktop app took a fresh random port on every
+ * launch, so each restart presented a new origin and an empty history. Keeping
+ * it in the data directory means it survives restarts, updates and a change of
+ * port, which is what a conversation you can pick up later actually requires.
+ */
+const historyPath = (orgId: number) => path.join(DATA_DIR, `chat-${orgId}.json`);
+
+/** Enough turns to keep the thread coherent without growing without bound. */
+const KEEP_TURNS = 40;
+
+chatRoutes.get('/chat-history/:orgId', (req, res) => {
+  try {
+    const raw = fs.readFileSync(historyPath(Number(req.params.orgId)), 'utf8');
+    const parsed: unknown = JSON.parse(raw);
+    res.json(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    res.json([]);
+  }
+});
+
+chatRoutes.put('/chat-history/:orgId', (req, res) => {
+  const body = req.body as unknown;
+  if (!Array.isArray(body)) return res.status(400).json({ error: 'Expected an array of messages' });
+  try {
+    fs.writeFileSync(historyPath(Number(req.params.orgId)), JSON.stringify(body.slice(-KEEP_TURNS)));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
 
 const NO_KEY_MESSAGE =
   'No Anthropic API key set. Open Settings and add your key — you can get one at console.claude.com.';

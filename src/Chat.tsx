@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { apiGet, apiPut } from './api';
 
 /**
  * Ask-the-save chat. The server streams the answer over SSE and announces each
@@ -63,33 +64,57 @@ const storageKey = (orgId: number) => `ootp-chat-${orgId}`;
 /** Keeps the tail of the conversation — enough for context, bounded for storage. */
 const KEEP = 40;
 
-function loadHistory(orgId: number): Message[] {
+const valid = (parsed: unknown): Message[] =>
+  Array.isArray(parsed)
+    ? parsed.filter(
+        (m): m is Message =>
+          !!m && typeof m === 'object' && 'role' in m && 'content' in m &&
+          typeof (m as Message).content === 'string'
+      )
+    : [];
+
+/**
+ * History comes from the server, which keeps it in the app's data folder.
+ *
+ * It used to live in localStorage, and the desktop app's origin changes with
+ * its port — so every restart looked like a fresh browser and the thread was
+ * gone. Anything already in localStorage is migrated up once so nobody loses a
+ * conversation they still have.
+ */
+async function loadHistory(orgId: number): Promise<Message[]> {
+  let stored: Message[] = [];
+  try {
+    stored = valid(await apiGet<unknown>(`/api/chat-history/${orgId}`));
+  } catch {
+    // No server (a static export) — fall through to whatever is local
+  }
+  if (stored.length > 0) return stored;
   try {
     const raw = localStorage.getItem(storageKey(orgId));
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (m): m is Message =>
-        !!m && typeof m === 'object' && 'role' in m && 'content' in m &&
-        typeof (m as Message).content === 'string'
-    );
+    const local = raw ? valid(JSON.parse(raw)) : [];
+    if (local.length > 0) void saveHistory(orgId, local);
+    return local;
   } catch {
-    // Corrupt or unavailable storage should never break the panel
     return [];
   }
 }
 
-function saveHistory(orgId: number, messages: Message[]): void {
+async function saveHistory(orgId: number, messages: Message[]): Promise<void> {
+  const trimmed = messages.slice(-KEEP);
   try {
-    localStorage.setItem(storageKey(orgId), JSON.stringify(messages.slice(-KEEP)));
+    await apiPut(`/api/chat-history/${orgId}`, trimmed);
   } catch {
-    // Quota exceeded or storage disabled — the panel still works in memory
+    // Keep a local copy as a backstop when the server cannot be reached
+    try {
+      localStorage.setItem(storageKey(orgId), JSON.stringify(trimmed));
+    } catch {
+      // Quota exceeded or storage disabled — the panel still works in memory
+    }
   }
 }
 
 export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
-  const [messages, setMessages] = useState<Message[]>(() => loadHistory(orgId));
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,8 +127,14 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
 
   // Each organization keeps its own thread, restored when you switch back
   useEffect(() => {
-    setMessages(loadHistory(orgId));
+    let cancelled = false;
     setError(null);
+    void loadHistory(orgId).then((m) => {
+      if (!cancelled) setMessages(m);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [orgId]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -118,7 +149,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
       setMessages([...history, { role: 'assistant', content: '', tools: [], at: now }]);
       // Save the question now: if the answer errors or is stopped, the thread
       // still reflects what was asked
-      saveHistory(orgId, history);
+      void saveHistory(orgId, history);
       setInput('');
       setBusy(true);
       setError(null);
@@ -189,7 +220,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           const last = prev[prev.length - 1];
           const next =
             last?.role === 'assistant' && !last.content.trim() ? prev.slice(0, -1) : prev;
-          saveHistory(orgId, next);
+          void saveHistory(orgId, next);
           return next;
         });
       }
@@ -201,7 +232,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
-    saveHistory(orgId, []);
+    void saveHistory(orgId, []);
   }, [orgId]);
 
   return (

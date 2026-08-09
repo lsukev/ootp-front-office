@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, Menu } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { initUpdater } from './updater.js';
 
 /**
@@ -162,7 +163,34 @@ async function createWindow(): Promise<void> {
       label: process.platform === 'darwin' ? 'your macOS Keychain' : 'Windows Credential storage (DPAPI)',
     });
 
-    const port = await startServer(0);
+    // Reuse the port from last time.
+    //
+    // The window's origin includes the port, and localStorage is scoped per
+    // origin — so a fresh random port every launch handed the UI a brand new,
+    // empty store each time. That is what quietly threw away the conversation
+    // with Peter and the chosen stat columns on every restart. Falling back to
+    // a free port when the old one is taken keeps two copies from colliding.
+    const portFile = path.join(process.env.OOTP_FO_DATA_DIR ?? '', 'port.json');
+    let preferred = 0;
+    try {
+      preferred = Number(JSON.parse(fs.readFileSync(portFile, 'utf8')).port) || 0;
+    } catch {
+      // First run, or the file was removed
+    }
+
+    let port: number;
+    try {
+      port = await startServer(preferred);
+    } catch {
+      console.warn(`[server] port ${preferred} unavailable, taking another`);
+      port = await startServer(0);
+    }
+    try {
+      fs.writeFileSync(portFile, JSON.stringify({ port }));
+    } catch (err) {
+      console.warn('[server] could not remember the port:', (err as Error).message);
+    }
+
     serverUrl = `http://127.0.0.1:${port}`;
     await mainWindow.loadURL(serverUrl);
   } catch (err) {
