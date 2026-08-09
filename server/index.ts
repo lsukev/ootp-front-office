@@ -9,6 +9,38 @@ import { tableExists } from './db.js';
 import { snapshotDates, takeSnapshot } from './history.js';
 import { loadSettings } from './settings.js';
 
+/**
+ * Rejects requests whose Host header is not a loopback name.
+ *
+ * The server binds to 127.0.0.1, which stops other machines reaching it but
+ * not the browser already running on this one. A page on the open web can
+ * point a hostname it controls at 127.0.0.1 (DNS rebinding) and then have the
+ * visitor's browser talk to this server — same-origin as far as the browser is
+ * concerned, because the hostname matches. That would hand a stranger's page
+ * the whole save and, worse, the ability to spend the user's API credits
+ * through /api/chat.
+ *
+ * The defence is the Host header: a rebound request carries the attacker's
+ * hostname, never `localhost` or a loopback IP. Only the hostname is checked,
+ * not the port, so the Vite dev proxy (which forwards the original
+ * `localhost:5173`) keeps working.
+ */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
+
+function requireLocalHost(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void {
+  const host = req.headers.host ?? '';
+  // Strip the port; an IPv6 literal keeps its brackets
+  const name = host.startsWith('[')
+    ? host.slice(0, host.indexOf(']') + 1)
+    : host.split(':')[0];
+  if (LOOPBACK_HOSTS.has(name.toLowerCase())) return next();
+  res.status(403).type('text/plain').send('This server only answers requests addressed to localhost.');
+}
+
 /** Import on boot if needed, then watch for fresh OOTP exports. */
 function bootstrapData(): void {
   const config = loadConfig();
@@ -30,6 +62,7 @@ function bootstrapData(): void {
  */
 export function startServer(port = 5178): Promise<number> {
   const app = express();
+  app.use(requireLocalHost);
   app.use(express.json());
   app.use('/api', api);
 

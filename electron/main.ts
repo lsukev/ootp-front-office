@@ -18,6 +18,16 @@ process.env.OOTP_FO_EMBEDDED = '1';
 
 let mainWindow: BrowserWindow | null = null;
 
+/** True only for http and https, the two schemes safe to hand to the OS. */
+function isWebUrl(raw: string): boolean {
+  try {
+    const scheme = new URL(raw).protocol;
+    return scheme === 'http:' || scheme === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -37,10 +47,25 @@ async function createWindow(): Promise<void> {
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
-  // Open external links in the real browser, never inside the app window
+  // Open external links in the real browser, never inside the app window.
+  // Only http and https are handed to the OS: openExternal will happily launch
+  // file://, and on Windows any registered protocol handler, so passing it an
+  // unfiltered URL turns a stray link in the UI into "run whatever this scheme
+  // is wired to". Every link the app actually shows is a web page.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isWebUrl(url)) void shell.openExternal(url);
+    else console.warn('[shell] refused to open non-web URL:', url);
     return { action: 'deny' };
+  });
+
+  // A link without target="_blank" would otherwise navigate this window away
+  // from the local UI, leaving a remote page running inside the app shell with
+  // the preload bridge attached. The window only ever shows the local server.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const target = new URL(url);
+    if (target.hostname === '127.0.0.1' || target.hostname === 'localhost') return;
+    event.preventDefault();
+    if (isWebUrl(url)) void shell.openExternal(url);
   });
 
   try {

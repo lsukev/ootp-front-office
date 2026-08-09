@@ -48,13 +48,12 @@ actual save data.
 | Injury Report | Org-wide trainer's report with estimated return dates |
 | Coaching Staff | Coaches, scouts, and farm managers with role-relevant ratings |
 
-**🌾 Farm System** — the pipeline
+**🌾 Farm System** — your own pipeline
 
 | Page | What you get |
 |------|--------------|
 | Prospects | Minor leaguers ranked by promotion signal, self-calibrated to your league's own level averages |
 | Development | Scout-rating changes over time — who's improving, who's declining, whose ceiling moved |
-| Draft Board | The draft class ranked by ceiling, from the day OOTP publishes it |
 
 **💼 Front Office** — transactions and money
 
@@ -82,6 +81,7 @@ works without one.
 |------|--------------|
 | Standings | Every division with run differential and current streaks |
 | Player Search | Search anyone in the league by name; filter by level, org, or free agency |
+| Draft Board | The draft class ranked by ceiling, from the day OOTP publishes it |
 | Leaderboards | League top-10s with your players highlighted |
 | My Watchlist | Star any player and keep your own scouting notes |
 

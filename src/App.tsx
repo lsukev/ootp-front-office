@@ -42,8 +42,9 @@ type Page =
 
 /**
  * Grouped by front-office function: what you do daily (Dashboard, Storylines),
- * running the big-league club (Clubhouse), the pipeline (Farm System),
- * transactions (Front Office), and reference (League).
+ * running the big-league club (Clubhouse), your own pipeline (Farm System),
+ * transactions (Front Office), and everything league-wide, including the
+ * amateur draft class, which belongs to nobody until it is drafted (League).
  */
 const NAV: Array<NavEntry<Page>> = [
   { kind: 'link', page: 'dashboard', label: 'Dashboard', hint: '🏟' },
@@ -65,7 +66,6 @@ const NAV: Array<NavEntry<Page>> = [
     items: [
       { page: 'prospects', label: 'Prospects', hint: 'Promotion signals by level' },
       { page: 'development', label: 'Development', hint: 'Rating changes over time' },
-      { page: 'draft', label: 'Draft Board', hint: 'The class, once OOTP publishes it' },
     ],
   },
   {
@@ -84,6 +84,7 @@ const NAV: Array<NavEntry<Page>> = [
       { page: 'standings', label: 'Standings', hint: 'Every division, run differential' },
       { page: 'trends', label: 'Season Trends', hint: 'Run differential and scoring curves' },
       { page: 'players', label: 'Player Search', hint: 'Search anyone in the league' },
+      { page: 'draft', label: 'Draft Board', hint: 'The class, once OOTP publishes it' },
       { page: 'leaders', label: 'Leaderboards', hint: 'League top tens' },
       { page: 'watchlist', label: 'My Watchlist', hint: 'Starred players and notes' },
     ],
