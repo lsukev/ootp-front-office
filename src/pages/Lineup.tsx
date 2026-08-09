@@ -152,6 +152,12 @@ export function Lineup({ teamId }: { teamId: number }) {
                 <th></th>
                 <Th>Player</Th>
                 <Th>Pos</Th>
+                <th>
+                  <Tip
+                    label="Glove"
+                    tip="OOTP's 20-80 fielding rating for this player at the position he is assigned. Positions are chosen on offence adjusted for defence, then swapped wherever two men are better suited the other way round — so the best bat plays the spot he can actually field."
+                  />
+                </th>
                 <Th>B</Th>
                 <th>
                   <Tip label="Off Value" tip={TIP_OFF_VALUE} />
@@ -170,6 +176,7 @@ export function Lineup({ teamId }: { teamId: number }) {
                   <td className="slot-num">{l.slot}</td>
                   <td className="name"><PlayerLink id={l.player_id}>{l.name}</PlayerLink></td>
                   <td>{l.positionName}</td>
+                  <td className="num">{l.defRating ?? '—'}</td>
                   <td>{l.bats}</td>
                   {/* A pitcher has no scouted offensive value; 0 would read as
                       a measured one rather than "does not apply" */}

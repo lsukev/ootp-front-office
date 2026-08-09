@@ -42,7 +42,7 @@ actual save data.
 
 | Page | What you get |
 |------|--------------|
-| Lineup | Sabermetric (Tango's *The Book*) or traditional ordering, platoon-aware, auto-built against tonight's probable opposing starter |
+| Lineup | Sabermetric (Tango's *The Book*) or traditional ordering, platoon-aware, auto-built against tonight's probable opposing starter. Positions are chosen on offence adjusted for fielding ability, so the best bat plays the spot he can actually field |
 | Rosters | Any team in your org with scout ratings and sortable stat lines. **Pick your own columns** — 24 batting and 23 pitching stats to choose from, including OPS+, wRC+, ERA+, FIP, wOBA, and BABIP |
 | Depth Chart | Positions × affiliates grid, each player with age and current→potential |
 | Injury Report | Org-wide trainer's report with estimated return dates |
@@ -79,15 +79,18 @@ works without one.
 
 | Page | What you get |
 |------|--------------|
-| Standings | Every division with run differential and current streaks |
+| Standings | Every division with run differential, current streaks, magic number, and the record each club is on pace for |
+| Franchise History | Every season the club has played — win curve, finishes, titles, payroll and attendance |
+| Org Comparison | Your farm system and major-league talent ranked against the rest of the league |
 | Player Search | Search anyone in the league by name; filter by level, org, or free agency |
 | Draft Board | The draft class ranked by ceiling, from the day OOTP publishes it |
 | Leaderboards | League top-10s with your players highlighted |
 | My Watchlist | Star any player and keep your own scouting notes |
 
 Click any player name anywhere for a full dossier: bio, ratings with potential markers,
-pitch arsenal and velocity, contract schedule, career history by level, recent game logs,
-and injury history.
+pitch arsenal and velocity, contract schedule, career history by level, fielding by position
+and season, honours (MVPs, Cy Youngs, Gold Gloves, All-Star selections), where he has
+finished in a league category, recent game logs, and injury history.
 
 **Export as a website** — **Settings → Share** writes your club's pages out as a plain static
 site: a folder you can upload to GitHub Pages, Netlify, or any web host so other people can

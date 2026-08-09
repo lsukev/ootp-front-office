@@ -328,6 +328,92 @@ function Dossier({ d }: { d: PlayerDossier }) {
         </section>
       )}
 
+      {(d.fieldingYears?.length ?? 0) > 0 && (
+        <section>
+          <h3>Fielding</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th><th>Lvl</th><th>Pos</th>
+                <th className="num">G</th><th className="num">Inn</th>
+                <th className="num">PO</th><th className="num">A</th><th className="num">E</th>
+                <th className="num">DP</th><th className="num">FPCT</th><th className="num">RF/9</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(d.fieldingYears ?? []).slice(0, 14).map((f, i) => (
+                <tr key={i}>
+                  <td className="num">{f.year}</td>
+                  <td><span className="lvl-badge">{f.levelName}</span></td>
+                  <td>{f.positionName}</td>
+                  <td className="num">{f.g}</td>
+                  <td className="num">{Math.round(f.innings)}</td>
+                  <td className="num">{f.po}</td>
+                  <td className="num">{f.a}</td>
+                  <td className="num">{f.e}</td>
+                  <td className="num">{f.dp}</td>
+                  <td className="num">{f.fpct !== null ? f.fpct.toFixed(3).replace(/^0\./, '.') : ''}</td>
+                  <td className="num">{f.rf9 !== null ? f.rf9.toFixed(2) : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* Honours first: what a player WAS is the headline of a career page */}
+      {(d.awards?.length ?? 0) > 0 && (
+        <section>
+          <h3>Honours</h3>
+          <div className="award-list">
+            {Object.entries(
+              (d.awards ?? []).reduce<Record<string, number[]>>((acc, a) => {
+                const label = a.positionName ? `${a.award} (${a.positionName})` : a.award;
+                (acc[label] ??= []).push(a.year);
+                return acc;
+              }, {})
+            )
+              // Keep the server's ordering: MVP before an All-Star nod
+              .sort(
+                (a, b) =>
+                  ((d.awards ?? []).find((x) =>
+                    (x.positionName ? `${x.award} (${x.positionName})` : x.award) === a[0]
+                  )?.rank ?? 99) -
+                  ((d.awards ?? []).find((x) =>
+                    (x.positionName ? `${x.award} (${x.positionName})` : x.award) === b[0]
+                  )?.rank ?? 99)
+              )
+              .map(([label, years]) => (
+                <div key={label} className="award-row">
+                  <span className="award-name">
+                    {years.length > 1 && <strong>{years.length}× </strong>}
+                    {label}
+                  </span>
+                  <span className="muted">{years.sort((a, b) => b - a).join(', ')}</span>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {(d.leagueLeader?.length ?? 0) > 0 && (
+        <section>
+          <h3>Led the League</h3>
+          <table className="mini">
+            <tbody>
+              {(d.leagueLeader ?? []).slice(0, 12).map((l, i) => (
+                <tr key={i}>
+                  <td className="num muted">{l.year}</td>
+                  <td className="num">{l.place === 1 ? '1st' : l.place === 2 ? '2nd' : '3rd'}</td>
+                  <td>{l.category}</td>
+                  <td className="num">{l.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {d.injuryHistory.length > 0 && (
         <section>
           <h3>Injury History</h3>

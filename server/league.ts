@@ -80,6 +80,7 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
       l: r.l,
       pct: r.pct,
       gb: r.gb,
+      g: r.g,
       streak: streakLabel(r.streak as number | null),
       magicNumber: r.magic_number === 1000 ? null : r.magic_number,
       rs,
@@ -89,7 +90,12 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
     });
   }
 
+  const scheduled =
+    (db.prepare(`SELECT rules_schedule_games_per_team AS n FROM leagues WHERE league_id = ?`)
+      .get(org.league_id) as { n: number | null } | undefined)?.n ?? null;
+
   res.json({
+    scheduledGames: scheduled,
     subLeagues: [...groups.values()].map((g) => ({
       name: g.subLeague,
       divisions: [...g.divisions.entries()].map(([name, teams]) => ({ name, teams })),

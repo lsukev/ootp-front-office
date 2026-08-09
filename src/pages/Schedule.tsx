@@ -31,7 +31,12 @@ interface Series {
   wins: number;
   losses: number;
 }
+interface HeadToHead {
+  opponentId: number; opponent: string; w: number; l: number; rf: number; ra: number;
+}
 interface ScheduleData {
+  headToHead?: HeadToHead[];
+  lineScores?: Record<string, { away: number[]; home: number[] }>;
   record: { w: number; l: number; home: string; away: string; runsFor: number; runsAgainst: number } | null;
   nextSeriesIndex: number;
   series: Series[];
@@ -87,6 +92,31 @@ export function Schedule({ teamId }: { teamId: number }) {
         </div>
       )}
 
+      {(data.headToHead?.length ?? 0) > 0 && (
+        <section>
+          <h2>Against each opponent</h2>
+          <div className="h2h-grid">
+            {(data.headToHead ?? []).map((h) => {
+              const diff = h.rf - h.ra;
+              return (
+                <div key={h.opponentId} className="h2h-card">
+                  <span className="h2h-team">{h.opponent}</span>
+                  <strong className={h.w > h.l ? 'good-text' : h.l > h.w ? 'bad-text' : ''}>
+                    {h.w}-{h.l}
+                  </strong>
+                  <span className="muted">
+                    {h.rf}–{h.ra}{' '}
+                    <span className={diff >= 0 ? 'good-text' : 'bad-text'}>
+                      ({diff >= 0 ? '+' : ''}{diff})
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <div className="toolbar">
         <div className="tabs">
           <button className={filter === 'all' ? 'active' : ''} onClick={() => setFilter('all')}>Full season</button>
@@ -138,6 +168,18 @@ export function Schedule({ teamId }: { teamId: number }) {
                           <span className={g.won ? 'good-text' : 'bad-text'}>
                             {g.won ? 'W' : 'L'} {g.us}-{g.them}
                             {g.extraInnings && <span className="muted"> (x)</span>}
+                          </span>
+                        ) : null}
+                        {/* Inning-by-inning, for the games we have it on */}
+                        {g.played && data.lineScores?.[String(g.game_id)] ? (
+                          <span
+                            className="line-score muted"
+                            title="Runs by inning — us on top"
+                          >
+                            {(g.isHome
+                              ? data.lineScores[String(g.game_id)].home
+                              : data.lineScores[String(g.game_id)].away
+                            ).join(' ')}
                           </span>
                         ) : (
                           <span className="muted">—</span>

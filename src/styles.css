@@ -1394,3 +1394,64 @@ button.cta {
   flex-wrap: wrap;
   border-color: var(--accent);
 }
+
+/* Honours on the player card: one line per award, years collapsed together */
+.award-list { display: flex; flex-direction: column; gap: 4px; }
+.award-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; }
+.award-name { color: var(--text); }
+
+/* Franchise win curve: one thin bar per season, oldest at the left */
+.win-curve {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 120px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.win-bar { flex: 1 1 auto; min-width: 2px; background: var(--muted); opacity: 0.55; border-radius: 1px 1px 0 0; }
+.win-bar:hover { opacity: 1; }
+.win-bar.win-playoff { background: var(--accent); opacity: 0.75; }
+.win-bar.win-title { background: var(--good); opacity: 1; }
+
+/* Active streaks under the hot/cold table */
+.streak-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.streak-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 10px;
+}
+.streak-chip strong { color: var(--accent); }
+
+/* Head-to-head: one small card per opponent */
+.h2h-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.h2h-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.h2h-card strong { font-size: 15px; }
+.h2h-team { color: var(--muted); }
+.line-score { display: block; font-size: 10px; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+
+/* Farm-system strength: a bar behind the rank, so the gaps are visible */
+.farm-bar-wrap { position: relative; display: flex; justify-content: flex-end; align-items: center; min-width: 90px; }
+.farm-bar {
+  position: absolute;
+  left: 0;
+  height: 14px;
+  background: var(--accent);
+  opacity: 0.28;
+  border-radius: 2px;
+}
+.farm-bar-wrap span { position: relative; }

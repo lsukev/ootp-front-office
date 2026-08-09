@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { TeamLogo } from '../TeamLogo';
+import { Tip } from '../playerModal';
 import { Th } from '../Th';
 
 interface StandingsTeam {
@@ -11,6 +12,7 @@ interface StandingsTeam {
   l: number;
   pct: number;
   gb: number;
+  g: number;
   streak: string;
   magicNumber: number | null;
   rs: number | null;
@@ -19,6 +21,7 @@ interface StandingsTeam {
   isOrg: boolean;
 }
 interface StandingsData {
+  scheduledGames?: number | null;
   subLeagues: Array<{ name: string; divisions: Array<{ name: string; teams: StandingsTeam[] }> }>;
 }
 
@@ -54,6 +57,18 @@ export function Standings({ orgId }: { orgId: number }) {
                     <tr>
                       <Th>Team</Th><Th>W</Th><Th>L</Th><Th>PCT</Th><Th>GB</Th>
                       <Th>RS</Th><Th>RA</Th><Th>DIFF</Th><Th>STRK</Th>
+                      <th>
+                        <Tip
+                          label="Pace"
+                          tip="The record this club is on course for if it keeps playing at its current rate over the full schedule. It is arithmetic, not a projection — it takes no account of who is left to play, injuries, or trades."
+                        />
+                      </th>
+                      <th>
+                        <Tip
+                          label="Magic"
+                          tip="Magic number: wins by this club plus losses by the closest chaser that would clinch the division. Shown only for a club that is leading; OOTP reports it for the leader alone."
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -73,6 +88,14 @@ export function Standings({ orgId }: { orgId: number }) {
                           {t.diff === null ? '' : t.diff > 0 ? `+${t.diff}` : t.diff}
                         </td>
                         <td className="num">{t.streak}</td>
+                        <td className="num muted">
+                          {data.scheduledGames && t.g > 0
+                            ? `${Math.round(t.pct * data.scheduledGames)}-${
+                                data.scheduledGames - Math.round(t.pct * data.scheduledGames)
+                              }`
+                            : ''}
+                        </td>
+                        <td className="num">{t.magicNumber ?? ''}</td>
                       </tr>
                     ))}
                   </tbody>

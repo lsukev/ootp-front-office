@@ -176,6 +176,41 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
       )
       .all(orgId, orgId) as Array<{ game_id: number }>
   ).map((r) => r.game_id);
+  /**
+   * Active streaks OOTP is already tracking.
+   *
+   * The streak table ships 21 unlabelled types. Two were pinned by finding the
+   * exact game each one began: a player's type-0 streak starts the day after
+   * his last hitless game, and type-9 the day after he last failed to reach
+   * base. Only those two are shown — the rest are left alone rather than
+   * guessed at and mislabelled.
+   */
+  const STREAK_HITTING = 0;
+  const STREAK_ON_BASE = 9;
+  const streaks = tableExists('players_streak')
+    ? (
+        db
+          .prepare(
+            `SELECT s.player_id, s.streak_id, s.value, s.started,
+                    p.first_name || ' ' || p.last_name AS name, p.position
+             FROM players_streak s
+             JOIN players p ON p.player_id = s.player_id
+             WHERE p.team_id = ? AND s.has_ended = 0
+               AND s.streak_id IN (${STREAK_HITTING}, ${STREAK_ON_BASE})
+               AND s.value >= 5
+             ORDER BY s.value DESC LIMIT 6`
+          )
+          .all(orgId) as Array<Record<string, number | string>>
+      ).map((r) => ({
+        player_id: r.player_id,
+        name: r.name,
+        positionName: POSITION_NAMES[r.position as number] ?? '',
+        games: r.value,
+        kind: r.streak_id === STREAK_HITTING ? 'hitting streak' : 'on-base streak',
+        since: r.started,
+      }))
+    : [];
+
   let hot: unknown[] = [];
   let cold: unknown[] = [];
   if (recentGameIds.length >= 3 && tableExists('players_game_batting')) {
@@ -245,6 +280,7 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
     upcoming,
     hot,
     cold,
+    streaks,
     injuries: injuries.slice(0, 8),
     pending: {
       expiring,

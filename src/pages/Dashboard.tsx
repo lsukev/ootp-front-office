@@ -5,6 +5,7 @@ import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
 
 interface DashboardData {
+  streaks?: Array<{ player_id: number; name: string; positionName: string; games: number; kind: string; since: string }>;
   standings: Array<{ team_id: number; team: string; w: number; l: number; gb: number; streak: number }>;
   recent: Array<{ date: string; opponent: string; isHome: boolean; score: string; won: boolean; innings: number }>;
   upcoming: Array<{
@@ -146,6 +147,18 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
               )}
             </tbody>
           </table>
+          {/* OOTP's own tracked streaks, which run longer than a 7-game window */}
+          {(data.streaks?.length ?? 0) > 0 && (
+            <div className="streak-strip">
+              {(data.streaks ?? []).map((s) => (
+                <span key={`${s.player_id}-${s.kind}`} className="streak-chip">
+                  <PlayerLink id={s.player_id}>{s.name}</PlayerLink>
+                  <strong>{s.games}</strong>
+                  <span className="muted">game {s.kind}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="dash-panel">

@@ -23,6 +23,8 @@ import { Leaderboards } from './pages/Leaderboards';
 import { Staff } from './pages/Staff';
 import { Watchlist } from './pages/Watchlist';
 import { Draft } from './pages/Draft';
+import { Franchise } from './pages/Franchise';
+import { OrgComparison } from './pages/OrgComparison';
 import { Players } from './pages/Players';
 import { Standings } from './pages/Standings';
 import { PlayerModal } from './playerModal';
@@ -36,7 +38,7 @@ import { Chat } from './Chat';
 import { apiGet, apiPost } from './api';
 
 type Page =
-  | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft'
+  | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
   | 'staff' | 'watchlist' | 'players' | 'standings' | 'pitching' | 'schedule' | 'payroll' | 'trends' | 'settings';
 
@@ -82,6 +84,8 @@ const NAV: Array<NavEntry<Page>> = [
     kind: 'group', label: 'League', icon: '📊',
     items: [
       { page: 'standings', label: 'Standings', hint: 'Every division, run differential' },
+      { page: 'franchise', label: 'Franchise History', hint: 'Every season the club has played' },
+      { page: 'orgcompare', label: 'Org Comparison', hint: 'Your system against the other 29' },
       { page: 'trends', label: 'Season Trends', hint: 'Run differential and scoring curves' },
       { page: 'players', label: 'Player Search', hint: 'Search anyone in the league' },
       { page: 'draft', label: 'Draft Board', hint: 'The class, once OOTP publishes it' },
@@ -352,6 +356,8 @@ export function App() {
                 {page === 'prospects' && <Prospects orgId={orgId} />}
                 {page === 'development' && <Development orgId={orgId} />}
                 {page === 'draft' && <Draft orgId={orgId} />}
+                {page === 'franchise' && <Franchise orgId={orgId} />}
+                {page === 'orgcompare' && <OrgComparison orgId={orgId} />}
                 {page === 'contracts' && <Contracts orgId={orgId} />}
                 {page === 'payroll' && <Payroll orgId={orgId} />}
                 {page === 'crunch' && <RosterCrunch orgId={orgId} />}

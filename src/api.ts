@@ -212,6 +212,13 @@ export interface PlayerDossier {
   pitchingGameLogs: Array<Record<string, number | string | null>>;
   injuryHistory: Array<Record<string, number | string | null>>;
   currentInjury: { status: string; daysLeft: number | null } | null;
+  awards?: Array<{ year: number; award: string; positionName: string | null; rank: number }>;
+  fieldingYears?: Array<{
+    year: number; levelName: string; positionName: string;
+    g: number; gs: number; innings: number; po: number; a: number; e: number; dp: number;
+    fpct: number | null; rf9: number | null;
+  }>;
+  leagueLeader?: Array<{ year: number; category: string; place: number; amount: number }>;
 }
 
 export const getPlayer = (id: number) => json<PlayerDossier>(`/api/player/${id}`);
@@ -325,6 +332,8 @@ export interface LineupSlot {
   player_id: number;
   name: string;
   positionName: string;
+  /** OOTP's 20-80 fielding rating at the position he is assigned. */
+  defRating?: number | null;
   bats: string;
   off: number;
   why: string;

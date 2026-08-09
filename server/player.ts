@@ -5,6 +5,73 @@ import { DATE_KEY } from './dashboard.js';
 
 export const playerRoutes = Router();
 
+/**
+ * OOTP ships award IDs with no lookup table, so these were recovered from the
+ * data itself and cross-checked against real baseball history: the first year
+ * each award appears (MVP 1911, Rookie of the Year 1947, Cy Young 1956, Gold
+ * Glove 1957, Silver Slugger 1980, World Series MVP 1955), whether it is
+ * position-specific, how many are handed out a year, and whether the winners
+ * are pitchers. Aaron Judge's record in an imported real-history save matches
+ * his actual honours exactly, which is what confirms the mapping.
+ */
+const AWARD_NAMES: Record<number, string> = {
+  0: 'Player of the Week',
+  1: 'Pitcher of the Month',
+  2: 'Batter of the Month',
+  3: 'Rookie of the Month',
+  4: 'Cy Young',
+  5: 'MVP',
+  6: 'Rookie of the Year',
+  7: 'Gold Glove',
+  9: 'All-Star',
+  11: 'Silver Slugger',
+  13: 'Reliever of the Year',
+  15: 'World Series MVP',
+};
+
+/** The honours worth a line on a career page, biggest first. */
+const AWARD_RANK: Record<number, number> = { 5: 1, 4: 2, 15: 3, 6: 4, 13: 5, 11: 6, 7: 7, 9: 8 };
+
+/** Weekly and monthly nods are noise on a career page; season awards are not. */
+const SEASON_AWARDS = [4, 5, 6, 7, 9, 11, 13, 15];
+
+/**
+ * League-leader categories, recovered the same way: for every category the
+ * recorded amount was matched against the actual league-leading value of each
+ * candidate stat across ten seasons. Only categories that matched a single
+ * column repeatedly are listed — the rate stats (average, ERA) record decimals
+ * that this method cannot pin down, so they are left out rather than guessed,
+ * and anything unrecognised is simply not shown.
+ */
+const LEADER_CATEGORIES: Record<number, string> = {
+  2: 'at-bats',
+  3: 'hits',
+  4: 'strikeouts',
+  6: 'doubles',
+  7: 'triples',
+  8: 'home runs',
+  9: 'stolen bases',
+  10: 'RBI',
+  11: 'runs',
+  12: 'walks',
+  14: 'hit by pitch',
+  15: 'sacrifice hits',
+  16: 'sacrifice flies',
+  27: 'appearances',
+  28: 'games started',
+  29: 'wins',
+  30: 'losses',
+  32: 'saves',
+  33: 'holds',
+  35: 'batters faced',
+  36: 'home runs allowed',
+  37: 'walks allowed',
+  38: 'strikeouts (pitching)',
+  39: 'wild pitches',
+  54: 'complete games',
+  56: 'shutouts',
+};
+
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
@@ -200,6 +267,84 @@ playerRoutes.get('/player/:id', (req, res) => {
     }
   }
 
+  // ── Fielding, by position and season ──────────────────────────────────
+  // The card showed scouted fielding ratings but never what the player has
+  // actually done in the field, which is the one half of the game the app was
+  // silent on.
+  const fieldingYears = tableExists('players_career_fielding_stats')
+    ? (
+        db
+          .prepare(
+            `SELECT year, level_id, position, SUM(g) AS g, SUM(gs) AS gs, SUM(ip) AS innings,
+                    SUM(po) AS po, SUM(a) AS a, SUM(e) AS e, SUM(dp) AS dp
+             FROM players_career_fielding_stats
+             WHERE player_id = ? AND split_id = 1
+             GROUP BY year, level_id, position
+             HAVING SUM(g) > 0
+             ORDER BY year DESC, SUM(g) DESC`
+          )
+          .all(id) as Array<Record<string, number>>
+      ).map((f) => {
+        const chances = (f.po ?? 0) + (f.a ?? 0) + (f.e ?? 0);
+        const innings = f.innings ?? 0;
+        return {
+          year: f.year,
+          levelName: LEVEL_NAMES[f.level_id] ?? '',
+          positionName: POSITION_NAMES[f.position] ?? '?',
+          g: f.g,
+          gs: f.gs,
+          innings,
+          po: f.po,
+          a: f.a,
+          e: f.e,
+          dp: f.dp,
+          // Fielding percentage, and range factor per nine innings — the two
+          // that need no league context to read
+          fpct: chances > 0 ? ((f.po ?? 0) + (f.a ?? 0)) / chances : null,
+          rf9: innings > 0 ? (((f.po ?? 0) + (f.a ?? 0)) / innings) * 9 : null,
+        };
+      })
+    : [];
+
+  // ── Honours ───────────────────────────────────────────────────────────
+  // Season awards only: a career page listing sixty Player of the Week nods
+  // buries the MVP among them.
+  const awards = tableExists('players_awards')
+    ? (
+        db
+          .prepare(
+            `SELECT award_id, year, position FROM players_awards
+             WHERE player_id = ? AND award_id IN (${SEASON_AWARDS.join(',')})
+             ORDER BY year DESC`
+          )
+          .all(id) as Array<{ award_id: number; year: number; position: number }>
+      ).map((a) => ({
+        year: a.year,
+        award: AWARD_NAMES[a.award_id] ?? `Award ${a.award_id}`,
+        positionName: a.position > 0 ? POSITION_NAMES[a.position] ?? null : null,
+        rank: AWARD_RANK[a.award_id] ?? 99,
+      }))
+    : [];
+
+  // Where he finished in a league category, top three only — "4th in doubles"
+  // is not something anyone puts on a plaque.
+  const leagueLeader = tableExists('players_league_leader')
+    ? (
+        db
+          .prepare(
+            `SELECT year, category, place, amount FROM players_league_leader
+             WHERE player_id = ? AND place <= 3 ORDER BY year DESC, place`
+          )
+          .all(id) as Array<{ year: number; category: number; place: number; amount: number }>
+      ).map((l) => ({
+        year: l.year,
+        category: LEADER_CATEGORIES[l.category] ?? null,
+        categoryId: l.category,
+        place: l.place,
+        amount: l.amount,
+      })).filter((l) => l.category !== null)
+    : [];
+
   res.json({
     player_id: id,
     name: `${p.first_name} ${p.last_name}`,
@@ -261,5 +406,8 @@ playerRoutes.get('/player/:id', (req, res) => {
     pitchingGameLogs,
     injuryHistory,
     currentInjury,
+    awards,
+    leagueLeader,
+    fieldingYears,
   });
 });

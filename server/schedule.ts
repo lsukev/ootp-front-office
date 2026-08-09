@@ -164,7 +164,51 @@ scheduleRoutes.get('/schedule/:teamId', (req, res) => {
   const away = games.filter((g) => g.played && !g.isHome);
   const nextIndex = series.findIndex((s) => !s.played);
 
+  /**
+   * Record against each opponent, and the line score of every game played.
+   *
+   * A season record says how the club is doing; a head-to-head record says who
+   * it is doing it against, which is the thing a manager actually asks before a
+   * series. games_score carries the runs scored in each inning and had never
+   * been read.
+   */
+  const headToHead = [...
+    games
+      .filter((g) => g.played)
+      .reduce((acc, g) => {
+        const cur = acc.get(g.oppId) ?? { opponentId: g.oppId, opponent: g.opponent, w: 0, l: 0, rf: 0, ra: 0 };
+        if (g.won === true) cur.w += 1;
+        else if (g.won === false) cur.l += 1;
+        cur.rf += g.us ?? 0;
+        cur.ra += g.them ?? 0;
+        acc.set(g.oppId, cur);
+        return acc;
+      }, new Map<number, { opponentId: number; opponent: string; w: number; l: number; rf: number; ra: number }>())
+      .values(),
+  ].sort((a, b) => b.w + b.l - (a.w + a.l) || b.w - a.w);
+
+  // Only the games already played, and only the recent ones — a full season of
+  // line scores is a lot of payload for a page that shows a window
+  const lineScores: Record<number, { away: number[]; home: number[] }> = {};
+  if (tableExists('games_score')) {
+    const recent = games.filter((g) => g.played).slice(-24).map((g) => g.game_id);
+    if (recent.length > 0) {
+      const holes = recent.map(() => '?').join(',');
+      for (const r of db
+        .prepare(
+          `SELECT game_id, team, inning, score FROM games_score
+           WHERE game_id IN (${holes}) ORDER BY inning`
+        )
+        .all(...recent) as Array<{ game_id: number; team: number; inning: number; score: number }>) {
+        const entry = (lineScores[r.game_id] ??= { away: [], home: [] });
+        (r.team === 0 ? entry.away : entry.home).push(r.score ?? 0);
+      }
+    }
+  }
+
   res.json({
+    headToHead,
+    lineScores,
     record: {
       w: wins,
       l: losses,
