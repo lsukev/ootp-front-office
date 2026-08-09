@@ -75,14 +75,18 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
         .get(orgId) as Record<string, number> | undefined) ?? null
     : null;
 
-  // Players on the club, PLUS anyone this club still pays after a trade or
-  // release — contract_team_id points back here while team_id has moved on.
-  // Without that dead money the total misses OOTP's own payroll figure: for the
-  // sample save it is exactly the $6.19M spread across three departed players.
+  // Players in the organization, PLUS anyone this club still pays after a trade
+  // or release — contract_team_id points back here while the player has moved
+  // on. Without that dead money the total misses OOTP's own payroll figure.
+  //
+  // Membership is judged on organization_id, NOT team_id. A player optioned to
+  // the affiliate keeps the organization but takes the affiliate's team_id, so
+  // comparing team_id billed the club's own farmhands as money owed to men who
+  // had left — Anthony Volpe and Carlos Rodón among them in the sample save.
   const rows = db
     .prepare(
       `SELECT c.*, p.first_name, p.last_name, p.age, p.position, p.retired,
-              p.team_id AS current_team_id,
+              p.team_id AS current_team_id, p.organization_id AS current_org,
               rs.mlb_service_years AS service_years
        FROM players_contract c
        JOIN players p ON p.player_id = c.player_id
@@ -94,7 +98,7 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
     first_name: string; last_name: string; age: number; position: number;
     no_trade: number; last_year_team_option: number; last_year_player_option: number;
     last_year_vesting_option: number; service_years: number | null;
-    current_team_id: number;
+    current_team_id: number; current_org: number | null;
   }>;
 
   // Signed extensions that begin after the current deal expires
@@ -130,8 +134,8 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
       return {
         player_id: c.player_id,
         name: `${c.first_name} ${c.last_name}`,
-        // Salary owed to someone who no longer plays here
-        deadMoney: c.current_team_id !== orgId,
+        // Salary owed to someone who has left the organization altogether
+        deadMoney: c.current_org !== orgId,
         age: c.age,
         positionName: POSITION_NAMES[c.position] ?? '?',
         salaryNow: byYear[0] ?? 0,
@@ -175,12 +179,18 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
           ownerExpectation: finances.owner_expectation ?? 0,
         }
       : null,
-    deadMoney: {
-      total: players.filter((p) => p.deadMoney).reduce((sum, p) => sum + (p.salaryNow ?? 0), 0),
-      players: players
-        .filter((p) => p.deadMoney)
-        .map((p) => ({ player_id: p.player_id, name: p.name, salary: p.salaryNow })),
-    },
+    deadMoney: (() => {
+      // Only men the club is genuinely still paying. A departed player whose
+      // contract has already run out owes nothing and simply is not dead money,
+      // however long his old deal lingers in the export.
+      const owed = players.filter(
+        (p) => p.deadMoney && p.byYear.some((v) => (v ?? 0) > 0)
+      );
+      return {
+        total: owed.reduce((sum, p) => sum + (p.salaryNow ?? 0), 0),
+        players: owed.map((p) => ({ player_id: p.player_id, name: p.name, salary: p.salaryNow })),
+      };
+    })(),
     commitments: commitments.map((c) => ({
       ...c,
       // Headroom assumes the budget holds flat, which is the only honest
