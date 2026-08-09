@@ -33,6 +33,7 @@ interface NextGame {
 export function Lineup({ teamId }: { teamId: number }) {
   const [vs, setVs] = useState<'r' | 'l'>('r');
   const [style, setStyle] = useState<'saber' | 'trad'>('saber');
+  const [dh, setDh] = useState<'auto' | 'on' | 'off'>('auto');
   const [data, setData] = useState<LineupResponse | null>(null);
   const [next, setNext] = useState<NextGame | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +51,12 @@ export function Lineup({ teamId }: { teamId: number }) {
   useEffect(() => {
     setData(null);
     setError(null);
-    getLineup(teamId, vs, style).then(setData).catch((e) => setError(e.message));
-  }, [teamId, vs, style]);
+    getLineup(teamId, vs, style, dh).then(setData).catch((e) => setError(e.message));
+  }, [teamId, vs, style, dh]);
+
+  // Switching clubs can mean switching leagues, so the override goes back to
+  // following the rule rather than silently carrying to another team's card
+  useEffect(() => setDh('auto'), [teamId]);
 
   return (
     <div>
@@ -98,6 +103,23 @@ export function Lineup({ teamId }: { teamId: number }) {
             vs LHP
           </button>
         </div>
+        {/* The rule is read from the save; this only changes the card on screen */}
+        {data && (
+          <div className="tabs">
+            <button
+              className={data.usesDH ? 'active' : ''}
+              onClick={() => setDh(data.leagueUsesDH === true ? 'auto' : 'on')}
+            >
+              With DH
+            </button>
+            <button
+              className={!data.usesDH ? 'active' : ''}
+              onClick={() => setDh(data.leagueUsesDH === false ? 'auto' : 'off')}
+            >
+              No DH
+            </button>
+          </div>
+        )}
       </div>
       {error && <div className="banner error">{error}</div>}
       {!data && !error && <p className="muted">Building lineup…</p>}
@@ -109,11 +131,19 @@ export function Lineup({ teamId }: { teamId: number }) {
               : 'Classic ordering: speed leads off, bat control 2nd, best hitter 3rd, power cleanup.'}{' '}
             Platoon-aware: ranked by each player's offensive value {vs === 'r' ? 'vs right-handed' : 'vs left-handed'}{' '}
             pitching.{' '}
-            {data.usesDH === false && (
-              <>
-                This league bats no designated hitter, so the order is eight position players with
-                tonight&rsquo;s starting pitcher batting ninth.
-              </>
+            {data.dhOverridden ? (
+              <strong>
+                {data.usesDH
+                  ? 'Showing a DH card, which this league does not use.'
+                  : 'Showing a no-DH card, which this league does not use.'}
+              </strong>
+            ) : (
+              data.usesDH === false && (
+                <>
+                  This league bats no designated hitter, so the order is eight position players with
+                  tonight&rsquo;s starting pitcher batting ninth.
+                </>
+              )
             )}
           </p>
           <table>

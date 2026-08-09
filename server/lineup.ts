@@ -126,6 +126,10 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
   const teamId = Number(req.params.teamId);
   const vs = req.query.vs === 'l' ? 'l' : 'r';
   const style = req.query.style === 'trad' ? 'trad' : 'saber';
+  // 'auto' follows the league; on/off let a manager see the other card without
+  // changing his save — useful for interleague, and for judging how much the
+  // rule is actually worth to this roster.
+  const dhParam = req.query.dh === 'on' ? 'on' : req.query.dh === 'off' ? 'off' : 'auto';
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
 
   const values = valuesByPlayer();
@@ -175,7 +179,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       used.add(atPos[0].player_id);
     }
   }
-  const dh = usesDH(teamId);
+  const leagueUsesDH = usesDH(teamId);
+  const dh = dhParam === 'auto' ? leagueUsesDH : dhParam === 'on';
   const remaining = candidates.filter((c) => !used.has(c.player_id)).sort((a, b) => b.off - a.off);
   // With a DH the ninth bat is the best one left over. Without one, only the
   // eight fielders bat and the pitcher takes the ninth slot himself.
@@ -236,6 +241,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     vs,
     style,
     usesDH: dh,
+    leagueUsesDH,
+    dhOverridden: dh !== leagueUsesDH,
     lineup: lineup.map((l) => {
       const s = statsById.get(l.player.player_id);
       return {

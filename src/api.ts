@@ -309,16 +309,23 @@ export interface LineupSlot {
 export interface LineupResponse {
   vs: 'r' | 'l';
   style: 'saber' | 'trad';
-  /** False in leagues where the pitcher bats. Absent on older servers. */
+  /** Whether this card was built with a DH — the league rule unless overridden. */
   usesDH?: boolean;
+  /** What the league itself says, regardless of the override. */
+  leagueUsesDH?: boolean;
+  dhOverridden?: boolean;
   lineup: LineupSlot[];
   bench: Array<{ player_id: number; name: string; positionName: string; off: number }>;
 }
 
 export const getContracts = (orgId: number) => json<ContractsResponse>(`/api/contracts/${orgId}`);
 export const getFreeAgents = (orgId: number) => json<FreeAgentsResponse>(`/api/free-agents/${orgId}`);
-export const getLineup = (teamId: number, vs: 'r' | 'l', style: 'saber' | 'trad') =>
-  json<LineupResponse>(`/api/lineup/${teamId}?vs=${vs}&style=${style}`);
+export const getLineup = (
+  teamId: number,
+  vs: 'r' | 'l',
+  style: 'saber' | 'trad',
+  dh: 'auto' | 'on' | 'off' = 'auto'
+) => json<LineupResponse>(`/api/lineup/${teamId}?vs=${vs}&style=${style}&dh=${dh}`);
 export const getOrgs = () => json<Org[]>('/api/orgs');
 export const getDepthChart = (orgId: number) =>
   json<{ teams: DepthTeam[]; players: DepthPlayer[] }>(`/api/depth-chart/${orgId}`);

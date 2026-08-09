@@ -320,3 +320,31 @@ export function teamFinances(teamId: number): TeamFinances | null {
     fanInterest: r.fan_interest ?? 0,
   };
 }
+
+const HOLE_POSITION_NAMES: Record<number, string> = {
+  2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF',
+};
+
+/**
+ * The org's weakest positions, thinnest first, measured by the best player it
+ * currently has at each spot. Used to flag free agents and draft prospects who
+ * address a genuine gap.
+ */
+export function rosterHoles(orgId: number): Array<{ position: number; positionName: string; bestValue: number | null }> {
+  const players = db
+    .prepare(
+      `SELECT p.player_id, p.position FROM players p WHERE p.team_id = ? AND p.retired = 0`
+    )
+    .all(orgId) as Array<{ player_id: number; position: number }>;
+  const values = valuesByPlayer();
+  const bestByPos = new Map<number, number>();
+  for (const p of players) {
+    const v = values.get(p.player_id)?.overall;
+    if (v === undefined) continue;
+    if (v > (bestByPos.get(p.position) ?? -Infinity)) bestByPos.set(p.position, v);
+  }
+  const spots = [2, 3, 4, 5, 6, 7, 8, 9];
+  return spots
+    .map((pos) => ({ position: pos, positionName: HOLE_POSITION_NAMES[pos], bestValue: bestByPos.get(pos) ?? null }))
+    .sort((a, b) => (a.bestValue ?? 0) - (b.bestValue ?? 0));
+}

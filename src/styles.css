@@ -356,6 +356,21 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 /* A signed extension is settled business, not a decision to make */
 .flag-locked { border-color: var(--good); color: var(--good); }
 
+/* Draft board filter bar: wraps rather than pushing controls off a narrow window */
+.draft-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+}
+.draft-filters input[type='number'] { width: 64px; }
+/* Keep the search box a box rather than letting it eat the whole bar */
+.draft-filters .trade-search { flex: 0 1 260px; min-width: 180px; }
+/* Sortable headers read as clickable */
+thead th[onclick], thead th { user-select: none; }
+
+
 .rec-action { color: var(--text); }
 .slot-num { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 16px; }
 

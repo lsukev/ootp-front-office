@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { seasonYear } from './valuation.js';
+import { rosterHoles, seasonYear } from './valuation.js';
 
 export const rosterOpsRoutes = Router();
 
@@ -361,6 +361,60 @@ function draftLeague(orgId: number): DraftLeague | null {
   };
 }
 
+interface Prospect {
+  age: number;
+  positionName: string;
+  school: string;
+  isPitcher: boolean;
+  cur: number | null;
+  pot: number | null;
+  upside: number | null;
+}
+
+/**
+ * A read on a draft prospect, in the same shape the Contracts page uses.
+ *
+ * Everything here comes from scouted ratings, which for amateurs your staff has
+ * barely seen are the noisiest numbers in the game — so the labels describe the
+ * KIND of bet a player is rather than pretending to rank them precisely. The
+ * roster-need flag is deliberately the weakest signal: a draft pick is years
+ * from the majors, and today's thin position rarely predicts the one you will
+ * actually be short of when he arrives.
+ */
+function advise(p: Prospect, thin: Set<string>): { label: string; reasons: string[] } | null {
+  const pot = p.pot ?? 0;
+  const cur = p.cur ?? 0;
+  const upside = p.upside ?? 0;
+  if (pot < 45) return null;
+
+  const reasons: string[] = [];
+  let label: string;
+
+  if (pot >= 55 && upside >= 15) {
+    label = 'High ceiling, long wait';
+    reasons.push(`${pot} ceiling, but ${upside} points of it is still projection`);
+  } else if (upside <= 8 && cur >= 45) {
+    label = 'Close to ready';
+    reasons.push(`already at ${cur} of a ${pot} ceiling — least development left`);
+  } else if (pot >= 52) {
+    label = 'Everyday-regular ceiling';
+    reasons.push(`${pot} ceiling`);
+  } else {
+    label = 'Depth piece';
+    reasons.push(`${pot} ceiling — organizational depth rather than a future regular`);
+  }
+
+  // Age is read against the class, not the calendar: the draft pool runs 16-25,
+  // so the same ceiling at 18 is a much better bet than at 22
+  if (p.age <= 18) reasons.push(`only ${p.age} — years of development still ahead`);
+  else if (p.age >= 23) reasons.push(`already ${p.age}, old for the class`);
+
+  if (p.school === 'HS') reasons.push('high schooler — further away, more variance');
+  if (thin.has(p.positionName)) reasons.push(`${p.positionName} is among your thinnest spots today`);
+
+  return { label, reasons };
+}
+
 rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
 
@@ -406,9 +460,9 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
         ? avg([r.stuP, r.movP, r.ctlP])
         : avg([r.conP, r.gapP, r.powP, r.eyeP, r.avkP]);
       return {
-        player_id: r.player_id,
-        name: r.name,
-        age: r.age,
+        player_id: Number(r.player_id),
+        name: String(r.name),
+        age: Number(r.age ?? 0),
         positionName: POSITION_NAMES[r.position as number] ?? '?',
         bats: HANDS[r.bats as number] ?? '?',
         throws: HANDS[r.throws as number] ?? '?',
@@ -419,16 +473,30 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
         isPitcher,
         cur,
         pot,
+        // How much of the ceiling is still projection rather than present
+        // ability. A big gap is upside; it is also risk.
+        upside: cur !== null && pot !== null ? pot - cur : null,
         speed: r.spd,
       };
     })
     .filter((p) => p.pot !== null)
     .sort((a, b) => (b.pot ?? 0) - (a.pot ?? 0) || (b.cur ?? 0) - (a.cur ?? 0));
 
+  const needs = rosterHoles(Number(req.params.orgId));
+  const thin = new Set(needs.slice(0, 3).map((h): string => h.positionName));
+
+  const withAdvice = prospects.map((p, i) => ({
+    ...p,
+    // Board rank within the whole class, kept through client-side sorting so a
+    // re-sorted table can still say where a player stood on ceiling
+    boardRank: i + 1,
+    recommendation: advise(p, thin),
+  }));
+
   res.json({
     ...league,
     total: prospects.length,
-    batters: prospects.filter((p) => !p.isPitcher).slice(0, 60),
-    pitchers: prospects.filter((p) => p.isPitcher).slice(0, 60),
+    needs,
+    prospects: withAdvice,
   });
 });
