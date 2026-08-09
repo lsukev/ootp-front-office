@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { db, tableExists } from './db.js';
-import { getApiKey } from './settings.js';
+import { aiModel, getApiKey } from './settings.js';
+import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
 
 export const chatRoutes = Router();
@@ -264,8 +265,13 @@ function systemPrompt(orgId: number): string {
   const date = team ? currentGameDate(team.league_id) : null;
 
   return [
-    'You are the front-office analyst inside OOTP Front Office, a desktop companion app for a',
-    'saved Out of the Park Baseball league. You are talking to the general manager.',
+    'Your name is Peter. You are the front-office analyst inside OOTP Front Office, a desktop',
+    'companion app for a saved Out of the Park Baseball league. You are talking to the general',
+    'manager, who is your boss. Introduce yourself by name only if asked who you are.',
+    '',
+    'This is a text-message conversation, so write like one: short messages, plain sentences, no',
+    'greeting or sign-off on every reply. You can be dry and opinionated the way a trusted analyst',
+    'is with a colleague — but never invent a number to be interesting.',
     '',
     `They run the ${label} (team_id ${orgId}). It is the ${year} season${date ? `, currently ${date}` : ''}.`,
     '',
@@ -324,14 +330,21 @@ chatRoutes.post('/chat', async (req, res) => {
     .filter((m) => m.content.trim().length > 0)
     .map((m) => ({ role: m.role, content: m.content }));
 
+  const model = aiModel();
+  // Only send the thinking parameter to a model the API reports as supporting
+  // it. Omitting it is valid everywhere; sending it to a model that does not
+  // take it is a 400, and the model is now the user's choice rather than ours.
+  const thinking: Anthropic.ThinkingConfigParam | undefined =
+    (await supportsAdaptiveThinking(model)) ? { type: 'adaptive' } : undefined;
+
   try {
     // Manual tool-use loop: run the model, execute whatever tools it asks for,
     // feed the results back, and repeat until it answers in plain text.
     for (let turn = 0; turn < 12; turn++) {
       const stream = client.messages.stream({
-        model: 'claude-opus-5',
+        model,
         max_tokens: 8000,
-        thinking: { type: 'adaptive' },
+        ...(thinking ? { thinking } : {}),
         system: systemPrompt(team),
         tools: TOOLS,
         messages,

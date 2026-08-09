@@ -15,11 +15,23 @@ export interface AppSettings {
   useTeamColors: boolean;
   defaultOrgId: number | null;
   theme: 'system' | 'dark' | 'light';
+  model: string;
 }
 interface SettingsResponse {
   settings: AppSettings;
   apiKey: ApiKeyStatus;
   dataDir: string;
+}
+interface ModelChoice {
+  id: string;
+  name: string;
+  contextTokens: number | null;
+  adaptiveThinking: boolean | null;
+}
+interface ModelsResponse {
+  models: ModelChoice[];
+  /** False when the API could not be reached and this is the built-in short list. */
+  live: boolean;
 }
 
 export function Settings({
@@ -31,6 +43,7 @@ export function Settings({
   onSaveChanged: (save: SaveInfo) => void;
 }) {
   const [data, setData] = useState<SettingsResponse | null>(null);
+  const [models, setModels] = useState<ModelsResponse | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -38,8 +51,13 @@ export function Settings({
   const [reimporting, setReimporting] = useState(false);
   const desktop = desktopBridge();
 
+  const loadModels = () => {
+    apiGet<ModelsResponse>('/api/models').then(setModels).catch(() => {});
+  };
+
   useEffect(() => {
     apiGet<SettingsResponse>('/api/settings').then(setData).catch(() => {});
+    loadModels();
   }, []);
 
   const update = async (patch: Partial<AppSettings>) => {
@@ -58,6 +76,8 @@ export function Settings({
       setKeyInput('');
       setKeyMessage({ ok: true, text: 'Key verified and saved. The AI features are ready to use.' });
       if (data) setData({ ...data, apiKey: r.apiKey });
+      // The real model list needs a working key, so fetch it again now there is one
+      loadModels();
     } catch (e) {
       setKeyMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -71,6 +91,7 @@ export function Settings({
       const r = await apiDelete<{ apiKey: ApiKeyStatus }>('/api/settings/api-key');
       if (data) setData({ ...data, apiKey: r.apiKey });
       setKeyMessage({ ok: true, text: 'Key removed.' });
+      loadModels();
     } finally {
       setKeyBusy(false);
     }
@@ -141,6 +162,34 @@ export function Settings({
           <a href="https://console.claude.com" target="_blank" rel="noreferrer">console.claude.com</a>. It is
           checked against the API before saving, so a typo is caught here rather than later.
         </p>
+
+        <div className="settings-row">
+          <div>
+            <strong>Model</strong>
+            <div className="muted">
+              Used by Peter, Storylines, the GM Briefing, and trade verdicts. Larger models reason
+              better and cost more per generation; smaller ones are quicker and cheaper.
+            </div>
+            {models && !models.live && (
+              <div className="muted">
+                Showing a short built-in list — add a key to read the current one from the API.
+              </div>
+            )}
+          </div>
+          <select
+            value={settings.model}
+            onChange={(e) => void update({ model: e.target.value })}
+          >
+            {/* A model saved earlier may no longer be listed; keep it selectable
+                rather than silently snapping the user onto a different one */}
+            {models && !models.models.some((m) => m.id === settings.model) && (
+              <option value={settings.model}>{settings.model}</option>
+            )}
+            {(models?.models ?? []).map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
       </section>
 
       <section className="settings-block">

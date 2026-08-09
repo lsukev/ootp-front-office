@@ -1300,6 +1300,8 @@ button.cta {
   gap: 12px;
   padding: 0 6px;
 }
+/* Names the contact inside the opening line rather than on its own row */
+.imsg-name { color: var(--fg); font-weight: 600; }
 .imsg-starters { display: flex; flex-direction: column; gap: 7px; }
 .imsg-starters button {
   border-radius: 16px;

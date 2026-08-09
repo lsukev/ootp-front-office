@@ -65,7 +65,7 @@ const NAV: Array<NavEntry<Page>> = [
     items: [
       { page: 'prospects', label: 'Prospects', hint: 'Promotion signals by level' },
       { page: 'development', label: 'Development', hint: 'Rating changes over time' },
-      { page: 'draft', label: 'Draft Board', hint: 'Scouted class by ceiling' },
+      { page: 'draft', label: 'Draft Board', hint: 'The class, once OOTP publishes it' },
     ],
   },
   {
@@ -289,7 +289,7 @@ export function App() {
                 setChatUsed(true);
                 setChatOpen((v) => !v);
               }}
-              title="Ask about your league"
+              title="Message Peter, your front-office analyst"
             >
               ✦ Ask
             </button>
@@ -334,7 +334,7 @@ export function App() {
                 {page === 'depth' && <DepthChart orgId={orgId} />}
                 {page === 'prospects' && <Prospects orgId={orgId} />}
                 {page === 'development' && <Development orgId={orgId} />}
-                {page === 'draft' && <Draft />}
+                {page === 'draft' && <Draft orgId={orgId} />}
                 {page === 'contracts' && <Contracts orgId={orgId} />}
                 {page === 'payroll' && <Payroll orgId={orgId} />}
                 {page === 'crunch' && <RosterCrunch orgId={orgId} />}
@@ -370,12 +370,12 @@ export function App() {
               {chatOpen && <div className="chat-scrim" onClick={() => setChatOpen(false)} />}
               <aside
                 className={`chat-drawer ${chatOpen ? '' : 'chat-hidden'}`}
-                aria-label="Ask about your league"
+                aria-label="Message Peter, your front-office analyst"
                 aria-hidden={!chatOpen}
                 {...(chatOpen ? {} : { inert: '' })}
               >
                 <header className="chat-head">
-                  <strong>Ask the front office</strong>
+                  <strong>Peter</strong>
                   <button className="chat-close" onClick={() => setChatOpen(false)} title="Close">
                     ✕
                   </button>

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
-import { getApiKey } from './settings.js';
+import { aiModel, getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
@@ -152,7 +152,7 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const client = new Anthropic({ apiKey: key });
 
   const response = await client.messages.create({
-    model: 'claude-opus-5',
+    model: aiModel(),
     max_tokens: 16000,
     system:
       `You are the beat writer and front-office analyst for the ${context.organization}, an OOTP Baseball franchise. ` +

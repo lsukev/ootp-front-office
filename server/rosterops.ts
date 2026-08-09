@@ -270,12 +270,112 @@ rosterOpsRoutes.get('/staff/:orgId', (req, res) => {
 
 // ── Draft prep ──────────────────────────────────────────────────────────
 
-rosterOpsRoutes.get('/draft', (_req, res) => {
+/**
+ * OOTP writes dates unpadded — "2026-4-12" — which sorts wrong as text. Padding
+ * them makes plain string comparison a valid date comparison.
+ */
+function padDate(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  // SQLite hands back whatever type the column holds, and a date OOTP left
+  // blank arrives as a number. Anything unparseable becomes null rather than
+  // throwing — a missing draft date should hide a line, not break the page.
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(raw).trim());
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+}
+
+interface DraftLeague {
+  league_id: number;
+  leagueName: string;
+  /** The league runs an amateur draft at all. Reserve-era and custom leagues may not. */
+  hasDraft: boolean;
+  /**
+   * OOTP's own switch for whether the draft pool screen is visible. Gating on
+   * this means the app shows a prospect exactly when the game does — before the
+   * class is published these players exist in the export but appear on no screen
+   * in OOTP, so listing them here invented a scouting report out of thin air.
+   */
+  poolVisible: boolean;
+  gameDate: string | null;
+  draftDate: string | null;
+  poolDate: string | null;
+  combineDate: string | null;
+  rounds: number;
+}
+
+/**
+ * The amateur draft belongs to the top-level league, so an affiliate org has to
+ * walk up to its parent before any of these settings mean anything.
+ */
+function draftLeague(orgId: number): DraftLeague | null {
+  const team = db.prepare(`SELECT league_id FROM teams WHERE team_id = ?`).get(orgId) as
+    | { league_id: number }
+    | undefined;
+  if (!team) return null;
+
+  type Row = {
+    league_id: number; name: string; parent_league_id: number | null;
+    rules_amateur_draft: number | null; show_draft_pool: number | null;
+    draft_date: string | null; rules_amateur_draft_rounds: number | null; today: string | null;
+  };
+  const fetch = (id: number): Row | undefined =>
+    db
+      .prepare(
+        `SELECT league_id, name, parent_league_id, rules_amateur_draft, show_draft_pool,
+                draft_date, rules_amateur_draft_rounds, "current_date" AS today
+         FROM leagues WHERE league_id = ?`
+      )
+      .get(id) as Row | undefined;
+
+  let row = fetch(team.league_id);
+  // Affiliates carry rules_amateur_draft = 0; the parent MLB league owns the draft
+  const seen = new Set<number>();
+  while (row && row.rules_amateur_draft !== 1 && row.parent_league_id && !seen.has(row.league_id)) {
+    seen.add(row.league_id);
+    row = fetch(row.parent_league_id);
+  }
+  if (!row) return null;
+
+  // The pool announcement and combine are calendar events rather than columns
+  const eventDate = (type: number): string | null => {
+    if (!tableExists('league_events')) return null;
+    const e = db
+      .prepare(
+        `SELECT start_date FROM league_events
+         WHERE league_id = ? AND type = ? AND deleted = 0
+         ORDER BY start_date LIMIT 1`
+      )
+      .get(row!.league_id, type) as { start_date: string } | undefined;
+    return padDate(e?.start_date);
+  };
+
+  return {
+    league_id: row.league_id,
+    leagueName: row.name,
+    hasDraft: row.rules_amateur_draft === 1,
+    poolVisible: row.rules_amateur_draft === 1 && row.show_draft_pool === 1,
+    gameDate: padDate(row.today),
+    draftDate: padDate(row.draft_date),
+    poolDate: eventDate(3),
+    combineDate: eventDate(43),
+    rounds: row.rules_amateur_draft_rounds ?? 0,
+  };
+}
+
+rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
+
+  const league = draftLeague(Number(req.params.orgId));
+  if (!league) return res.status(404).json({ error: 'Unknown team' });
+
+  // Nothing is read from the players table until OOTP itself publishes the class
+  if (!league.poolVisible) {
+    return res.json({ ...league, total: 0, batters: [], pitchers: [] });
+  }
+
   const rows = db
     .prepare(
       `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position, p.role,
-              p.bats, p.throws, p.hsc_status, p.draft_year,
+              p.bats, p.throws, p.college,
               b.batting_ratings_overall_contact AS con, b.batting_ratings_overall_gap AS gap,
               b.batting_ratings_overall_power AS pow, b.batting_ratings_overall_eye AS eye,
               b.batting_ratings_overall_strikeouts AS avk, b.running_ratings_speed AS spd,
@@ -312,7 +412,10 @@ rosterOpsRoutes.get('/draft', (_req, res) => {
         positionName: POSITION_NAMES[r.position as number] ?? '?',
         bats: HANDS[r.bats as number] ?? '?',
         throws: HANDS[r.throws as number] ?? '?',
-        school: r.hsc_status === 1 ? 'HS' : r.hsc_status === 2 ? 'College' : '—',
+        // hsc_status is a fine-grained class code (4 = high school, 8-10 =
+        // college years) that the export ships no lookup table for. The college
+        // flag is the part that survives translation.
+        school: r.college === 1 ? 'College' : 'HS',
         isPitcher,
         cur,
         pot,
@@ -323,8 +426,8 @@ rosterOpsRoutes.get('/draft', (_req, res) => {
     .sort((a, b) => (b.pot ?? 0) - (a.pot ?? 0) || (b.cur ?? 0) - (a.cur ?? 0));
 
   res.json({
+    ...league,
     total: prospects.length,
-    draftYear: rows.length ? rows[0].draft_year : null,
     batters: prospects.filter((p) => !p.isPitcher).slice(0, 60),
     pitchers: prospects.filter((p) => p.isPitcher).slice(0, 60),
   });

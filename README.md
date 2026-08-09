@@ -54,7 +54,7 @@ actual save data.
 |------|--------------|
 | Prospects | Minor leaguers ranked by promotion signal, self-calibrated to your league's own level averages |
 | Development | Scout-rating changes over time — who's improving, who's declining, whose ceiling moved |
-| Draft Board | The scouted draft class ranked by ceiling |
+| Draft Board | The draft class ranked by ceiling, from the day OOTP publishes it |
 
 **💼 Front Office** — transactions and money
 

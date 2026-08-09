@@ -222,11 +222,12 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         {messages.length === 0 && (
           <div className="imsg-intro">
             <div className="imsg-avatar imsg-avatar-lg" aria-hidden="true">
-              FO
+              P
             </div>
             <p>
-              Ask anything about {orgLabel} or the league. I look the numbers up in your save
-              before answering — I don&rsquo;t work from memory.
+              <strong className="imsg-name">Peter</strong> is your front-office analyst. Ask him
+              anything about {orgLabel} or the league — he looks every number up in your save before
+              answering rather than working from memory.
             </p>
             <div className="imsg-starters">
               {STARTERS.map((s) => (
@@ -255,7 +256,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
               <div className={`imsg-row imsg-${m.role} ${endsRun ? 'imsg-run-end' : ''}`}>
                 {m.role === 'assistant' && (
                   <div className="imsg-avatar" aria-hidden="true">
-                    {startsRun ? 'FO' : ''}
+                    {startsRun ? 'P' : ''}
                   </div>
                 )}
                 <div className="imsg-stack">
@@ -303,7 +304,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
             value={input}
             rows={1}
             placeholder="Message"
-            aria-label={`Ask about ${orgLabel}`}
+            aria-label={`Message Peter about ${orgLabel}`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               // Enter sends; Shift+Enter is a newline

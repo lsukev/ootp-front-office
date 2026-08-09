@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
-import { getApiKey } from './settings.js';
+import { aiModel, getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { summarizeSide } from './trade.js';
@@ -27,7 +27,7 @@ async function callOpus(system: string, user: string, maxTokens = 16000): Promis
   if (!key) throw Object.assign(new Error(NO_KEY_MESSAGE), { status: 401 });
   const client = new Anthropic({ apiKey: key });
   const response = await client.messages.create({
-    model: 'claude-opus-5',
+    model: aiModel(),
     max_tokens: maxTokens,
     system,
     messages: [{ role: 'user', content: user }],

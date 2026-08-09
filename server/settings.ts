@@ -21,6 +21,8 @@ export interface Settings {
   defaultOrgId: number | null;
   /** 'system' follows the OS setting and changes with it. */
   theme: 'system' | 'dark' | 'light';
+  /** Model id used by every AI feature. See models.ts for the picker's list. */
+  model: string;
 }
 
 const DEFAULTS: Settings = {
@@ -28,7 +30,16 @@ const DEFAULTS: Settings = {
   useTeamColors: true,
   defaultOrgId: null,
   theme: 'system',
+  model: 'claude-opus-5',
 };
+
+/** The model every AI call site should use. */
+export function aiModel(): string {
+  // A hand-edited or truncated settings.json can put anything here, and every
+  // AI feature would fail on it — fall back rather than throw.
+  const chosen: unknown = loadSettings().model;
+  return (typeof chosen === 'string' && chosen.trim()) || DEFAULTS.model;
+}
 
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 const KEY_PATH = path.join(DATA_DIR, 'credentials.json');
@@ -168,6 +179,12 @@ settingsRoutes.post('/settings', (req, res) => {
   }
   if (body.theme === 'system' || body.theme === 'dark' || body.theme === 'light') {
     next.theme = body.theme;
+  }
+  // Model ids are validated by shape only. The catalogue comes from the API and
+  // grows over time, so refusing anything not on today's list would block a
+  // model released after this build shipped — the API rejects a bad id anyway.
+  if (typeof body.model === 'string' && /^[a-z0-9.\-]{3,64}$/i.test(body.model.trim())) {
+    next.model = body.model.trim();
   }
   writeSettings(next);
 
