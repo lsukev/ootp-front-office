@@ -108,7 +108,13 @@ export function Lineup({ teamId }: { teamId: number }) {
               ? 'Ordering per The Book (Tango et al.): your three best hitters bat 1, 2, and 4 — not 3-4-5.'
               : 'Classic ordering: speed leads off, bat control 2nd, best hitter 3rd, power cleanup.'}{' '}
             Platoon-aware: ranked by each player's offensive value {vs === 'r' ? 'vs right-handed' : 'vs left-handed'}{' '}
-            pitching.
+            pitching.{' '}
+            {data.usesDH === false && (
+              <>
+                This league bats no designated hitter, so the order is eight position players with
+                tonight&rsquo;s starting pitcher batting ninth.
+              </>
+            )}
           </p>
           <table>
             <thead>
@@ -135,7 +141,9 @@ export function Lineup({ teamId }: { teamId: number }) {
                   <td className="name"><PlayerLink id={l.player_id}>{l.name}</PlayerLink></td>
                   <td>{l.positionName}</td>
                   <td>{l.bats}</td>
-                  <td className="num">{Math.round(l.off)}</td>
+                  {/* A pitcher has no scouted offensive value; 0 would read as
+                      a measured one rather than "does not apply" */}
+                  <td className="num">{l.positionName === 'P' ? '—' : Math.round(l.off)}</td>
                   <td className="num">{l.pa ?? ''}</td>
                   <td className="num">{l.ops !== null ? l.ops.toFixed(3).replace(/^0\./, '.') : ''}</td>
                   <td className="num" style={{ color: plusColor(l.opsPlus) }}>{l.opsPlus ?? ''}</td>

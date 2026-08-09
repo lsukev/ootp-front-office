@@ -89,7 +89,14 @@ export function Contracts({ orgId }: { orgId: number }) {
               <td className="num"><Pct value={p.talentPct} /></td>
               <td>
                 {p.flags.map((f) => (
-                  <span key={f} className={`flag ${f === 'expiring' ? 'flag-hot' : ''}`}>{f}</span>
+                  <span
+                    key={f}
+                    className={`flag ${f === 'expiring' ? 'flag-hot' : ''}${
+                      f.startsWith('extended thru') ? 'flag-locked' : ''
+                    }`}
+                  >
+                    {f}
+                  </span>
                 ))}
               </td>
               <td className="reasons">

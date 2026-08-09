@@ -10,6 +10,33 @@ export const contractRoutes = Router();
 /** Days of major-league service that make one service year. */
 const SERVICE_DAYS_PER_YEAR = 172;
 
+/**
+ * How much service a player still on the major-league roster can bank between
+ * now and the end of the season, as a fraction of a service year.
+ *
+ * The export publishes `mlb_service_days_this_year`, so the season's progress
+ * is whatever the most-tenured man on a major-league roster has banked: he has
+ * been up since Opening Day, so his total is the season's own clock. In the
+ * off-season that reaches 172 and nothing is left to earn; before Opening Day
+ * it is 0 and a full year remains.
+ */
+function serviceRemainingThisSeason(): number {
+  if (!tableExists('players_roster_status') || !tableExists('teams')) return 1;
+  const row = db
+    .prepare(
+      `SELECT MAX(rs.mlb_service_days_this_year) AS banked
+       FROM players_roster_status rs
+       JOIN players p ON p.player_id = rs.player_id
+       JOIN teams t ON t.team_id = p.team_id
+       WHERE t.level = 1`
+    )
+    .get() as { banked: number | null } | undefined;
+  const banked = row?.banked;
+  // An export without the column behaves as it always did, adding a full year
+  if (typeof banked !== 'number' || !Number.isFinite(banked)) return 1;
+  return Math.min(Math.max(SERVICE_DAYS_PER_YEAR - banked, 0), SERVICE_DAYS_PER_YEAR) / SERVICE_DAYS_PER_YEAR;
+}
+
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
@@ -115,18 +142,30 @@ export function computeContracts(orgId: number) {
     service_years: number | null; service_days: number | null;
   }>;
 
+  const serviceLeft = serviceRemainingThisSeason();
+
   const rows = players
     .map((p) => {
       const c = contracts.get(p.player_id);
       // Placeholder rows: zero-year deals or ones with no valid end year
-      if (!c || c.totalYears < 1 || c.endYear < year) return null;
+      if (!c || c.totalYears < 1 || c.controlledThrough < year) return null;
+      // A signed extension is the club's real commitment, so it drives both the
+      // years-left column and the recommendation
+      const endYear = c.controlledThrough;
+      const yearsAfterThis = c.extension
+        ? Math.max(c.controlledThrough - year, 0)
+        : c.yearsAfterThis;
       // mlb_service_years is truncated to whole years, so it cannot tell a
       // player a week past a threshold from one most of a year past it. Service
       // days are exact — 172 of them make an MLB service year.
       const service =
         p.service_days != null ? p.service_days / SERVICE_DAYS_PER_YEAR : p.service_years ?? 0;
-      // A full season adds one service year, so this is where he lands next winter
-      const projected = service + 1;
+      // Where he lands next winter. Only the part of the season still to be
+      // played can be added: mlb_service_days already counts the days banked
+      // so far this year, so adding a whole year on top of it pushed players
+      // over the free-agency line months before they actually get there, and
+      // they were flagged "expiring" while still holding an arbitration year.
+      const projected = service + serviceLeft;
       // With no free agency the reserve clause binds him regardless of service,
       // so nobody is ever "reaching" a market
       const reachingFA = hasFreeAgency && projected >= faMinYears;
@@ -139,7 +178,7 @@ export function computeContracts(orgId: number) {
       const tPct = talentPct(p.player_id);
       const rec = recommend({
         age: p.age,
-        yearsAfterThis: c.yearsAfterThis,
+        yearsAfterThis,
         reachingFA,
         hasFreeAgency,
         overallPct: oPct,
@@ -147,29 +186,33 @@ export function computeContracts(orgId: number) {
         salaryNow: c.salaryNow,
       });
       const flags: string[] = [];
-      if (c.yearsAfterThis === 0 && !hasFreeAgency) {
+      if (c.extension) {
+        // Already locked up beyond the current deal — not a decision to make
+        flags.push(`extended thru ${c.extension.endYear}`);
+      } else if (yearsAfterThis === 0 && !hasFreeAgency) {
         // The deal ends but he cannot leave — the club simply renews him
         flags.push('reserve clause');
-      } else if (c.yearsAfterThis === 0 && reachingFA) flags.push('expiring');
-      else if (c.yearsAfterThis === 0 && arbYear !== null) {
+      } else if (yearsAfterThis === 0 && reachingFA) flags.push('expiring');
+      else if (yearsAfterThis === 0 && arbYear !== null) {
         // Saying "team control" for an arbitration-eligible player hid the fact
         // that he still has arbitration years left, which read as "expiring"
         flags.push(`arbitration ${arbYear}`);
-      } else if (c.yearsAfterThis === 0) flags.push('pre-arbitration');
+      } else if (yearsAfterThis === 0) flags.push('pre-arbitration');
       if (c.lastYearTeamOption) flags.push('team option');
       if (c.lastYearPlayerOption) flags.push('player option');
       if (c.lastYearVestingOption) flags.push('vesting option');
       if (c.noTrade) flags.push('no-trade');
       return {
-        sortKey: c.yearsAfterThis + (c.yearsAfterThis === 0 && !reachingFA ? 0.5 : 0),
+        sortKey: yearsAfterThis + (yearsAfterThis === 0 && !reachingFA ? 0.5 : 0),
         player_id: p.player_id,
         name: `${p.first_name} ${p.last_name}`,
         age: p.age,
         positionName: POSITION_NAMES[p.position] ?? '?',
         salaryNow: c.salaryNow,
         totalYears: c.totalYears,
-        yearsAfterThis: c.yearsAfterThis,
-        endYear: c.endYear,
+        yearsAfterThis,
+        endYear,
+        extension: c.extension,
         serviceYears: Number(service.toFixed(2)),
         arbYear,
         overallPct: oPct,

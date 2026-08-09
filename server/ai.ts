@@ -79,7 +79,7 @@ function briefingContext(orgId: number) {
     contractSituations: contracts,
     injuries,
     finances: teamFinances(orgId),
-    leagueRules: rulesBriefing(team.league_id as number),
+    leagueRules: rulesBriefing(team.league_id as number, orgId),
   };
 }
 

@@ -353,6 +353,8 @@ tr:hover td { background: rgba(255,255,255,0.03); }
   text-transform: uppercase; white-space: nowrap;
 }
 .flag-hot { border-color: var(--accent); color: var(--accent); }
+/* A signed extension is settled business, not a decision to make */
+.flag-locked { border-color: var(--good); color: var(--good); }
 
 .rec-action { color: var(--text); }
 .slot-num { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 16px; }

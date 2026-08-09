@@ -18,20 +18,39 @@ interface ContractRow extends Record<string, number> {
   season_year: number;
 }
 
+/** A signed extension that has not started yet; same salary0..14 shape. */
+interface ExtensionRow extends Record<string, number> {
+  player_id: number;
+  years: number;
+  season_year: number;
+}
+
 /**
  * Salary for a given calendar year. `current_year` counts COMPLETED contract
  * years, so this season sits at salary{current_year} and each future season
  * walks one index further — the same indexing valuation.ts established and
  * verified against real deals.
  */
-function salaryForYear(c: ContractRow, thisSeason: number, year: number): number | null {
+function salaryForYear(
+  c: ContractRow,
+  thisSeason: number,
+  year: number,
+  extension?: ExtensionRow
+): number | null {
   const completed = c.current_year ?? 0;
   const offset = year - thisSeason;
   const idx = completed + offset;
   const years = c.years ?? 0;
   if (offset < 0 || idx < 0 || idx > 14) return null;
-  // Past the final year of the deal, the money is off the books
-  if (idx > years - 1) return null;
+  // Past the final year of the deal the current contract pays nothing more —
+  // but a signed extension picks up from its own start year, and leaving it
+  // out understated every future season by the whole value of the new deal.
+  if (idx > years - 1) {
+    if (!extension) return null;
+    const extIdx = year - extension.season_year;
+    if (extIdx < 0 || extIdx > 14 || extIdx > (extension.years ?? 0) - 1) return null;
+    return extension[`salary${extIdx}`] ?? 0;
+  }
   return c[`salary${idx}`] ?? 0;
 }
 
@@ -78,13 +97,31 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
     current_team_id: number;
   }>;
 
+  // Signed extensions that begin after the current deal expires
+  const extensions = new Map<number, ExtensionRow>();
+  if (tableExists('players_contract_extension')) {
+    const extRows = db
+      .prepare(`SELECT * FROM players_contract_extension WHERE years > 0`)
+      .all() as ExtensionRow[];
+    for (const e of extRows) extensions.set(e.player_id, e);
+  }
+
   const years = Array.from({ length: HORIZON }, (_, i) => thisSeason + i);
 
   const players = rows
     .map((c) => {
-      const byYear = years.map((y) => salaryForYear(c, thisSeason, y));
+      const extension = extensions.get(c.player_id);
+      const byYear = years.map((y) => salaryForYear(c, thisSeason, y, extension));
       const completed = c.current_year ?? 0;
-      const yearsAfterThis = Math.max((c.years ?? 0) - completed - 1, 0);
+      const contractEnd = (c.season_year ?? thisSeason) + (c.years ?? 0) - 1;
+      // An extension keeps him on the books, so he is neither expiring nor
+      // "coming off after this season"
+      const endYear = extension
+        ? Math.max(contractEnd, extension.season_year + extension.years - 1)
+        : contractEnd;
+      const yearsAfterThis = extension
+        ? Math.max(endYear - thisSeason, 0)
+        : Math.max((c.years ?? 0) - completed - 1, 0);
       const options: string[] = [];
       if (c.last_year_team_option === 1) options.push('team option');
       if (c.last_year_player_option === 1) options.push('player option');
@@ -100,7 +137,7 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
         salaryNow: byYear[0] ?? 0,
         byYear,
         yearsAfterThis,
-        endYear: (c.season_year ?? thisSeason) + (c.years ?? 0) - 1,
+        endYear,
         expiring: yearsAfterThis === 0,
         options,
         serviceYears: c.service_years,

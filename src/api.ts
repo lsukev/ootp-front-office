@@ -261,6 +261,8 @@ export interface ContractRow {
   overallPct: number | null;
   talentPct: number | null;
   flags: string[];
+  /** Present only when a signed extension starts after the current deal. */
+  extension: { years: number; startYear: number; endYear: number; firstSalary: number } | null;
   recommendation: { action: string; reasons: string[] } | null;
 }
 
@@ -307,6 +309,8 @@ export interface LineupSlot {
 export interface LineupResponse {
   vs: 'r' | 'l';
   style: 'saber' | 'trad';
+  /** False in leagues where the pitcher bats. Absent on older servers. */
+  usesDH?: boolean;
   lineup: LineupSlot[];
   bench: Array<{ player_id: number; name: string; positionName: string; off: number }>;
 }

@@ -99,7 +99,8 @@ freeAgentRoutes.get('/free-agents/:orgId', (req, res) => {
     .filter((p) => {
       const c = contracts.get(p.player_id);
       return (
-        c && c.isMajor && c.yearsAfterThis === 0 &&
+        // A signed extension means he never reaches the market
+        c && c.isMajor && c.yearsAfterThis === 0 && !c.extension &&
         !c.lastYearTeamOption && !c.lastYearPlayerOption &&
         (p.service_years ?? 0) >= faMinYears - 1 // crosses the FA threshold during this season
       );

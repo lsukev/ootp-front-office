@@ -10,6 +10,15 @@ export interface ContractInfo {
   lastYearTeamOption: boolean;
   lastYearPlayerOption: boolean;
   lastYearVestingOption: boolean;
+  /**
+   * An already-signed extension that begins after the current deal runs out.
+   * OOTP keeps it in a separate table until it takes effect, so a player who
+   * has just signed one still shows a one-year contract in players_contract —
+   * which read as "expiring" when he is in fact locked up for years.
+   */
+  extension: { years: number; startYear: number; endYear: number; firstSalary: number } | null;
+  /** Last season the club holds him under contract, extension included. */
+  controlledThrough: number;
 }
 
 /**
@@ -70,15 +79,51 @@ export function leagueRules(leagueId: number): LeagueRules {
 }
 
 /**
- * A plain-language note about the league's contract rules, for the AI prompts.
+ * Whether this club's half of the league bats a designated hitter.
  *
- * Without this the model assumes the modern CBA. In a reserve-clause league it
- * would urge a GM to extend a player "before he reaches the open market" that
- * will not exist for another sixty years.
+ * The flag lives on the sub-league, not the league, which is historically
+ * exactly right: the AL adopted the DH in 1973 and the NL did not until 2022,
+ * so the two halves of the same league disagreed for half a century. A
+ * pre-1973 replay has it off everywhere, and a lineup card that hands one of
+ * the nine spots to a DH is simply illegal there.
  */
-export function rulesBriefing(leagueId: number): string {
+export function usesDH(teamId: number): boolean {
+  if (!tableExists('sub_leagues')) return true;
+  const row = db
+    .prepare(
+      `SELECT sl.designated_hitter AS dh
+       FROM teams t
+       JOIN sub_leagues sl
+         ON sl.league_id = t.league_id AND sl.sub_league_id = t.sub_league_id
+       WHERE t.team_id = ?`
+    )
+    .get(teamId) as { dh: number | null } | undefined;
+  // An export without the table behaves as it always did rather than dropping
+  // a bat from every lineup in the app
+  return row?.dh == null ? true : row.dh === 1;
+}
+
+/**
+ * A plain-language note about the league's rules, for the AI prompts.
+ *
+ * Without this the model assumes the modern game. In a reserve-clause league it
+ * would urge a GM to extend a player "before he reaches the open market" that
+ * will not exist for another sixty years, and in a pre-1973 replay it would
+ * happily park a slugger at DH.
+ */
+export function rulesBriefing(leagueId: number, teamId?: number): string {
   const r = leagueRules(leagueId);
   const parts: string[] = [];
+  // Whether the pitcher hits changes lineup construction, bench roles and what
+  // a "bat-only" player is worth, so the model must not assume the modern game
+  if (teamId !== undefined && !usesDH(teamId)) {
+    parts.push(
+      'This league has NO DESIGNATED HITTER — the pitcher bats, ninth. Only eight position ' +
+        'players are in the order, there is no place for a bat-only slugger who cannot field, ' +
+        'and double switches and pinch-hitting for the pitcher are live tactical questions. ' +
+        'Never suggest using someone "at DH".'
+    );
+  }
   if (!r.hasFreeAgency) {
     parts.push(
       'This league has NO FREE AGENCY — the reserve clause binds players to the club indefinitely. ' +
@@ -122,6 +167,23 @@ export function currentGameDate(leagueId: number): string | null {
 export function contractsByPlayer(): Map<number, ContractInfo> {
   const out = new Map<number, ContractInfo>();
   if (!tableExists('players_contract')) return out;
+
+  // Signed-but-not-yet-started extensions. The table carries a row for every
+  // player, almost all of them zeroed, so only real terms are worth keeping.
+  const extensions = new Map<number, { years: number; startYear: number; firstSalary: number }>();
+  if (tableExists('players_contract_extension')) {
+    const extRows = db
+      .prepare(`SELECT player_id, years, season_year, salary0 FROM players_contract_extension WHERE years > 0`)
+      .all() as Array<{ player_id: number; years: number; season_year: number; salary0: number }>;
+    for (const e of extRows) {
+      extensions.set(e.player_id, {
+        years: e.years,
+        startYear: e.season_year,
+        firstSalary: e.salary0 ?? 0,
+      });
+    }
+  }
+
   const rows = db.prepare(`SELECT * FROM players_contract`).all() as Array<Record<string, number>>;
   for (const c of rows) {
     const years = c.years ?? 0;
@@ -129,16 +191,25 @@ export function contractsByPlayer(): Map<number, ContractInfo> {
     // salary{current_year} (0-based) — verified against known deals in a real export
     const completed = c.current_year ?? 0;
     const idx = Math.min(Math.max(completed, 0), 14);
+    const endYear = (c.season_year ?? 0) + years - 1;
+
+    const e = extensions.get(c.player_id);
+    const extension = e
+      ? { years: e.years, startYear: e.startYear, endYear: e.startYear + e.years - 1, firstSalary: e.firstSalary }
+      : null;
+
     out.set(c.player_id, {
       salaryNow: c[`salary${idx}`] ?? 0,
       totalYears: years,
       yearsAfterThis: Math.max(years - completed - 1, 0),
-      endYear: (c.season_year ?? 0) + years - 1,
+      endYear,
       isMajor: c.is_major === 1,
       noTrade: c.no_trade === 1,
       lastYearTeamOption: c.last_year_team_option === 1,
       lastYearPlayerOption: c.last_year_player_option === 1,
       lastYearVestingOption: c.last_year_vesting_option === 1,
+      extension,
+      controlledThrough: extension ? Math.max(endYear, extension.endYear) : endYear,
     });
   }
   return out;

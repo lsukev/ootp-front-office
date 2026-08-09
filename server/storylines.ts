@@ -117,7 +117,7 @@ function assembleContext(orgId: number) {
       )
       .slice(0, 12),
     finances: teamFinances(orgId),
-    leagueRules: rulesBriefing(team.league_id as number),
+    leagueRules: rulesBriefing(team.league_id as number, orgId),
   };
 }
 
