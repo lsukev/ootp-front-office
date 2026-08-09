@@ -84,6 +84,8 @@ export function importCsvDir(csvDir: string): ImportResult {
     totalRows += dataRows.length;
   }
 
+  buildIndexes();
+
   return {
     tables: result.length,
     rows: totalRows,
@@ -91,4 +93,43 @@ export function importCsvDir(csvDir: string): ImportResult {
     finishedAt: new Date().toISOString(),
     files: result,
   };
+}
+
+/**
+ * Indexes the columns every page actually filters on.
+ *
+ * The import creates plain tables with no indexes, so a lookup like "this
+ * player's career stats" scanned all 679,000 rows of players_career_batting_stats.
+ * Nothing was obviously broken — the app just did far more work than it needed
+ * to on every page, and a player card cost about 0.4s of that.
+ *
+ * Columns are discovered rather than listed, because the importer is
+ * deliberately schema-tolerant: OOTP adds and renames fields between versions,
+ * and a hardcoded list would quietly stop covering new tables.
+ */
+function buildIndexes(): void {
+  const started = Date.now();
+  const tables = (
+    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>
+  ).map((t) => t.name);
+
+  let made = 0;
+  for (const table of tables) {
+    const columns = new Set(
+      (db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>).map((c) => c.name)
+    );
+    for (const column of ['player_id', 'team_id', 'game_id', 'league_id']) {
+      if (!columns.has(column)) continue;
+      try {
+        db.exec(`CREATE INDEX IF NOT EXISTS "idx_${table}_${column}" ON "${table}" ("${column}")`);
+        made += 1;
+      } catch (err) {
+        // A malformed table should not fail the whole import
+        console.warn(`[import] index on ${table}.${column} failed:`, (err as Error).message);
+      }
+    }
+  }
+  // Lets SQLite pick between the indexes it now has rather than guessing
+  db.exec('ANALYZE');
+  console.log(`[import] ${made} indexes in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }

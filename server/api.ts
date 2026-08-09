@@ -14,6 +14,7 @@ import { storylineRoutes } from './storylines.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
+import { clearValuationCaches } from './valuation.js';
 import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
@@ -21,6 +22,7 @@ import { aiRoutes } from './ai.js';
 import { logoRoutes } from './logos.js';
 import { settingsRoutes } from './settings.js';
 import { modelRoutes } from './models.js';
+import { exportRoutes } from './exporter.js';
 import { leagueRoutes } from './league.js';
 import { pitchingRoutes } from './pitching.js';
 import { scheduleRoutes } from './schedule.js';
@@ -32,6 +34,7 @@ export const api = Router();
 api.use(logoRoutes);
 api.use(settingsRoutes);
 api.use(modelRoutes);
+api.use(exportRoutes);
 api.use(leagueRoutes);
 api.use(pitchingRoutes);
 api.use(scheduleRoutes);
@@ -76,6 +79,7 @@ export function runImport(csvDir: string): void {
     clearPendingExport();
     fs.writeFileSync(META_PATH, JSON.stringify(importState.lastImport));
     clearStatCaches(); // league baselines are per-import
+    clearValuationCaches();
     try {
       takeSnapshot(); // development-tracking snapshot, keyed by in-game date
     } catch (err) {

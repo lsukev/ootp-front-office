@@ -8,6 +8,9 @@ export interface SaveInfo {
 
 export interface Status {
   csvExportedAt: string | null;
+  /** True when running as a static export rather than against a live server. */
+  exportedSite?: boolean;
+  exportedAt?: string;
   configured: boolean;
   saveName: string | null;
   csvDir: string | null;
@@ -65,8 +68,27 @@ export async function apiDelete<T>(url: string): Promise<T> {
   return json<T>(url, { method: 'DELETE' });
 }
 
+/**
+ * A static export is a folder of files, so an API path has to become a filename.
+ * Must stay identical to exportPath in server/exporter.ts — the two agree on
+ * where every file lives, and a query string is folded into the name because a
+ * static host ignores it.
+ */
+const exportPath = (url: string): string =>
+  '/api/' + url.replace(/^\/?api\//, '').replace(/[?&=]/g, '_');
+
+/**
+ * Set once at boot from /api/status. A static export has no server behind it,
+ * so reads are redirected to files and writes are hidden from the UI entirely.
+ */
+let staticSite = false;
+export const isStaticSite = (): boolean => staticSite;
+export const setStaticSite = (value: boolean): void => {
+  staticSite = value;
+};
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(staticSite && url.startsWith('/api/') ? exportPath(url) : url, init);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `${res.status} ${res.statusText}`);
@@ -337,3 +359,13 @@ export const setConfig = (csvDir: string, saveName: string) =>
     body: JSON.stringify({ csvDir, saveName }),
   });
 export const triggerImport = () => json<{ ok: boolean }>('/api/import', { method: 'POST' });
+
+export interface SiteExportResult {
+  outDir: string;
+  files: number;
+  bytes: number;
+  players: number;
+  warnings: string[];
+}
+export const exportStaticSite = (orgId: number) =>
+  apiPost<SiteExportResult>(`/api/export-site/${orgId}`);

@@ -56,8 +56,9 @@ export function Contracts({ orgId }: { orgId: number }) {
     <div>
       <FinanceCards finances={data.finances} />
       <p className="muted hint-line">
-        Sorted by urgency: expiring deals first, largest salary first. Value/Talent are percentiles among all
-        players on MLB rosters — value is current production, talent is scouted ceiling.
+        Sorted by urgency: expiring deals first, largest salary first. Value/Talent are percentiles against
+        MLB-rostered players in the same role — position players, starters and relievers ranked separately —
+        where value is current worth and talent is scouted ceiling.
       </p>
       <table>
         <thead>

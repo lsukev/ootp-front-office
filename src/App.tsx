@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  getOrgs, getSaves, getStatus, setConfig, triggerImport,
+  getOrgs, getSaves, getStatus, isStaticSite, setConfig, setStaticSite, triggerImport,
   type Org, type SaveInfo, type Status,
 } from './api';
 import { RosterPage } from './pages/Roster';
@@ -106,6 +106,9 @@ export function App() {
 
   const refreshStatus = useCallback(async () => {
     const s = await getStatus();
+    // A static export has no server behind it: reads become file lookups and
+    // every write-backed feature is hidden rather than left to fail on click
+    if (s.exportedSite) setStaticSite(true);
     setStatus(s);
     if (s.hasData) {
       const os = await getOrgs();
@@ -130,7 +133,7 @@ export function App() {
   // Poll for a fresh export. Cheap, and the alternative is the user staring at
   // stale numbers with no idea the game has moved on.
   useEffect(() => {
-    if (!status?.hasData) return;
+    if (!status?.hasData || isStaticSite()) return;
     const id = setInterval(() => {
       getStatus()
         .then((s) => setStatus((prev) => (prev?.exportPending === s.exportPending ? prev : s)))
@@ -202,6 +205,15 @@ export function App() {
   if (!status) return <div className="shell"><p className="muted">Loading…</p></div>;
 
   const busy = switching || status.importing;
+  // A snapshot has no query endpoint behind Player Search and nowhere to save a
+  // watchlist, so those two entries come out of the menu entirely
+  const navEntries = isStaticSite()
+    ? NAV.map((e) =>
+        e.kind === 'group'
+          ? { ...e, items: e.items.filter((i) => i.page !== 'players' && i.page !== 'watchlist') }
+          : e
+      )
+    : NAV;
 
   return (
     <div className="shell">
@@ -234,6 +246,7 @@ export function App() {
         )}
 
         <div className="header-right">
+          {!isStaticSite() && (
           <select
             value={status.saveName ?? ''}
             disabled={busy}
@@ -251,6 +264,7 @@ export function App() {
               </option>
             ))}
           </select>
+          )}
           <span
             className="muted freshness"
             title={`OOTP export: ${fmtTime(status.csvExportedAt)} · imported: ${fmtTime(
@@ -265,9 +279,11 @@ export function App() {
                   ? `imported ${relativeTime(status.lastImport.finishedAt)}`
                   : 'no data yet'}
           </span>
-          <button onClick={hardRefresh} disabled={busy || !status.configured}>
-            {busy ? 'Working…' : '↻ Refresh'}
-          </button>
+          {!isStaticSite() && (
+            <button onClick={hardRefresh} disabled={busy || !status.configured}>
+              {busy ? 'Working…' : '↻ Refresh'}
+            </button>
+          )}
           <UpdateBadge onOpenSettings={() => setPage('settings')} />
           {status.hasData && (
             <button
@@ -283,7 +299,7 @@ export function App() {
               {mode === 'dark' ? '☀' : '☾'}
             </button>
           )}
-          {status.hasData && (
+          {status.hasData && !isStaticSite() && (
             <button
               className={`ask-button ${chatOpen ? 'active' : ''}`}
               onClick={() => {
@@ -295,7 +311,7 @@ export function App() {
               ✦ Ask
             </button>
           )}
-          {status.hasData && (
+          {status.hasData && !isStaticSite() && (
             <button
               className={`gear ${page === 'settings' ? 'active' : ''}`}
               onClick={() => setPage('settings')}
@@ -325,7 +341,7 @@ export function App() {
         <SavePicker saves={saves} onPick={switchSave} busy={busy} />
       ) : (
         <>
-          <Nav entries={NAV} current={page} onNavigate={setPage} />
+          <Nav entries={navEntries} current={page} onNavigate={setPage} />
           <main>
             {orgId !== null && org && (
               <>
@@ -355,6 +371,7 @@ export function App() {
                   <Settings
                     status={status}
                     orgs={orgs}
+                    orgId={orgId}
                     onSettingsChanged={setAppSettings}
                     onSaveChanged={switchSave}
                   />

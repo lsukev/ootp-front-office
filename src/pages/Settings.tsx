@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { apiDelete, apiGet, apiPost, desktopBridge, triggerImport, type Org, type SaveInfo, type Status } from '../api';
+import {
+  apiDelete, apiGet, apiPost, desktopBridge, exportStaticSite, triggerImport,
+  type Org, type SaveInfo, type SiteExportResult, type Status,
+} from '../api';
 import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
 
@@ -35,10 +38,11 @@ interface ModelsResponse {
 }
 
 export function Settings({
-  status, orgs, onSettingsChanged, onSaveChanged,
+  status, orgs, orgId, onSettingsChanged, onSaveChanged,
 }: {
   status: Status;
   orgs: Org[];
+  orgId: number | null;
   onSettingsChanged: (s: AppSettings) => void;
   onSaveChanged: (save: SaveInfo) => void;
 }) {
@@ -49,6 +53,9 @@ export function Settings({
   const [keyMessage, setKeyMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [changingSave, setChangingSave] = useState(false);
   const [reimporting, setReimporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<SiteExportResult | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const desktop = desktopBridge();
 
   const loadModels = () => {
@@ -94,6 +101,20 @@ export function Settings({
       loadModels();
     } finally {
       setKeyBusy(false);
+    }
+  };
+
+  const runExport = async () => {
+    if (orgId === null) return;
+    setExporting(true);
+    setExported(null);
+    setExportError(null);
+    try {
+      setExported(await exportStaticSite(orgId));
+    } catch (e) {
+      setExportError((e as Error).message);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -247,6 +268,46 @@ export function Settings({
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="settings-block">
+        <h2>Share</h2>
+        <p className="muted hint-line">
+          Writes your club&rsquo;s pages out as a plain website — a folder you can upload to any
+          host so other people can browse your league. It is a snapshot of the current export
+          rather than a live view, and it contains league data only: your API key and settings are
+          never written into it.
+        </p>
+        <div className="settings-row">
+          <div>
+            <strong>Export as a website</strong>
+            <div className="muted">
+              The AI features, watchlist, player search and settings all need a running server, so
+              they are left out of the exported copy.
+            </div>
+          </div>
+          <button className="btn-feature" onClick={runExport} disabled={exporting || orgId === null}>
+            {exporting ? 'Exporting…' : 'Export website'}
+          </button>
+        </div>
+        {exportError && <div className="banner error">{exportError}</div>}
+        {exported && (
+          <div className="banner success">
+            Wrote {exported.files} files ({(exported.bytes / 1024 / 1024).toFixed(1)} MB), including{' '}
+            {exported.players} player cards.
+            <div className="muted small-path">{exported.outDir}</div>
+            {desktop && (
+              <button onClick={() => void desktop.openPath(exported.outDir)}>Open folder</button>
+            )}
+            {exported.warnings.length > 0 && (
+              <ul className="muted">
+                {exported.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="settings-block">

@@ -28,9 +28,16 @@ export function Tip({ label, tip }: { label: ReactNode; tip: string }) {
 }
 
 export const TIP_VALUE =
-  "OOTP's evaluation of the player's current on-field ability, shown as a percentile among all players on MLB rosters. 86 = better right now than 86% of MLB-rostered players.";
+  "OOTP's evaluation of the player's current worth to a club, shown as a percentile against others " +
+  'in his own role — position players, starters and relievers are ranked separately. 86 means better ' +
+  'right now than 86% of MLB-rostered players doing his job.\n\n' +
+  'The split matters because the underlying number includes playing time: a closer throws around 65 ' +
+  'innings, so ranking him against starters and everyday players would bury even an excellent one.';
 export const TIP_TALENT =
-  "The scouted ceiling (potential), as a percentile among MLB-rostered players. Talent well below Value suggests decline risk; well above suggests untapped upside still to develop.";
+  'The scouted ceiling (potential), as a percentile against MLB-rostered players in the same role. ' +
+  'Talent well below Value suggests decline risk; well above suggests untapped upside still to develop. ' +
+  'A settled veteran often sits lower here than on Value simply because most of the league still has ' +
+  'projection left and he does not.';
 export const TIP_CURPOT =
   'Current → potential scout ratings (20-80 scale), averaged across the main rating categories. 45→60 means an average-ish player today with above-average upside.';
 

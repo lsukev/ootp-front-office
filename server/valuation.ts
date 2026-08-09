@@ -34,6 +34,9 @@ export interface ContractInfo {
  */
 export const ON_ROSTER = '(rs.is_active = 1 OR rs.is_on_dl = 1 OR rs.is_on_dl60 = 1)';
 
+/** OOTP's role code for a starting pitcher. */
+export const ROLE_STARTER = 11;
+
 export interface LeagueRules {
   /** Service years needed for free agency; 0 means the league has none. */
   faMinYears: number;
@@ -163,8 +166,24 @@ export function currentGameDate(leagueId: number): string | null {
   return row?.d ?? null;
 }
 
+/**
+ * These two maps cover every player in the league and were being rebuilt from
+ * scratch on every request — a player card reloaded all 12,000 contracts to
+ * read one. They only change when a new export is imported, which is exactly
+ * when the cache is dropped.
+ */
+let contractCache: Map<number, ContractInfo> | null = null;
+let valueCache: Map<number, PlayerValue> | null = null;
+
+export function clearValuationCaches(): void {
+  contractCache = null;
+  valueCache = null;
+  percentilerCache = null;
+}
+
 /** Contracts keyed by player_id. Salary years live in salary0..salary14. */
 export function contractsByPlayer(): Map<number, ContractInfo> {
+  if (contractCache) return contractCache;
   const out = new Map<number, ContractInfo>();
   if (!tableExists('players_contract')) return out;
 
@@ -212,6 +231,7 @@ export function contractsByPlayer(): Map<number, ContractInfo> {
       controlledThrough: extension ? Math.max(endYear, extension.endYear) : endYear,
     });
   }
+  contractCache = out;
   return out;
 }
 
@@ -225,6 +245,7 @@ export interface PlayerValue {
 }
 
 export function valuesByPlayer(): Map<number, PlayerValue> {
+  if (valueCache) return valueCache;
   const out = new Map<number, PlayerValue>();
   if (!tableExists('players_value')) return out;
   const rows = db
@@ -244,6 +265,7 @@ export function valuesByPlayer(): Map<number, PlayerValue> {
       pitching: r.pitching_value ?? 0,
     });
   }
+  valueCache = out;
   return out;
 }
 
@@ -251,26 +273,69 @@ export function valuesByPlayer(): Map<number, PlayerValue> {
  * Percentile rank (0-100) helpers computed against all players currently on an
  * MLB-level roster — the pool that matters for big-league decisions.
  */
-export function mlbPercentiler(values: Map<number, PlayerValue>): {
+interface Percentiler {
   overallPct: (playerId: number) => number | null;
   talentPct: (playerId: number) => number | null;
-} {
-  const mlbIds = (
-    db
-      .prepare(
-        `SELECT p.player_id FROM players p JOIN teams t ON t.team_id = p.team_id
-         WHERE t.level = 1 AND t.allstar_team = 0 AND p.retired = 0`
-      )
-      .all() as Array<{ player_id: number }>
-  ).map((r) => r.player_id);
-  const overallSorted = mlbIds
-    .map((id) => values.get(id)?.overall)
-    .filter((v): v is number => v !== undefined)
-    .sort((a, b) => a - b);
-  const talentSorted = mlbIds
-    .map((id) => values.get(id)?.talent)
-    .filter((v): v is number => v !== undefined)
-    .sort((a, b) => a - b);
+}
+let percentilerCache: Percentiler | null = null;
+
+/**
+ * Percentile ranks against the players a man actually competes with. Built once
+ * per import: it queries every MLB roster and sorts three pools, which is not
+ * work worth repeating for each player card.
+ */
+export function mlbPercentiler(values: Map<number, PlayerValue>): Percentiler {
+  if (percentilerCache) return percentilerCache;
+  const rows = db
+    .prepare(
+      `SELECT p.player_id, p.position, p.role FROM players p JOIN teams t ON t.team_id = p.team_id
+       WHERE t.level = 1 AND t.allstar_team = 0 AND p.retired = 0`
+    )
+    .all() as Array<{ player_id: number; position: number; role: number }>;
+
+  /**
+   * Which pool a player is judged against.
+   *
+   * OOTP's overall_value is value TO THE CLUB, and playing time is baked into
+   * it: a closer throws about 65 innings, so his total can never approach a
+   * starter's or an everyday player's however good he is. Ranked against all
+   * 1,000-odd big leaguers, relievers pile up at the bottom — the league's
+   * closers average 879 against 1,067 for starters and 1,097 for position
+   * players — and a genuinely good closer reads as below average. Comparing a
+   * man to the players he is actually competing with fixes that.
+   */
+  const groupOf = (position: number, role: number): 'pos' | 'sp' | 'rp' =>
+    position !== 1 ? 'pos' : role === ROLE_STARTER ? 'sp' : 'rp';
+
+  const groupById = new Map<number, 'pos' | 'sp' | 'rp'>();
+  const pools = {
+    pos: { overall: [] as number[], talent: [] as number[] },
+    sp: { overall: [] as number[], talent: [] as number[] },
+    rp: { overall: [] as number[], talent: [] as number[] },
+  };
+  for (const r of rows) {
+    const g = groupOf(r.position, r.role);
+    groupById.set(r.player_id, g);
+    const v = values.get(r.player_id);
+    if (!v) continue;
+    pools[g].overall.push(v.overall);
+    pools[g].talent.push(v.talent);
+  }
+  for (const g of ['pos', 'sp', 'rp'] as const) {
+    pools[g].overall.sort((a, b) => a - b);
+    pools[g].talent.sort((a, b) => a - b);
+  }
+
+  const sortedFor = (id: number, key: 'overall' | 'talent'): number[] => {
+    const g = groupById.get(id);
+    // Someone off an MLB roster still gets a reading, against the closest pool
+    if (g) return pools[g][key];
+    const p = db.prepare(`SELECT position, role FROM players WHERE player_id = ?`).get(id) as
+      | { position: number; role: number }
+      | undefined;
+    return pools[p ? groupOf(p.position, p.role) : 'pos'][key];
+  };
+
   const pct = (sorted: number[], v: number | undefined): number | null => {
     if (v === undefined || sorted.length === 0) return null;
     let lo = 0;
@@ -282,10 +347,11 @@ export function mlbPercentiler(values: Map<number, PlayerValue>): {
     }
     return Math.round((lo / sorted.length) * 100);
   };
-  return {
-    overallPct: (id) => pct(overallSorted, values.get(id)?.overall),
-    talentPct: (id) => pct(talentSorted, values.get(id)?.talent),
+  percentilerCache = {
+    overallPct: (id) => pct(sortedFor(id, 'overall'), values.get(id)?.overall),
+    talentPct: (id) => pct(sortedFor(id, 'talent'), values.get(id)?.talent),
   };
+  return percentilerCache;
 }
 
 export interface TeamFinances {

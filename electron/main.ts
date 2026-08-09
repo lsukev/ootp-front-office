@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, Menu } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerMonitor, shell, Menu } from 'electron';
 import path from 'node:path';
 import { initUpdater } from './updater.js';
 
@@ -17,6 +17,54 @@ process.env.OOTP_FO_APP_ROOT ??= app.isPackaged
 process.env.OOTP_FO_EMBEDDED = '1';
 
 let mainWindow: BrowserWindow | null = null;
+
+/** Where the embedded server ended up, so the window can be reloaded later. */
+let serverUrl: string | null = null;
+let lastRecoveryAt = 0;
+let lastLoadFinishedAt = 0;
+
+/**
+ * Puts the UI back after the renderer has gone away.
+ *
+ * macOS is free to kill a background renderer while the machine sleeps, and
+ * Electron does not reload it for you: the WebContents survives, the window
+ * keeps painting its backgroundColor, and the user comes back to a blank pane
+ * with no error and no way to recover short of quitting the app. The main
+ * process and the embedded server are both untouched, which is why nothing
+ * looks wrong from the outside.
+ */
+function recoverWindow(reason: string): void {
+  if (!mainWindow || mainWindow.isDestroyed() || !serverUrl) return;
+  // If the page itself is what fails, reloading in a tight loop helps nobody
+  const now = Date.now();
+  if (now - lastRecoveryAt < 5000) return;
+  lastRecoveryAt = now;
+  console.warn(`[window] reloading after ${reason}`);
+  mainWindow.webContents.loadURL(serverUrl).catch((err: unknown) => {
+    console.error('[window] reload failed:', err);
+  });
+}
+
+/**
+ * True when the renderer is not showing the app — either it stopped answering
+ * or the root element never got its content back.
+ */
+async function windowIsBlank(): Promise<boolean> {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (mainWindow.webContents.isLoading()) return false;
+  // React mounts a moment after the load event, and calling a freshly loaded
+  // page blank would start a reload loop on a slow machine
+  if (Date.now() - lastLoadFinishedAt < 4000) return false;
+  try {
+    return !(await mainWindow.webContents.executeJavaScript(
+      "!!document.getElementById('root') && document.getElementById('root').childElementCount > 0",
+      true
+    ));
+  } catch {
+    // A renderer that cannot run a one-line script is gone
+    return true;
+  }
+}
 
 /** True only for http and https, the two schemes safe to hand to the OS. */
 function isWebUrl(raw: string): boolean {
@@ -47,6 +95,14 @@ async function createWindow(): Promise<void> {
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
+  // Second safety net: whatever killed the renderer, coming back to the window
+  // is when it matters. recoverWindow's own throttle keeps this cheap.
+  mainWindow.on('focus', () => {
+    void windowIsBlank().then((blank) => {
+      if (blank) recoverWindow('blank window on focus');
+    });
+  });
+
   // Open external links in the real browser, never inside the app window.
   // Only http and https are handed to the OS: openExternal will happily launch
   // file://, and on Windows any registered protocol handler, so passing it an
@@ -66,6 +122,22 @@ async function createWindow(): Promise<void> {
     if (target.hostname === '127.0.0.1' || target.hostname === 'localhost') return;
     event.preventDefault();
     if (isWebUrl(url)) void shell.openExternal(url);
+  });
+
+  // The renderer dying is not fatal and not visible — without these the window
+  // simply goes blank and stays that way
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    recoverWindow(`renderer gone (${details.reason})`);
+  });
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
+    // -3 is ABORTED, which is what a superseded navigation reports; ignore it
+    if (isMainFrame && code !== -3) recoverWindow(`load failed (${code} ${description})`);
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('[window] renderer unresponsive');
+  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    lastLoadFinishedAt = Date.now();
   });
 
   try {
@@ -91,7 +163,8 @@ async function createWindow(): Promise<void> {
     });
 
     const port = await startServer(0);
-    await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+    serverUrl = `http://127.0.0.1:${port}`;
+    await mainWindow.loadURL(serverUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     dialog.showErrorBox(
@@ -155,8 +228,13 @@ if (!app.requestSingleInstanceLock()) {
   // directory so the renderer can't ask the shell to open arbitrary paths.
   ipcMain.handle('open-path', async (_event, target: string) => {
     const dataDir = process.env.OOTP_FO_DATA_DIR ?? '';
-    if (!dataDir || path.resolve(target) !== path.resolve(dataDir)) return;
-    await shell.openPath(dataDir);
+    if (!dataDir) return;
+    // Anywhere inside the data directory is fine — exports live in a subfolder
+    // — but nothing outside it, so the renderer still cannot open the disk.
+    const root = path.resolve(dataDir);
+    const wanted = path.resolve(target);
+    if (wanted !== root && !wanted.startsWith(root + path.sep)) return;
+    await shell.openPath(wanted);
   });
 
   app.whenReady().then(() => {
@@ -165,6 +243,18 @@ if (!app.requestSingleInstanceLock()) {
     void createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    });
+
+    // Waking is when the damage shows up, so check then rather than waiting for
+    // the user to notice. render-process-gone does not always fire for a
+    // renderer the OS reaped while the machine was asleep — the delay gives
+    // loopback networking a moment to come back before the check runs.
+    powerMonitor.on('resume', () => {
+      setTimeout(() => {
+        void windowIsBlank().then((blank) => {
+          if (blank) recoverWindow('blank window after wake');
+        });
+      }, 2000);
     });
   });
 

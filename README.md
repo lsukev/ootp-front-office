@@ -89,6 +89,13 @@ Click any player name anywhere for a full dossier: bio, ratings with potential m
 pitch arsenal and velocity, contract schedule, career history by level, recent game logs,
 and injury history.
 
+**Export as a website** — **Settings → Share** writes your club's pages out as a plain static
+site: a folder you can upload to GitHub Pages, Netlify, or any web host so other people can
+browse your league. It takes about 20 seconds and comes to a few megabytes, player cards
+included. It is a snapshot rather than a live view, and it contains league data only — your
+API key and settings are never written into it. The AI features, watchlist, player search and
+settings all need a running server, so they are left out of the exported copy.
+
 ---
 
 ## Install
