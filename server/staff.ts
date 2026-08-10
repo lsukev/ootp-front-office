@@ -9,9 +9,12 @@ import { db, tableExists } from './db.js';
  * is paid to see the money. Ask one question of all five and the disagreement
  * is the useful part — five voices agreeing would be five costumes.
  *
- * They are real staff with real ratings, so what OOTP thinks of a man shapes
- * what he says. A manager who leans on the bunt says so; a scout rated 170 at
- * amateur coverage speaks with a confidence a poorly-rated one has not earned.
+ * What separates a costume from a person is specifics, and OOTP stores nearly a
+ * hundred fields per coach: where he was born, what he did as a player, how
+ * quickly he pulls a starter, whether he trusts a stat line or a scout. All of
+ * it is turned into plain sentences here, because a man who can tell you he hit
+ * 126 home runs and has no use for an opener reads as himself, while a man
+ * described only as "the manager" reads as a label.
  */
 
 /** OOTP's occupation codes for the seats we hire from. */
@@ -26,12 +29,9 @@ export type PersonaId = 'analyst' | 'manager' | 'pitching' | 'scout' | 'owner';
 
 interface PersonaSpec {
   id: PersonaId;
-  /** Seat in the organisation, or null for Peter, who is the app itself. */
   occupation: number | null;
   role: string;
-  /** Shown on the tab when the save has nobody in the seat. */
   fallbackName: string;
-  /** What this person is trying to achieve, which is what makes him worth asking. */
   brief: string[];
 }
 
@@ -102,93 +102,203 @@ export interface Persona {
   id: PersonaId;
   name: string;
   role: string;
-  /** Traits worth putting in the prompt, already in words. */
-  traits: string[];
+  /** Everything true of this particular man, already in sentences. */
+  facts: string[];
 }
 
-interface CoachRow {
-  first_name: string;
-  last_name: string;
-  teach_hitting: number | null;
-  teach_pitching: number | null;
-  scout_major: number | null;
-  scout_amateur: number | null;
-  favor_pitching_to_hitting: number | null;
-  bunt_hit: number | null;
-  hit_run: number | null;
-  player_loyalty: number | null;
-  personality: number | null;
-}
+type Coach = Record<string, number | string | null>;
 
-const COACH_FIELDS =
-  `first_name, last_name, teach_hitting, teach_pitching, scout_major, scout_amateur,
-   favor_pitching_to_hitting, bunt_hit, hit_run, player_loyalty, personality`;
+const num = (c: Coach, k: string): number => Number(c[k] ?? 0);
 
-function coachInSeat(orgId: number, occupation: number): CoachRow | null {
+function loadCoach(orgId: number, occupation: number): Coach | null {
   if (!tableExists('coaches')) return null;
   return (
     (db
-      .prepare(`SELECT ${COACH_FIELDS} FROM coaches WHERE team_id = ? AND occupation = ? LIMIT 1`)
-      .get(orgId, occupation) as CoachRow | undefined) ?? null
+      .prepare(`SELECT * FROM coaches WHERE team_id = ? AND occupation = ? LIMIT 1`)
+      .get(orgId, occupation) as Coach | undefined) ?? null
   );
 }
 
-/**
- * Turns a coach's numbers into sentences he could say about himself.
- *
- * OOTP's coach ratings run roughly 0-200 rather than the 20-80 scale used for
- * players, and the strategy sliders are signed preferences centred on zero.
- * Only traits that actually distinguish him are mentioned — a middling number
- * says nothing and would just pad the prompt.
- */
-function traitsFor(id: PersonaId, c: CoachRow): string[] {
-  const out: string[] = [];
-  const strong = (v: number | null) => (v ?? 0) >= 120;
-  const weak = (v: number | null) => (v ?? 0) > 0 && (v ?? 0) <= 60;
+const money = (n: number): string =>
+  n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${Math.round(n / 1000)}k`;
 
-  if (id === 'manager') {
-    if ((c.favor_pitching_to_hitting ?? 0) >= 4) out.push('You build a club around pitching and defence first.');
-    if ((c.favor_pitching_to_hitting ?? 0) <= -4) out.push('You would rather out-hit a problem than pitch around it.');
-    if ((c.bunt_hit ?? 0) >= 3) out.push('You like the bunt more than the numbers say you should, and you know it.');
-    if ((c.hit_run ?? 0) >= 3) out.push('You will put runners in motion.');
-    if (strong(c.teach_hitting)) out.push('Hitting is the part of the game you know best.');
-    if (strong(c.teach_pitching)) out.push('You came up on the pitching side and it shows.');
-    if ((c.player_loyalty ?? 0) >= 3) out.push('You are loyal to your veterans, sometimes past the point the numbers justify.');
+/** Age, birthplace, time in the game and what he is signed for. */
+function bioLines(c: Coach): string[] {
+  const out: string[] = [];
+  const age = num(c, 'age');
+  const city = tableExists('cities')
+    ? (db.prepare(`SELECT name FROM cities WHERE city_id = ?`).get(c.city_of_birth_id) as
+        | { name: string }
+        | undefined)?.name
+    : undefined;
+  const nation = tableExists('nations')
+    ? (db.prepare(`SELECT short_name FROM nations WHERE nation_id = ?`).get(c.nation_id) as
+        | { short_name: string }
+        | undefined)?.short_name
+    : undefined;
+  const where = [city, nation].filter(Boolean).join(', ');
+  if (age > 0) out.push(`You are ${age}${where ? `, from ${where}` : ''}.`);
+  const exp = num(c, 'experience');
+  if (exp > 0) out.push(`You have ${exp} year${exp === 1 ? '' : 's'} in the job.`);
+  const years = num(c, 'contract_years');
+  const salary = num(c, 'contract_salary');
+  if (years > 0) {
+    out.push(
+      `You are signed for ${years} more year${years === 1 ? '' : 's'}` +
+        (salary > 0 ? ` at ${money(salary)} a year` : '') +
+        (years <= 1 ? ' — your seat is not especially warm, and you know it.' : '.')
+    );
   }
-  if (id === 'pitching') {
-    if (strong(c.teach_pitching)) out.push('You are one of the better pitching coaches in the league and you back your read.');
-    if (weak(c.teach_pitching)) out.push('You are not a highly regarded coach; hedge where you are unsure.');
-  }
-  if (id === 'scout') {
-    if (strong(c.scout_amateur)) out.push('Amateur talent is your strength — you are trusted on draft-age players.');
-    if (weak(c.scout_amateur)) out.push('Amateur coverage is thin for you; say when a draft read is a guess.');
-    if (strong(c.scout_major)) out.push('You know the major-league population cold.');
-    if (weak(c.scout_major)) out.push('Your professional coverage is spotty; be candid about that.');
-  }
-  if ((c.personality ?? 0) >= 3) out.push('You are direct to the point of blunt.');
   return out;
 }
 
 /**
- * Everyone available to talk on this club. A seat the save has not filled is
- * simply left out rather than given an invented name — the point of using the
- * real staff is that they are real.
+ * What he did as a player, when he was one.
+ *
+ * Only about one staff member in twelve ever played, so most get nothing here —
+ * but for the ones who did, a real career is the single detail that makes the
+ * conversation feel like a conversation rather than a lookup.
  */
+function playingLines(c: Coach): string[] {
+  const id = num(c, 'former_player_id');
+  if (!id || !tableExists('players_career_batting_stats')) return [];
+  const bat = db
+    .prepare(
+      `SELECT COUNT(DISTINCT year) AS yrs, SUM(pa) AS pa, SUM(h) AS h, SUM(hr) AS hr
+       FROM players_career_batting_stats WHERE player_id = ? AND split_id = 1 AND level_id = 1`
+    )
+    .get(id) as { yrs: number; pa: number | null; h: number | null; hr: number | null } | undefined;
+  const pitch = tableExists('players_career_pitching_stats')
+    ? (db
+        .prepare(
+          `SELECT COUNT(DISTINCT year) AS yrs, SUM(g) AS g, SUM(w) AS w, SUM(s) AS sv
+           FROM players_career_pitching_stats WHERE player_id = ? AND split_id = 1 AND level_id = 1`
+        )
+        .get(id) as { yrs: number; g: number | null; w: number | null; sv: number | null } | undefined)
+    : undefined;
+
+  if (pitch && (pitch.g ?? 0) > 0) {
+    return [
+      `You pitched in the majors yourself — ${pitch.yrs} season${pitch.yrs === 1 ? '' : 's'}, ` +
+        `${pitch.g} appearances, ${pitch.w} wins${(pitch.sv ?? 0) > 0 ? ` and ${pitch.sv} saves` : ''}. ` +
+        'Draw on it when it is genuinely relevant, not as a party piece.',
+    ];
+  }
+  if (bat && (bat.pa ?? 0) > 0) {
+    return [
+      `You played in the majors yourself — ${bat.yrs} season${bat.yrs === 1 ? '' : 's'}, ` +
+        `${bat.h} hits and ${bat.hr} home runs in ${bat.pa} plate appearances. ` +
+        'Draw on it when it is genuinely relevant, not as a party piece.',
+    ];
+  }
+  return ['You never played in the majors, and you are matter-of-fact about it if it comes up.'];
+}
+
+/**
+ * How he actually runs a game, from OOTP's own strategy sliders.
+ *
+ * Only the sliders whose direction the name makes unambiguous are used — higher
+ * means more of the thing named. A slider whose sign convention is a guess would
+ * put a confident falsehood in his mouth, which is worse than saying nothing, so
+ * the hook settings are deliberately left out.
+ *
+ * Nothing fires below ±3: a man leaning slightly one way is not a man with a
+ * reputation, and padding the brief with faint tendencies dilutes the strong ones.
+ */
+const TENDENCIES: Array<{ field: string; high: string; low: string }> = [
+  { field: 'bunt', high: 'You will give up an out to move a runner, and you make no apology for it.', low: 'You almost never bunt.' },
+  { field: 'squeeze', high: 'You like the squeeze.', low: 'You have no use for the squeeze play.' },
+  { field: 'stealing', high: 'You run on anybody.', low: 'You do not give away outs on the bases.' },
+  { field: 'running', high: 'You are aggressive sending runners.', low: 'You hold runners at the base.' },
+  { field: 'hit_run', high: 'You like the hit-and-run.', low: 'You rarely put the hit-and-run on.' },
+  { field: 'pinchhit_pos', high: 'You go to your bench early for a hitter.', low: 'You let your regulars hit for themselves.' },
+  { field: 'intentional_walk', high: 'You will put a man on to get to the matchup you want.', low: 'You do not believe in the intentional walk.' },
+  { field: 'pitch_around', high: 'You pitch around dangerous hitters.', low: 'You go after everybody.' },
+  { field: 'infield_in', high: 'You bring the infield in to cut the run off.', low: 'You concede the run and play for the out.' },
+  { field: 'shift_if', high: 'You shift the infield aggressively.', low: 'You leave your infield where it belongs.' },
+  { field: 'opener', high: 'You will use an opener.', low: 'You have no use for an opener.' },
+  { field: 'lr_matchup', high: 'You play the left-right matchups hard.', low: 'You do not chase platoon matchups.' },
+];
+
+const PHILOSOPHY: Array<{ field: string; high: string; low: string }> = [
+  { field: 'favor_pitching_to_hitting', high: 'You build a club around pitching and defence first.', low: 'You would rather out-hit a problem than pitch around it.' },
+  { field: 'favor_speed_to_power', high: 'You would take the athlete over the slugger.', low: 'You want thump in the middle of the order.' },
+  { field: 'favor_avg_to_obp', high: 'You care more that a man hits than that he walks.', low: 'On-base is the number you look at first.' },
+  { field: 'favor_veterans_to_prospects', high: 'You trust the veteran over the kid, most times.', low: 'You would rather find out what the kid can do.' },
+  { field: 'favor_defense_to_offense', high: 'You will carry a glove that cannot hit.', low: 'You will live with a defensive liability who produces.' },
+];
+
+function fromSliders(c: Coach, table: typeof TENDENCIES, limit: number): string[] {
+  return table
+    .map((t) => {
+      const v = num(c, t.field);
+      if (v >= 3) return { v: Math.abs(v), text: t.high };
+      if (v <= -3) return { v: Math.abs(v), text: t.low };
+      return null;
+    })
+    .filter((x): x is { v: number; text: string } => x !== null)
+    // Strongest convictions first, so a trimmed list keeps what defines him
+    .sort((a, b) => b.v - a.v)
+    .slice(0, limit)
+    .map((x) => x.text);
+}
+
+/** Craft and temperament, on OOTP's roughly 0-200 scale for coach ratings. */
+function craftLines(id: PersonaId, c: Coach): string[] {
+  const out: string[] = [];
+  const strong = (k: string) => num(c, k) >= 120;
+  const weak = (k: string) => num(c, k) > 0 && num(c, k) <= 60;
+
+  if (id === 'manager') {
+    if (strong('handle_players')) out.push('You are unusually good with people; players play hard for you.');
+    else if (weak('handle_players')) out.push('You have never been a players’ manager and you know it.');
+    if (strong('handle_rookies')) out.push('Young players settle quickly under you.');
+    if (strong('teach_hitting')) out.push('Hitting is the part of the game you know best.');
+    if (strong('teach_pitching')) out.push('You came up on the pitching side and it shows.');
+    if (num(c, 'player_loyalty') >= 4) out.push('You are loyal to your veterans, sometimes past the point the numbers justify.');
+  }
+  if (id === 'pitching') {
+    if (strong('teach_pitching')) out.push('You are one of the better pitching coaches in the league and you back your read.');
+    else if (weak('teach_pitching')) out.push('You are not highly regarded as a coach; hedge where you are unsure.');
+    if (strong('prevent_arms') || strong('heal_arms')) out.push('Keeping arms healthy is the thing you are actually known for.');
+  }
+  if (id === 'scout') {
+    if (strong('scout_amateur')) out.push('Amateur talent is your strength — you are trusted on draft-age players.');
+    else if (weak('scout_amateur')) out.push('Amateur coverage is thin for you; say when a draft read is a guess.');
+    if (strong('scout_major')) out.push('You know the major-league population cold.');
+    else if (weak('scout_major')) out.push('Your professional coverage is spotty; be candid about that.');
+    if (strong('scout_international')) out.push('You have real reach internationally.');
+  }
+
+  // How he weighs evidence, which is the trait most likely to show in an answer
+  const stats = num(c, 'value_stats');
+  const ratings = num(c, 'ratings_value');
+  if (stats >= 6 && ratings <= 0) out.push('You trust what a man has actually done over what a scout thinks he might become.');
+  if (ratings >= 6 && stats <= 0) out.push('You trust the eye and the tools over a stat line.');
+
+  if (num(c, 'personality') >= 3) out.push('You are direct to the point of blunt.');
+  if (num(c, 'trade_aggressiveness') >= 5 && id !== 'pitching') out.push('You are not shy about making a deal.');
+  return out;
+}
+
 export function personasFor(orgId: number): Persona[] {
   const out: Persona[] = [];
   for (const spec of SPECS) {
     if (spec.occupation === null) {
-      out.push({ id: spec.id, name: spec.fallbackName, role: spec.role, traits: [] });
+      out.push({ id: spec.id, name: spec.fallbackName, role: spec.role, facts: [] });
       continue;
     }
-    const c = coachInSeat(orgId, spec.occupation);
+    const c = loadCoach(orgId, spec.occupation);
     if (!c) continue;
-    out.push({
-      id: spec.id,
-      name: `${c.first_name} ${c.last_name}`.trim() || spec.fallbackName,
-      role: spec.role,
-      traits: traitsFor(spec.id, c),
-    });
+    const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim() || spec.fallbackName;
+    const facts = [
+      ...bioLines(c),
+      ...playingLines(c),
+      ...(spec.id === 'manager' ? fromSliders(c, TENDENCIES, 5) : []),
+      ...(spec.id === 'manager' || spec.id === 'owner' ? fromSliders(c, PHILOSOPHY, 3) : []),
+      ...craftLines(spec.id, c),
+    ];
+    out.push({ id: spec.id, name, role: spec.role, facts });
   }
   return out;
 }
@@ -197,30 +307,65 @@ export function personaById(orgId: number, id: string): Persona | null {
   return personasFor(orgId).find((p) => p.id === id) ?? null;
 }
 
+/** The club's record, so a man under pressure sounds like one. */
+function standing(orgId: number): string | null {
+  if (!tableExists('team_record')) return null;
+  const r = db.prepare(`SELECT w, l, gb FROM team_record WHERE team_id = ?`).get(orgId) as
+    | { w: number; l: number; gb: number | null }
+    | undefined;
+  if (!r) return null;
+  const gb = r.gb ?? 0;
+  const where = gb <= 0 ? 'leading the division' : `${gb} game${gb === 1 ? '' : 's'} back`;
+  return `The club is ${r.w}-${r.l}, ${where}. Let that colour how urgent you sound.`;
+}
+
 /** The role-specific half of the system prompt. The league context is shared. */
-export function personaBrief(p: Persona): string {
+export function personaBrief(p: Persona, orgId: number): string {
   const spec = SPECS.find((s) => s.id === p.id);
   if (!spec) return '';
-  const lines = [
-    p.id === 'analyst'
-      ? `Your name is ${p.name}. You are the ${p.role} inside OOTP Front Office, a desktop companion`
-      : `You are ${p.name}, ${p.role} of this club, speaking to the general manager through the`,
-    p.id === 'analyst'
-      ? 'app for a saved Out of the Park Baseball league. You are talking to the general manager,'
-      : 'club’s front-office app. Introduce yourself by name only if asked who you are.',
-    ...(p.id === 'analyst' ? ['who is your boss. Introduce yourself by name only if asked who you are.'] : []),
-    '',
-    ...spec.brief,
-  ];
-  if (p.traits.length > 0) {
-    lines.push('', 'What you are actually like, from your own record:', ...p.traits.map((t) => `- ${t}`));
+  const lines: string[] = [];
+
+  if (p.id === 'analyst') {
+    lines.push(
+      `Your name is ${p.name}. You are the ${p.role} inside OOTP Front Office, a desktop companion`,
+      'app for a saved Out of the Park Baseball league. You are talking to the general manager,',
+      'who is your boss. Introduce yourself by name only if asked who you are.'
+    );
+  } else {
+    lines.push(
+      `You are ${p.name}, ${p.role} of this club, speaking to the general manager through the`,
+      'club’s front-office app. Introduce yourself by name only if asked who you are.'
+    );
   }
-  if (p.id !== 'analyst') {
+  lines.push('', ...spec.brief);
+
+  if (p.facts.length > 0) {
     lines.push(
       '',
-      'Stay in your seat. Another voice in this app covers the numbers in depth, and the others',
-      'cover their own ground — when a question is really for one of them, give your own view in a',
-      'line and say whose call it properly is. Never pretend to a view you would not hold.'
+      'This is who you are. It is your actual record, not decoration — answer as a man these',
+      'things are true of, and mention them only where they bear on the question:',
+      ...p.facts.map((f) => `- ${f}`)
+    );
+  }
+
+  if (p.id !== 'analyst') {
+    const others = personasFor(orgId).filter((o) => o.id !== p.id);
+    if (others.length > 0) {
+      lines.push(
+        '',
+        `The rest of the front office, who you know by name: ${others
+          .map((o) => `${o.name} (${o.role})`)
+          .join(', ')}.`,
+        'Refer to them the way a colleague would. When a question is properly theirs, give your own',
+        'view in a line and say whose call it is — by name, not by title.'
+      );
+    }
+    const s = standing(orgId);
+    if (s) lines.push('', s);
+    lines.push(
+      '',
+      'Stay in your seat. Never pretend to a view you would not hold, and never soften a real',
+      'disagreement with the front office just because you are talking to your boss.'
     );
   }
   return lines.join('\n');

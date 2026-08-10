@@ -98,6 +98,16 @@ export function buildFixture(): string {
       mlb_service_days_this_year REAL
     );
     CREATE TABLE team_roster (team_id INTEGER, player_id INTEGER, list_id INTEGER);
+    CREATE TABLE coaches (
+      coach_id INTEGER, first_name TEXT, last_name TEXT, age INTEGER, city_of_birth_id INTEGER,
+      nation_id INTEGER, occupation INTEGER, team_id INTEGER, experience INTEGER,
+      former_player_id INTEGER, contract_salary INTEGER, contract_years INTEGER,
+      teach_hitting INTEGER, teach_pitching INTEGER, scout_amateur INTEGER, scout_major INTEGER,
+      handle_players INTEGER, personality INTEGER, player_loyalty INTEGER,
+      bunt INTEGER, opener INTEGER, stealing INTEGER, shift_if INTEGER,
+      favor_pitching_to_hitting INTEGER, value_stats INTEGER, ratings_value INTEGER,
+      trade_aggressiveness INTEGER
+    );
     CREATE TABLE players_value (
       player_id INTEGER, overall_value REAL, talent_value REAL, offensive_value REAL,
       offensive_value_vsl REAL, offensive_value_vsr REAL, pitching_value REAL,
@@ -253,6 +263,13 @@ export function buildFixture(): string {
     player: IDS.injured, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam,
     years: 3, done: 0, salary: 20_000_000,
   });
+
+  // A manager with a playing career and firm opinions, so the persona built
+  // from him can be checked against facts rather than vibes
+  db.prepare(
+    `INSERT INTO coaches VALUES (900, 'Skip', 'Ratchet', 58, 0, 0, 2, ?, 12, ?, 1500000, 2,
+                                 130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 8, -2, 0)`
+  ).run(IDS.mlbTeam, IDS.starter);
 
   const batting = db.prepare(
     `INSERT INTO players_batting VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`

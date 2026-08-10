@@ -330,7 +330,7 @@ function systemPrompt(orgId: number, persona: Persona): string {
   const date = team ? currentGameDate(team.league_id) : null;
 
   return [
-    personaBrief(persona),
+    personaBrief(persona, orgId),
     '',
     'This is a text-message conversation, so write like one: short messages, plain sentences, no',
     'greeting or sign-off on every reply. You can be dry and opinionated the way a trusted analyst',
