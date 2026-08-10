@@ -1143,10 +1143,22 @@ button.cta {
   color: var(--accent);
   font-weight: 600;
 }
-.series-games td { padding: 3px 6px; font-size: 13px; }
-.series-date { color: var(--muted); white-space: nowrap; }
-.series-score { white-space: nowrap; font-weight: 600; }
-.series-vs { text-align: center; font-size: 11px; }
+/*
+ * Fixed layout so the row lives inside the card. The starter names are the only
+ * elastic part and they wrap; everything else is given the width it actually
+ * needs. Left to itself the table sized to its content — up to 539px inside a
+ * 420px card — and spilled the whole row, taking the Plan link off the edge.
+ */
+.series-games { width: 100%; table-layout: fixed; }
+.series-games td { padding: 3px 6px; font-size: 13px; vertical-align: top; }
+.series-date { width: 54px; color: var(--muted); white-space: nowrap; }
+.series-score { width: 92px; font-weight: 600; }
+.series-vs { width: 20px; text-align: center; font-size: 11px; }
+.series-plan { width: 42px; text-align: right; white-space: nowrap; }
+/* The names are the only part that can give. Everything in these rows inherits
+   nowrap, so without this a long one pushes the whole row past the card edge. */
+.series-starter { white-space: normal; }
+.series-starter button { white-space: normal; text-align: left; }
 
 /* Payroll */
 .finance-grid {
@@ -1524,7 +1536,12 @@ button.cta {
 }
 .h2h-card strong { font-size: 15px; }
 .h2h-team { color: var(--muted); }
-.line-score { display: block; font-size: 10px; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+/* Wraps within its cell rather than stretching the row; extra innings can run
+   to a dozen numbers and used to push everything sideways. */
+.line-score {
+  display: block; font-size: 10px; letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums; white-space: normal; line-height: 1.35;
+}
 
 /* Farm-system strength: a bar behind the rank, so the gaps are visible */
 .farm-bar-wrap { position: relative; display: flex; justify-content: flex-end; align-items: center; min-width: 90px; }
@@ -1619,7 +1636,6 @@ button.cta {
   letter-spacing: 0.06em; color: var(--muted); margin: 0 0 5px;
 }
 .game-plan-lineup { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.7; }
-.series-plan { text-align: right; white-space: nowrap; }
 
 .tenure { margin-bottom: 22px; }
 .tenure h2 { margin-bottom: 2px; }

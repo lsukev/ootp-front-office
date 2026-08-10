@@ -188,7 +188,7 @@ export function Schedule({ teamId }: { teamId: number }) {
                           <span className="muted">—</span>
                         )}
                       </td>
-                      <td>
+                      <td className="series-starter">
                         {g.ourStarter ? (
                           <>
                             <PlayerLink id={g.ourStarter.player_id}>{g.ourStarter.name}</PlayerLink>
@@ -199,7 +199,7 @@ export function Schedule({ teamId }: { teamId: number }) {
                         )}
                       </td>
                       <td className="muted series-vs">vs</td>
-                      <td>
+                      <td className="series-starter">
                         {g.theirStarter ? (
                           <>
                             <PlayerLink id={g.theirStarter.player_id}>{g.theirStarter.name}</PlayerLink>

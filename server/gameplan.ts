@@ -148,6 +148,60 @@ function scoutOpponent(oppTeamId: number) {
 }
 
 /**
+ * Which slot of the opponent's rotation this game falls on.
+ *
+ * The projected-starters table is not a lookup by game: it is the rotation in
+ * order, `starter_0` through `starter_7`, and the schedule advances one slot
+ * per remaining game in a series. This counts the opponent's unplayed games
+ * ahead of this one in the same series, matching what the schedule page shows
+ * so the two never disagree about who is pitching.
+ *
+ * A series is a run of consecutive games against the same club at the same
+ * venue, which is the same rule the schedule groups by.
+ */
+function rotationSlot(teamId: number, game: GameRow): number {
+  const all = db
+    .prepare(
+      `SELECT game_id, date, home_team, away_team, played
+       FROM games WHERE home_team = ? OR away_team = ?`
+    )
+    .all(teamId, teamId) as GameRow[];
+  const ordered = all
+    .map((g) => ({
+      ...g,
+      key: padDate(g.date) ?? '',
+      oppId: g.home_team === teamId ? g.away_team : g.home_team,
+      isHome: g.home_team === teamId,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+
+  const here = ordered.findIndex((g) => g.game_id === game.game_id);
+  if (here < 0) return 0;
+  const me = ordered[here];
+
+  let start = here;
+  while (
+    start > 0 &&
+    ordered[start - 1].oppId === me.oppId &&
+    ordered[start - 1].isHome === me.isHome
+  ) {
+    start--;
+  }
+  let slot = 0;
+  for (let i = start; i < here; i++) if (ordered[i].played !== 1) slot++;
+  return slot;
+}
+
+/** One slot of a club's projected rotation, or null when it is not exported. */
+function projectedStarter(teamId: number, slot: number): number | null {
+  if (!tableExists('projected_starting_pitchers')) return null;
+  const row = db
+    .prepare(`SELECT * FROM projected_starting_pitchers WHERE team_id = ?`)
+    .get(teamId) as Record<string, number> | undefined;
+  return row ? (row[`starter_${Math.min(slot, 7)}`] || null) : null;
+}
+
+/**
  * Everything worth knowing before one game.
  *
  * The opposing starter is taken from the game itself when the export names
@@ -173,15 +227,10 @@ gameplanRoutes.get('/game-plan/:teamId/:gameId', (req, res) => {
     | { label: string }
     | undefined;
 
-  // starter0 is the away side, starter1 the home side
+  // starter0 is the away side, starter1 the home side — the same mapping the
+  // schedule page uses for a played game
   const namedStarter = home ? g.starter0 : g.starter1;
-  const projected =
-    !namedStarter && tableExists('projected_starting_pitchers')
-      ? (db
-          .prepare(`SELECT player_id FROM projected_starting_pitchers WHERE team_id = ? LIMIT 1`)
-          .get(oppId) as { player_id: number } | undefined)?.player_id ?? null
-      : null;
-  const pitcherId = namedStarter || projected;
+  const pitcherId = namedStarter || projectedStarter(oppId, rotationSlot(teamId, g));
 
   const pitcher = pitcherId
     ? (db
