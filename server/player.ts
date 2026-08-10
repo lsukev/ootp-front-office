@@ -127,7 +127,10 @@ playerRoutes.get('/player/:id', (req, res) => {
               SUM(s.hr) AS hr, SUM(s.r) AS r, SUM(s.rbi) AS rbi, SUM(s.bb) AS bb, SUM(s.k) AS k,
               SUM(s.sb) AS sb, SUM(s.hp) AS hp, SUM(s.sf) AS sf, ROUND(SUM(s.war), 1) AS war
        FROM players_career_batting_stats s LEFT JOIN teams t ON t.team_id = s.team_id
-       WHERE s.player_id = ? AND s.split_id = 1
+       -- Professional seasons only. A drafted amateur's school year is stored
+       -- here under no league, and it belongs to neither the career table nor
+       -- the hover card's "what he is doing now" line
+       WHERE s.player_id = ? AND s.split_id = 1 AND s.league_id != 0
        GROUP BY s.year, s.team_id ORDER BY s.year DESC, pa DESC`
     )
     .all(id) as Array<Record<string, number | string | null>>;
@@ -154,7 +157,7 @@ playerRoutes.get('/player/:id', (req, res) => {
               SUM(s.outs) AS outs, SUM(s.er) AS er, SUM(s.ha) AS ha, SUM(s.bb) AS bb,
               SUM(s.k) AS k, ROUND(SUM(s.war), 1) AS war
        FROM players_career_pitching_stats s LEFT JOIN teams t ON t.team_id = s.team_id
-       WHERE s.player_id = ? AND s.split_id = 1
+       WHERE s.player_id = ? AND s.split_id = 1 AND s.league_id != 0
        GROUP BY s.year, s.team_id ORDER BY s.year DESC, outs DESC`
     )
     .all(id) as Array<Record<string, number | string | null>>;

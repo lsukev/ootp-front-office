@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { loadSettings } from './settings.js';
 import { seasonYear } from './valuation.js';
 
 export const payrollRoutes = Router();
@@ -174,6 +175,11 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
   });
 
   const budget = finances?.budget ?? null;
+  // What the owner is expected to allow next season. Only a number you have
+  // entered counts — otherwise the flat assumption stands, and the response
+  // says which of the two produced the headroom below.
+  const entered = loadSettings().nextSeasonBudget?.[String(orgId)];
+  const nextBudget = typeof entered === 'number' && entered > 0 ? entered : null;
   const expiringAfterThisYear = players.filter((p) => p.expiring && !p.deadMoney);
 
   res.json({
@@ -205,11 +211,17 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
         players: owed.map((p) => ({ player_id: p.player_id, name: p.name, salary: p.salaryNow })),
       };
     })(),
+    nextSeasonBudget: nextBudget,
     commitments: commitments.map((c) => ({
       ...c,
-      // Headroom assumes the budget holds flat, which is the only honest
-      // assumption available — OOTP does not publish future budgets.
-      headroom: budget !== null ? budget - c.total : null,
+      // Seasons after this one measure against the budget you expect, when you
+      // have given one. OOTP publishes no future budget, so without an entry
+      // the only honest assumption is that today's holds flat.
+      headroom:
+        (c.year > thisSeason ? (nextBudget ?? budget) : budget) !== null
+          ? (c.year > thisSeason ? (nextBudget ?? budget)! : budget!) - c.total
+          : null,
+      budgetUsed: c.year > thisSeason && nextBudget !== null ? 'expected' : 'flat',
     })),
     // What comes off the books after this season
     comingOff: {

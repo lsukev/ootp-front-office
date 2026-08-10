@@ -30,6 +30,8 @@ export const IDS = {
   extended: 14,
   /** On the injured list — the best bat on the roster, and unavailable. */
   injured: 31,
+  /** Just drafted out of high school and assigned to the farm. */
+  draftee: 32,
   /** Parked on the club with no roster spot; must not appear on the roster. */
   unrostered: 15,
   /** On a minor-league contract — not payroll. */
@@ -296,6 +298,19 @@ export function buildFixture(): string {
      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 5, 1, ?, 10, 0, 1, 1, 30, 2, 1, 20, 25, 1.0)`
   );
   bat.run(IDS.starter, SEASON, IDS.mlbTeam, IDS.league, 1, 200, 180, 45, 8);
+
+  // A signed high-school draftee: on a farm club, with a monstrous school line
+  // and not one professional plate appearance. OOTP files the school season
+  // under no league at all, and counting it made him look ready for a promotion
+  // on the strength of what he did to schoolboys.
+  player.run(IDS.draftee, 'Prep', 'Draftee', 18, 6, 0, 32, IDS.aaaTeam, IDS.mlbTeam);
+  status.run(IDS.draftee, 0, 0, 0, 0);
+  value.run(IDS.draftee, 400, 900, 400, 30, 60);
+  roster.run(IDS.aaaTeam, IDS.draftee);
+  batting.run(IDS.draftee, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55);
+  fielding.run(IDS.draftee, 20, 50, 50, 50, 50, 50, 50, 50, 50);
+  //           player          year    team          league  level  pa   ab   h    hr
+  bat.run(IDS.draftee, SEASON, 0, 0, 11, 220, 190, 95, 25);
   bat.run(IDS.starter, SEASON - 6, IDS.aaaTeam, IDS.league, 4, 400, 360, 130, 20);
 
   db.prepare(`INSERT INTO team_financials VALUES (?, 200000000, 18700000, 0, 0, 1, 1, 0, 0, 0, 0, 50)`).run(IDS.mlbTeam);

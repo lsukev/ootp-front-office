@@ -117,6 +117,17 @@ orgRoutes.get('/depth-chart/:orgId', (req, res) => {
 });
 
 /** Aggregate latest-season stats per player (split 1 = overall). */
+/**
+ * OOTP keeps a drafted amateur's school season in career stats alongside his
+ * professional one, under no league at all (`league_id = 0`, levels 10 and 11
+ * for college and high school). Summing every row therefore credits a new
+ * draftee with what he did to high schoolers — six WAR and a full season of
+ * plate appearances — which sails past the promotion gates the moment he signs
+ * and is assigned to an affiliate.
+ *
+ * Only professional lines count. In this save the two are cleanly separable:
+ * every `league_id = 0` row is level 10 or 11, and no real league uses either.
+ */
 function seasonBatting(): Map<number, Record<string, number>> {
   const t = 'players_career_batting_stats';
   const out = new Map<number, Record<string, number>>();
@@ -127,13 +138,14 @@ function seasonBatting(): Map<number, Record<string, number>> {
       `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t,
               SUM(hr) AS hr, SUM(bb) AS bb, SUM(hp) AS hp, SUM(k) AS k, SUM(sf) AS sf,
               SUM(sb) AS sb, SUM(war) AS war
-       FROM "${t}" WHERE year = ? AND split_id = 1 GROUP BY player_id`
+       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
     )
     .all(year) as Array<Record<string, number>>;
   for (const r of rows) out.set(r.player_id, r);
   return out;
 }
 
+/** Professional lines only, for the same reason as {@link seasonBatting}. */
 function seasonPitching(): Map<number, Record<string, number>> {
   const t = 'players_career_pitching_stats';
   const out = new Map<number, Record<string, number>>();
@@ -143,7 +155,7 @@ function seasonPitching(): Map<number, Record<string, number>> {
     .prepare(
       `SELECT player_id, SUM(outs) AS outs, SUM(er) AS er, SUM(bb) AS bb, SUM(k) AS k,
               SUM(bf) AS bf, SUM(ha) AS ha, SUM(g) AS g, SUM(gs) AS gs, SUM(war) AS war
-       FROM "${t}" WHERE year = ? AND split_id = 1 GROUP BY player_id`
+       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
     )
     .all(year) as Array<Record<string, number>>;
   for (const r of rows) out.set(r.player_id, r);

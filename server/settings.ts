@@ -23,11 +23,21 @@ export interface Settings {
   theme: 'system' | 'dark' | 'light';
   /** Model id used by every AI feature. See models.ts for the picker's list. */
   model: string;
+  /**
+   * What you expect the owner to hand you next season, per club, in dollars.
+   *
+   * OOTP does not publish a future budget — it is not set until the offseason —
+   * so future headroom had to assume this year's holds flat. On a club whose
+   * budget swings, that is the wrong number to plan against, and you are the
+   * one who knows which way the owner leans. Absent an entry, flat it stays.
+   */
+  nextSeasonBudget: Record<string, number>;
 }
 
 const DEFAULTS: Settings = {
   autoImport: true,
   useTeamColors: true,
+  nextSeasonBudget: {},
   defaultOrgId: null,
   theme: 'system',
   model: 'claude-opus-5',
@@ -166,6 +176,22 @@ export const settingsRoutes = Router();
 
 settingsRoutes.get('/settings', (_req, res) => {
   res.json({ settings: loadSettings(), apiKey: apiKeyStatus(), dataDir: DATA_DIR });
+});
+
+/**
+ * The budget you expect next season for one club. Zero or null clears it and
+ * returns that club to assuming this year's budget holds flat.
+ */
+settingsRoutes.put('/next-season-budget/:orgId', (req, res) => {
+  const orgId = String(Number(req.params.orgId));
+  const raw = (req.body as { amount?: unknown }).amount;
+  const amount = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : null;
+  const current = loadSettings();
+  const next = { ...current.nextSeasonBudget };
+  if (amount === null) delete next[orgId];
+  else next[orgId] = amount;
+  writeSettings({ ...current, nextSeasonBudget: next });
+  res.json({ ok: true, nextSeasonBudget: amount });
 });
 
 settingsRoutes.post('/settings', (req, res) => {

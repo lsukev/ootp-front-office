@@ -1537,3 +1537,14 @@ button.cta {
   border-radius: 2px;
 }
 .farm-bar-wrap span { position: relative; }
+
+/* ── Expected budget for next season ──────────────────────── */
+
+.next-budget {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 10px 0 4px; font-size: 13px;
+}
+.next-budget label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+.next-budget input { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+.next-budget-unit { color: var(--muted); }
+.next-budget .muted { font-size: 12px; }

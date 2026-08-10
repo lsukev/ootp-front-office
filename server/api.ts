@@ -318,7 +318,9 @@ api.get('/roster/:teamId', (req, res) => {
                 SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
                 SUM(war) AS war
          FROM players_career_batting_stats
-         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+         -- A drafted amateur's school season lives here under no league at
+         -- all, and summing it in credits him with what he did to schoolboys
+         WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
       )
       .all(statYear) as Array<Record<string, number>>;
     for (const row of rows) {
@@ -374,7 +376,7 @@ api.get('/roster/:teamId', (req, res) => {
                 SUM(gs) AS gs, SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld,
                 SUM(war) AS war
          FROM players_career_pitching_stats
-         WHERE year = ? AND split_id = 1 GROUP BY player_id`
+         WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
       )
       .all(statYear) as Array<Record<string, number>>;
     for (const row of rows) {

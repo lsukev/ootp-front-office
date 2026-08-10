@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { apiGet } from '../api';
+import { apiGet, apiPut } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
 import { Sparkline } from '../Chart';
 import { Th } from '../Th';
 
-interface Commitment { year: number; total: number; players: number; headroom: number | null }
+interface Commitment { year: number; total: number; players: number; headroom: number | null; budgetUsed?: 'expected' | 'flat' }
 interface PayrollPlayer {
   player_id: number;
   name: string;
@@ -28,6 +28,8 @@ interface PayrollData {
   } | null;
   deadMoney: { total: number; players: Array<{ player_id: number; name: string; salary: number }> };
   commitments: Commitment[];
+  /** What you told the app to expect next season, or null to assume flat. */
+  nextSeasonBudget: number | null;
   comingOff: {
     count: number; money: number;
     players: Array<{ player_id: number; name: string; age: number; salary: number }>;
@@ -48,17 +50,38 @@ const TIP_COMMITTED =
   'projection: arbitration raises and yet-to-be-signed players are not in it, which is why ' +
   'future seasons look so light.';
 const TIP_HEADROOM =
-  'Budget minus committed salary. Future seasons assume the budget stays where it is today, ' +
-  'since the save does not publish future budgets — treat the later years as a shape, not a forecast.';
+  'Budget minus committed salary. OOTP never publishes a future budget — the owner does not set ' +
+  'one until the offseason — so seasons after this one assume today\'s budget holds flat unless ' +
+  'you enter what you expect. Either way, treat the later years as a shape, not a forecast.';
 
 export function Payroll({ orgId }: { orgId: number }) {
   const [data, setData] = useState<PayrollData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [budgetDraft, setBudgetDraft] = useState('');
+
+  /** Entered in millions, which is how a budget is actually talked about. */
+  const saveNextBudget = async () => {
+    const millions = Number(budgetDraft);
+    const amount = budgetDraft.trim() === '' || !Number.isFinite(millions) || millions <= 0
+      ? null
+      : millions * 1_000_000;
+    try {
+      await apiPut(`/api/next-season-budget/${orgId}`, { amount });
+      setData(await apiGet<PayrollData>(`/api/payroll/${orgId}`));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   useEffect(() => {
     setData(null);
     setError(null);
-    apiGet<PayrollData>(`/api/payroll/${orgId}`).then(setData).catch((e) => setError(e.message));
+    apiGet<PayrollData>(`/api/payroll/${orgId}`)
+      .then((d) => {
+        setData(d);
+        setBudgetDraft(d.nextSeasonBudget ? String(d.nextSeasonBudget / 1_000_000) : '');
+      })
+      .catch((e) => setError(e.message));
   }, [orgId]);
 
   if (error) return <div className="banner error">{error}</div>;
@@ -117,9 +140,31 @@ export function Payroll({ orgId }: { orgId: number }) {
               <span className="muted commit-players">{c.players} player{c.players === 1 ? '' : 's'}</span>
               <span className={`commit-room ${(c.headroom ?? 0) >= 0 ? 'good-text' : 'bad-text'}`}>
                 {c.headroom === null ? '' : `${money(c.headroom)} free`}
+                {c.budgetUsed === 'expected' && <span className="muted"> *</span>}
               </span>
             </div>
           ))}
+        </div>
+        <div className="next-budget">
+          <label htmlFor="next-budget">Budget you expect next season</label>
+          <span className="next-budget-unit">$</span>
+          <input
+            id="next-budget"
+            type="number"
+            min="0"
+            step="1"
+            placeholder={f ? String(Math.round(f.budget / 1_000_000)) : ''}
+            value={budgetDraft}
+            onChange={(e) => setBudgetDraft(e.target.value)}
+            onBlur={saveNextBudget}
+            onKeyDown={(e) => e.key === 'Enter' && saveNextBudget()}
+          />
+          <span className="next-budget-unit">M</span>
+          <span className="muted">
+            {data.nextSeasonBudget
+              ? 'Seasons after this one are measured against it, marked *.'
+              : 'Leave it empty to assume this year\u2019s budget holds flat.'}
+          </span>
         </div>
         <p className="muted hint-line">
           The dashed line is today&rsquo;s budget. <Tip label="Headroom" tip={TIP_HEADROOM} /> in later

@@ -20,8 +20,10 @@ describe('roster membership', () => {
   it('does not empty the affiliate, whose players are not MLB-active', async () => {
     const { players } = await request(`/api/roster/${IDS.aaaTeam}`);
     // The naive fix — reusing the is_active guard — would return nothing here
-    expect(players.length).toBe(2);
-    expect(players.map((p: { last_name: string }) => p.last_name).sort()).toEqual(['Deal', 'Tioned']);
+    expect(players.length).toBe(3);
+    expect(players.map((p: { last_name: string }) => p.last_name).sort()).toEqual([
+      'Deal', 'Draftee', 'Tioned',
+    ]);
   });
 
   it('carries OOTP’s own 20-80 grades', async () => {
