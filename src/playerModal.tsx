@@ -36,7 +36,12 @@ export const TIP_OA =
   'Deliberately coarse: it moves in five-point steps and the whole league fits into twelve grades, ' +
   'so dozens of players share any given number. Value and Talent beside it are continuous and are ' +
   'compared against others in the same role, which is why those — not this — drive the rankings and ' +
-  'recommendations elsewhere in the app.';
+  'recommendations elsewhere in the app.\n\n' +
+  'It is on ONE major-league scale at every level: a Triple-A regular grades around 30-40 here, not ' +
+  '50. So a prospect can be hitting well for his level and still show a low Overall. The rate stats ' +
+  'on his card — OPS+, wRC+ — are the opposite, measured against the league he actually played in. ' +
+  'The two are answering different questions, which is worth remembering before reading a minor ' +
+  'leaguer as major-league ready.';
 
 export const TIP_VALUE =
   "OOTP's evaluation of the player's current worth to a club, shown as a percentile against others " +
