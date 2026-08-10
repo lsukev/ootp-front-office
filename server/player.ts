@@ -278,7 +278,8 @@ playerRoutes.get('/player/:id', (req, res) => {
             `SELECT year, level_id, position, SUM(g) AS g, SUM(gs) AS gs, SUM(ip) AS innings,
                     SUM(po) AS po, SUM(a) AS a, SUM(e) AS e, SUM(dp) AS dp
              FROM players_career_fielding_stats
-             WHERE player_id = ? AND split_id = 1
+             -- See api.ts: the current season is written with split_id 0
+             WHERE player_id = ?
              GROUP BY year, level_id, position
              HAVING SUM(g) > 0
              ORDER BY year DESC, SUM(g) DESC`

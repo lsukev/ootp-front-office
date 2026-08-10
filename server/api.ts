@@ -329,6 +329,42 @@ api.get('/roster/:teamId', (req, res) => {
   // OOTP's own 20-80 grades, for cross-checking against the game's own screens
   const playerValues = valuesByPlayer();
 
+  // Season fielding for the roster's optional defensive columns. Summed across
+  // positions: a utility man's total workload is the useful number in a roster
+  // row, and his split by position is on his card.
+  const fieldingByPlayer = new Map<number, Record<string, number | null>>();
+  if (tableExists('players_career_fielding_stats') && statYear !== null) {
+    const rows = db
+      .prepare(
+        `SELECT player_id, SUM(g) AS fg, SUM(gs) AS fgs, SUM(ip) AS finn,
+                SUM(po) AS po, SUM(a) AS a, SUM(e) AS e, SUM(dp) AS dp
+         FROM players_career_fielding_stats
+         -- No split filter: OOTP writes the CURRENT season's fielding with
+         -- split_id 0 and past seasons with 1, so filtering on 1 silently
+         -- dropped this year entirely. Each year carries exactly one split id,
+         -- so leaving it out cannot double count. Batting and pitching are
+         -- different — they really do split 1/2/3 — and keep their filter.
+         WHERE year = ? GROUP BY player_id`
+      )
+      .all(statYear) as Array<Record<string, number>>;
+    for (const r of rows) {
+      const chances = (r.po ?? 0) + (r.a ?? 0) + (r.e ?? 0);
+      const innings = r.finn ?? 0;
+      fieldingByPlayer.set(r.player_id, {
+        fg: r.fg ?? 0,
+        fgs: r.fgs ?? 0,
+        finn: innings,
+        po: r.po ?? 0,
+        a: r.a ?? 0,
+        e: r.e ?? 0,
+        dp: r.dp ?? 0,
+        fpct: chances > 0 ? Math.round(((r.po + r.a) / chances) * 1000) / 1000 : null,
+        // Chances handled per nine innings — the standard way to express range
+        rf9: innings > 0 ? Math.round((((r.po + r.a) / innings) * 9) * 100) / 100 : null,
+      });
+    }
+  }
+
   const pitchingByPlayer = new Map<number, Record<string, number | null>>();
   if (tableExists('players_career_pitching_stats') && statYear !== null && baseline) {
     const rows = db
@@ -363,6 +399,7 @@ api.get('/roster/:teamId', (req, res) => {
       batsName: BATS[p.bats as number] ?? String(p.bats ?? '?'),
       throwsName: THROWS[p.throws as number] ?? String(p.throws ?? '?'),
       ratings: ratingsByPlayer.get(id) ?? {},
+      fielding: fieldingByPlayer.get(id) ?? null,
       oaRating: playerValues.get(id)?.oaRating ?? null,
       potRating: playerValues.get(id)?.potRating ?? null,
       batting: battingByPlayer.get(id) ?? null,

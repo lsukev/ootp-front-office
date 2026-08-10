@@ -16,7 +16,23 @@ permissions:
 # .exe files with the Apple certificate — producing an invalid Authenticode
 # signature that is worse for users than shipping unsigned.
 jobs:
+  # Gates the release. Both packaging jobs wait on it, so a regression caught
+  # here never reaches an installer.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
   macos:
+    needs: test
     name: macOS
     runs-on: macos-latest
     steps:
@@ -63,6 +79,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    needs: test
     name: Windows
     runs-on: windows-latest
     steps:

@@ -18,7 +18,9 @@
     "dist:mac": "npm run abi:electron && npm run desktop:build && electron-builder --mac",
     "dist:win": "npm run abi:electron && npm run desktop:build && electron-builder --win",
     "abi:electron": "electron-builder install-app-deps",
-    "abi:node": "npm rebuild better-sqlite3"
+    "abi:node": "npm rebuild better-sqlite3",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -43,6 +45,7 @@
     "react-dom": "^18.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.1.10"
   }
 }

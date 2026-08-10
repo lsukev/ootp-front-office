@@ -194,6 +194,28 @@ Then browse `http://localhost:5178` on the remote computer. Or use
 
 The rest of this section is for running from source.
 
+## Tests
+
+```bash
+npm test
+```
+
+Vitest, against a hand-built fixture league in a temp directory — no save
+required, so it runs in CI and gates every release. The fixture exists to pin
+down the cases that have actually shipped as bugs: a player optioned to the
+affiliate, one traded away with nothing retained, a signed extension that has
+not started, a man parked on a club with no roster spot, and a player sitting
+on the free-agency service boundary.
+
+Two more checks need a real import and so are run by hand:
+
+```bash
+npm run check:stats    # OPS+, wRC+, ERA+ and FIP centre on 100 in every league
+npm run check:theme    # all 30 clubs pass WCAG AA in both modes
+```
+
+---
+
 ## Requirements
 
 - **OOTP Baseball 27** with at least one save

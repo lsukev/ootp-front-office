@@ -75,6 +75,12 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
         .get(orgId) as Record<string, number> | undefined) ?? null
     : null;
 
+  // Payroll means major-league contracts, which is what OOTP's own figure
+  // counts and how the money actually works: a man on the 40-man optioned to
+  // Triple-A is still paid his major-league salary, while a minor-league deal
+  // is not payroll at all. Counting every contract in the organization put the
+  // total consistently above OOTP's own number.
+  //
   // Players in the organization, PLUS anyone this club still pays after a trade
   // or release.
   //
@@ -99,7 +105,7 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
        FROM players_contract c
        JOIN players p ON p.player_id = c.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = c.player_id
-       WHERE p.retired = 0 AND c.years >= 1
+       WHERE p.retired = 0 AND c.years >= 1 AND c.is_major = 1
          AND (p.organization_id = ? OR (c.contract_team_id = ? AND c.retained != 0))`
     )
     .all(orgId, orgId) as Array<ContractRow & {

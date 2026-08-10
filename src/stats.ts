@@ -13,7 +13,7 @@ export interface StatDef {
   label: string;
   desc: string;
   format: StatFormat;
-  section: 'Counting' | 'Rate' | 'Advanced';
+  section: 'Counting' | 'Rate' | 'Advanced' | 'Fielding';
   /** Lower is better — flips the color scale on plus/rate stats. */
   lowerIsBetter?: boolean;
 }
@@ -77,6 +77,42 @@ export const PITCHING_STATS: StatDef[] = [
   { key: 'war', label: 'WAR', desc: 'Wins Above Replacement, as calculated by OOTP', format: 'dec1', section: 'Advanced' },
 ];
 
+/**
+ * Season fielding, summed across every position a man played.
+ *
+ * A utility player's total workload is what belongs in a roster row; the split
+ * by position lives on his card, where there is room for it.
+ */
+export const FIELDING_STATS: StatDef[] = [
+  { key: 'fg', label: 'G', desc: 'Games played in the field', format: 'int', section: 'Fielding' },
+  { key: 'fgs', label: 'GS', desc: 'Games started in the field', format: 'int', section: 'Fielding' },
+  { key: 'finn', label: 'Inn', desc: 'Innings played in the field', format: 'int', section: 'Fielding' },
+  { key: 'po', label: 'PO', desc: 'Putouts', format: 'int', section: 'Fielding' },
+  { key: 'a', label: 'A', desc: 'Assists', format: 'int', section: 'Fielding' },
+  { key: 'e', label: 'E', desc: 'Errors', format: 'int', section: 'Fielding' },
+  { key: 'dp', label: 'DP', desc: 'Double plays turned', format: 'int', section: 'Fielding' },
+  {
+    key: 'fpct',
+    label: 'FPCT',
+    desc:
+      'Fielding percentage — putouts plus assists over total chances. It says how often a player ' +
+      'handled what he reached, and nothing about how much he reached, so a statue with safe hands ' +
+      'can lead the league in it.',
+    format: 'avg3',
+    section: 'Fielding',
+  },
+  {
+    key: 'rf9',
+    label: 'RF/9',
+    desc:
+      'Range factor — putouts plus assists per nine innings. It measures how much a fielder is ' +
+      'involved, which is the part fielding percentage misses. Compare it only within a position: ' +
+      'a first baseman handles far more chances than a left fielder.',
+    format: 'dec2',
+    section: 'Fielding',
+  },
+];
+
 export const DEFAULT_BATTING = ['pa', 'avg', 'obp', 'slg', 'ops', 'opsPlus', 'wrcPlus', 'hr', 'rbi', 'sb', 'war'];
 export const DEFAULT_PITCHING = ['g', 'gs', 'w', 'l', 'sv', 'ip', 'era', 'eraPlus', 'fip', 'whip', 'k9', 'war'];
 
@@ -105,8 +141,15 @@ export function saveColumns(group: StatGroup, keys: string[]): void {
   }
 }
 
+/** Fielding is offered in both groups — everyone on the field has a glove. */
 export const statsFor = (group: StatGroup): StatDef[] =>
-  group === 'batting' ? BATTING_STATS : PITCHING_STATS;
+  group === 'batting'
+    ? [...BATTING_STATS, ...FIELDING_STATS]
+    : [...PITCHING_STATS, ...FIELDING_STATS];
+
+const FIELDING_KEYS = new Set(FIELDING_STATS.map((f) => f.key));
+/** Fielding lives in its own block on the payload, not with the hitting line. */
+export const isFieldingStat = (key: string): boolean => FIELDING_KEYS.has(key);
 
 export const findStat = (group: StatGroup, key: string): StatDef | undefined =>
   statsFor(group).find((s) => s.key === key);

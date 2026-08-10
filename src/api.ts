@@ -44,6 +44,8 @@ export interface RosterPlayer {
   throwsName: string;
   uniform_number: number | null;
   ratings: Record<string, number>;
+  /** Season fielding, summed across positions. Null when he has not fielded. */
+  fielding: Record<string, number | null> | null;
   oaRating: number | null;
   potRating: number | null;
   batting: Record<string, number | null> | null;
