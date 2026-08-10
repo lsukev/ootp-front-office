@@ -189,7 +189,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   // Who this club has on the payroll. A save missing a seat simply shows fewer
   // tabs rather than offering a conversation with nobody.
   useEffect(() => {
-    apiGet<{ staff: StaffMember[] }>(`/api/staff/${orgId}`)
+    apiGet<{ staff: StaffMember[] }>(`/api/chat-staff/${orgId}`)
       .then((r) => {
         const people = r.staff.length > 0 ? r.staff : FALLBACK_STAFF;
         setStaff(people);

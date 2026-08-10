@@ -32,8 +32,14 @@ const historyPath = (orgId: number, persona: string) =>
  */
 const KEEP_TURNS = 1000;
 
-/** Who this club can put on the phone. */
-chatRoutes.get('/staff/:orgId', (req, res) => {
+/**
+ * Who this club can put on the phone.
+ *
+ * Named for the chat rather than for the staff: `/staff/:orgId` already belongs
+ * to the Coaching Staff page, and registering it twice silently handed that
+ * page this payload instead of its own.
+ */
+chatRoutes.get('/chat-staff/:orgId', (req, res) => {
   const people = personasFor(Number(req.params.orgId));
   res.json({ staff: people.map((p) => ({ id: p.id, name: p.name, role: p.role })) });
 });
