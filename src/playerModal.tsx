@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
 
@@ -439,6 +439,8 @@ function Dossier({ d }: { d: PlayerDossier }) {
         </section>
       )}
 
+      <StaffNotes playerId={d.player_id} />
+
       {d.contact && (d.contact.battedBalls ?? 0) > 0 && (
         <section>
           <h3>
@@ -602,5 +604,66 @@ function ContactStat({
       <span className="contact-value">{value === null || value === undefined ? '—' : `${value}${unit}`}</span>
       {league !== undefined && <span className="contact-league">lg {league}{unit}</span>}
     </div>
+  );
+}
+
+interface Note {
+  id: number;
+  source: string | null;
+  body: string;
+  game_date: string | null;
+}
+
+/**
+ * What the staff have said about this man, kept on his page.
+ *
+ * Advice given in a chat window is only useful while you can still see it. A
+ * plan for a pitcher coming back from the injured list is needed weeks later,
+ * at the moment he is activated, which is exactly when the conversation is
+ * long gone — so it is filed here, with who said it and the date of the game
+ * when they did.
+ */
+function StaffNotes({ playerId }: { playerId: number }) {
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  const load = useCallback(() => {
+    apiGet<{ notes: Note[] }>(`/api/player-notes/${playerId}`)
+      .then((r) => setNotes(r.notes))
+      // Notes live in the history database, which a save exported elsewhere may
+      // not have; the rest of the card should not care
+      .catch(() => setNotes([]));
+  }, [playerId]);
+
+  useEffect(load, [load]);
+
+  const remove = async (id: number) => {
+    try {
+      await apiDelete(`/api/player-notes/${id}`);
+      load();
+    } catch {
+      /* leave it on screen rather than lying about having removed it */
+    }
+  };
+
+  if (notes.length === 0) return null;
+
+  return (
+    <section>
+      <h3>Staff Notes</h3>
+      {notes.map((n) => (
+        <div key={n.id} className="staff-note">
+          <div className="staff-note-head">
+            <strong>{n.source ?? 'You'}</strong>
+            {n.game_date && <span className="muted"> · {n.game_date}</span>}
+            <button className="link-button staff-note-x" onClick={() => void remove(n.id)}>
+              Remove
+            </button>
+          </div>
+          {n.body.split('\n').filter((l) => l.trim()).map((line, i) => (
+            <p key={i}>{line.replace(/\*\*/g, '')}</p>
+          ))}
+        </div>
+      ))}
+    </section>
   );
 }

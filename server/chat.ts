@@ -382,6 +382,8 @@ function systemPrompt(orgId: number, persona: Persona): string {
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** In a room, which member of staff said it. Absent in a one-to-one thread. */
+  speaker?: string;
 }
 
 /**
@@ -521,11 +523,81 @@ function loadContext(orgId: number, persona: string): StoredContext | null {
   }
 }
 
+/**
+ * One member of staff answering once: run the model, execute whatever tools it
+ * asks for, feed the results back, repeat until it answers in plain text.
+ *
+ * Pulled out of the route so a room can run it once per person in turn.
+ */
+async function runToolLoop(opts: {
+  client: Anthropic;
+  model: string;
+  thinking: Anthropic.ThinkingConfigParam | undefined;
+  system: Anthropic.TextBlockParam[];
+  messages: Anthropic.MessageParam[];
+  send: (event: string, data: unknown) => void;
+}): Promise<{ answer: string; refused: boolean }> {
+  const { client, model, thinking, system, messages, send } = opts;
+  let answer = '';
+  for (let turn = 0; turn < 12; turn++) {
+    markCachePoint(messages);
+    const stream = client.messages.stream({
+      model,
+      max_tokens: 8000,
+      ...(thinking ? { thinking } : {}),
+      system,
+      tools: TOOLS,
+      messages,
+    });
+
+    stream.on('text', (delta) => {
+      answer += delta;
+      send('text', { delta });
+    });
+
+    const message = await stream.finalMessage();
+    if (message.stop_reason === 'refusal') {
+      send('error', { message: 'The model declined to answer that.' });
+      return { answer, refused: true };
+    }
+
+    messages.push({ role: 'assistant', content: message.content });
+
+    const toolUses = message.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    );
+    if (toolUses.length === 0) break;
+
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const use of toolUses) {
+      send('tool', { name: use.name });
+      try {
+        const output = await runTool(use.name, (use.input ?? {}) as Record<string, unknown>);
+        results.push({ type: 'tool_result', tool_use_id: use.id, content: output });
+      } catch (err) {
+        results.push({
+          type: 'tool_result',
+          tool_use_id: use.id,
+          content: err instanceof Error ? err.message : String(err),
+          is_error: true,
+        });
+      }
+    }
+    // All results for one assistant turn go back in a single user message
+    messages.push({ role: 'user', content: results });
+  }
+  return { answer, refused: false };
+}
+
+/** At most this many voices in a room: past four it stops being a conversation. */
+const ROOM_LIMIT = 4;
+
 chatRoutes.post('/chat', async (req, res) => {
-  const { messages: history, orgId, persona: personaId } = req.body as {
+  const { messages: history, orgId, persona: personaId, members: memberIds } = req.body as {
     messages?: ChatMessage[];
     orgId?: number;
     persona?: string;
+    members?: string[];
   };
   if (!tableExists('players')) {
     return res.status(400).json({ error: 'No data imported yet — pick a save first.' });
@@ -537,10 +609,19 @@ chatRoutes.post('/chat', async (req, res) => {
   if (!key) return res.status(401).json({ error: NO_KEY_MESSAGE });
 
   const team = Number.isFinite(Number(orgId)) ? Number(orgId) : defaultOrgId();
+  const roster = personasFor(team);
+  const isRoom = String(personaId) === 'room';
+
   // A club that has fired its scout cannot put one on the phone, so an unknown
   // or vacant seat falls back to the analyst rather than answering as nobody
-  const persona = personaById(team, String(personaId ?? 'analyst')) ??
-    personasFor(team)[0];
+  const solo = personaById(team, String(personaId ?? 'analyst')) ?? roster[0];
+  const room = isRoom
+    ? (Array.isArray(memberIds) ? memberIds : [])
+        .map((id) => roster.find((p) => p.id === id))
+        .filter((p): p is Persona => p !== undefined)
+        .slice(0, ROOM_LIMIT)
+    : [];
+  const speakers = isRoom ? (room.length > 0 ? room : [roster[0]]) : [solo];
 
   // Server-sent events: the answer streams in, and tool calls are announced as
   // they happen so the user sees the assistant working rather than a spinner.
@@ -553,17 +634,6 @@ chatRoutes.post('/chat', async (req, res) => {
   };
 
   const client = new Anthropic({ apiKey: key });
-
-  // Resume the stored transcript, tool results and all, when this thread is the
-  // one it belongs to. Anything else — a cleared conversation, a thread edited
-  // elsewhere — rebuilds from what the client sent, which costs only the
-  // evidence and never produces a mismatched reply.
-  const stored = loadContext(team, persona.id);
-  const resuming = stored !== null && continuesThread(stored.visible, history);
-  const messages: Anthropic.MessageParam[] = resuming ? trimTranscript(stored.messages) : [];
-  stripCachePoints(messages);
-  appendPlain(messages, resuming ? history.slice(stored.visible.length) : history);
-
   const model = aiModel();
   // Only send the thinking parameter to a model the API reports as supporting
   // it. Omitting it is valid everywhere; sending it to a model that does not
@@ -571,76 +641,91 @@ chatRoutes.post('/chat', async (req, res) => {
   const thinking: Anthropic.ThinkingConfigParam | undefined =
     (await supportsAdaptiveThinking(model)) ? { type: 'adaptive' } : undefined;
 
-  // The tools and the system prompt are identical on every call and sit ahead
-  // of the conversation, so one breakpoint here caches both.
-  const system: Anthropic.TextBlockParam[] = [
-    { type: 'text', text: systemPrompt(team, persona), cache_control: { type: 'ephemeral' } },
-  ];
-
-  // Kept so the stored transcript ends exactly where the window does, which is
-  // what lets the next question recognise this thread as its own.
-  let answer = '';
-
   try {
-    // Manual tool-use loop: run the model, execute whatever tools it asks for,
-    // feed the results back, and repeat until it answers in plain text.
-    for (let turn = 0; turn < 12; turn++) {
-      markCachePoint(messages);
-      const stream = client.messages.stream({
-        model,
-        max_tokens: 8000,
-        ...(thinking ? { thinking } : {}),
-        system,
-        tools: TOOLS,
-        messages,
+    if (!isRoom) {
+      const persona = speakers[0];
+      // Resume the stored transcript, tool results and all, when this thread is
+      // the one it belongs to. Anything else — a cleared conversation, a thread
+      // edited elsewhere — rebuilds from what the client sent.
+      const stored = loadContext(team, persona.id);
+      const resuming = stored !== null && continuesThread(stored.visible, history);
+      const messages: Anthropic.MessageParam[] = resuming ? trimTranscript(stored.messages) : [];
+      stripCachePoints(messages);
+      appendPlain(messages, resuming ? history.slice(stored.visible.length) : history);
+
+      const system: Anthropic.TextBlockParam[] = [
+        { type: 'text', text: systemPrompt(team, persona), cache_control: { type: 'ephemeral' } },
+      ];
+      const { answer } = await runToolLoop({ client, model, thinking, system, messages, send });
+
+      // Only a completed answer is stored. A transcript left ending on a tool
+      // call whose result never arrived is one the API refuses outright, so a
+      // failed turn keeps the last good transcript rather than poisoning it.
+      stripCachePoints(messages);
+      saveContext(team, persona.id, {
+        visible: [...history, { role: 'assistant', content: answer }],
+        messages: stripThinking(messages),
       });
-
-      stream.on('text', (delta) => {
-        answer += delta;
-        send('text', { delta });
-      });
-
-      const message = await stream.finalMessage();
-
-      if (message.stop_reason === 'refusal') {
-        send('error', { message: 'The model declined to answer that.' });
-        break;
-      }
-
-      messages.push({ role: 'assistant', content: message.content });
-
-      const toolUses = message.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-      );
-      if (toolUses.length === 0) break;
-
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const use of toolUses) {
-        send('tool', { name: use.name });
-        try {
-          const output = await runTool(use.name, (use.input ?? {}) as Record<string, unknown>);
-          results.push({ type: 'tool_result', tool_use_id: use.id, content: output });
-        } catch (err) {
-          results.push({
-            type: 'tool_result',
-            tool_use_id: use.id,
-            content: err instanceof Error ? err.message : String(err),
-            is_error: true,
-          });
-        }
-      }
-      // All results for one assistant turn go back in a single user message
-      messages.push({ role: 'user', content: results });
+      send('done', {});
+      return;
     }
 
-    // Only a completed answer is stored. A transcript left ending on a tool
-    // call whose result never arrived is one the API refuses outright, so a
-    // failed turn keeps the last good transcript rather than poisoning it.
-    stripCachePoints(messages);
-    saveContext(team, persona.id, {
-      visible: [...history, { role: 'assistant', content: answer }],
-      messages: stripThinking(messages),
-    });
+    /*
+     * A room. Each person answers in turn and can see what colleagues have
+     * already said this turn, which is the whole point — the trainer's view of
+     * a pitcher coming back is worth more next to the pitching coach's, and
+     * worth most when one of them says the other is wrong.
+     *
+     * Rooms rebuild from the visible thread each turn rather than resuming a
+     * stored transcript. Keeping one per speaker per room composition is more
+     * bookkeeping than it is worth, and everyone still calls tools fresh, so
+     * nothing here is answered from memory.
+     */
+    const saidThisTurn: Array<{ name: string; role: string; text: string }> = [];
+    for (const person of speakers) {
+      send('speaker', { id: person.id, name: person.name, role: person.role });
+
+      const messages: Anthropic.MessageParam[] = [];
+      appendPlain(
+        messages,
+        history.map((m) =>
+          m.role === 'assistant' && m.speaker
+            ? { ...m, content: `${m.speaker}: ${m.content}` }
+            : m
+        )
+      );
+      if (saidThisTurn.length > 0) {
+        messages.push({
+          role: 'user',
+          content:
+            'Others in the room have already answered:\n\n' +
+            saidThisTurn.map((s) => `${s.name} (${s.role}):\n${s.text}`).join('\n\n') +
+            '\n\nGive your own view. Where you agree, say so briefly and add what they missed ' +
+            'rather than repeating them. Where you disagree, say so plainly and name the man ' +
+            'you are disagreeing with.',
+        });
+      }
+
+      const others = speakers.filter((p) => p.id !== person.id);
+      const system: Anthropic.TextBlockParam[] = [
+        {
+          type: 'text',
+          text:
+            systemPrompt(team, person) +
+            `\n\nYou are in a room with the general manager` +
+            (others.length > 0
+              ? ` and ${others.map((o) => `${o.name} (${o.role})`).join(', ')}`
+              : '') +
+            '. This is a discussion rather than a memo: keep it short, speak only to the part ' +
+            'that is properly yours, and do not summarise what the others cover.',
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
+
+      const { answer, refused } = await runToolLoop({ client, model, thinking, system, messages, send });
+      saidThisTurn.push({ name: person.name, role: person.role, text: answer });
+      if (refused) break;
+    }
     send('done', {});
   } catch (err) {
     const e = err as Error & { status?: number };

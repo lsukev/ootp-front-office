@@ -17,7 +17,8 @@ type Entry = [id: number, name: string];
 let indexPromise: Promise<Entry[]> | null = null;
 let indexOrg: number | null = null;
 
-function nameIndex(orgId: number): Promise<Entry[]> {
+/** Shared so other features can find the players an answer talks about. */
+export function nameIndex(orgId: number): Promise<Entry[]> {
   if (indexPromise && indexOrg === orgId) return indexPromise;
   indexOrg = orgId;
   indexPromise = apiGet<{ names: Entry[] }>(`/api/name-index/${orgId}`)

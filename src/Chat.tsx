@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet, apiPut } from './api';
-import { PlayerNames } from './PlayerNames';
+import { apiGet, apiPost, apiPut } from './api';
+import { PlayerNames, nameIndex } from './PlayerNames';
 
 /**
  * Ask-the-save chat. The server streams the answer over SSE and announces each
@@ -11,6 +11,9 @@ import { PlayerNames } from './PlayerNames';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  /** In a room, who said it. Absent in a one-to-one thread. */
+  speaker?: string;
+  speakerRole?: string;
   /** Tools the assistant called while producing this answer. */
   tools?: string[];
   /** ISO send time. Absent on threads saved before timestamps existed. */
@@ -55,7 +58,10 @@ interface StaffMember { id: string; name: string; role: string }
  * a strip of five, and a name on its own is no help at all to anyone who does
  * not already know who Drew Toussaint is.
  */
+const ROOM_ID = 'room';
+
 const ROLE_LABEL: Record<string, string> = {
+  room: 'Everyone',
   analyst: 'Analyst',
   manager: 'Manager',
   pitching: 'Pitching Coach',
@@ -89,6 +95,11 @@ const STARTERS_BY_PERSONA: Record<string, string[]> = {
     'Who is pressing at the plate right now?',
     'Is anyone hitting into bad luck?',
     'Which of our young bats is closest to figuring it out?',
+  ],
+  room: [
+    'Who is hurt, and how should we handle him when he is back?',
+    'Should we go after a starter, and can we afford one?',
+    'What is the biggest problem with this team right now?',
   ],
   trainer: [
     'Who is hurt and how long are they out?',
@@ -185,6 +196,21 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   const abortRef = useRef<AbortController | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>(FALLBACK_STAFF);
   const [persona, setPersona] = useState('analyst');
+  /** Who is in the room. Remembered, since assembling it is a small chore. */
+  const [roomMembers, setRoomMembers] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('ootp-room-members');
+      return raw ? (JSON.parse(raw) as string[]) : ['trainer', 'pitching', 'manager'];
+    } catch {
+      return ['trainer', 'pitching', 'manager'];
+    }
+  });
+  const toggleMember = (id: string) =>
+    setRoomMembers((cur) => {
+      const next = cur.includes(id) ? cur.filter((m) => m !== id) : [...cur, id].slice(0, 4);
+      try { localStorage.setItem('ootp-room-members', JSON.stringify(next)); } catch { /* fine */ }
+      return next;
+    });
 
   // Who this club has on the payroll. A save missing a seat simply shows fewer
   // tabs rather than offering a conversation with nobody.
@@ -192,7 +218,8 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
     apiGet<{ staff: StaffMember[] }>(`/api/chat-staff/${orgId}`)
       .then((r) => {
         const people = r.staff.length > 0 ? r.staff : FALLBACK_STAFF;
-        setStaff(people);
+        // The room only makes sense when there is more than one person to put in it
+        setStaff(people.length > 1 ? [...people, { id: ROOM_ID, name: 'The Room', role: 'group' }] : people);
         setPersona((cur) => (people.some((p) => p.id === cur) ? cur : people[0].id));
       })
       .catch(() => setStaff(FALLBACK_STAFF));
@@ -251,7 +278,8 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           body: JSON.stringify({
             orgId,
             persona,
-            messages: history.map(({ role, content }) => ({ role, content })),
+            ...(persona === ROOM_ID ? { members: roomMembers } : {}),
+            messages: history.map(({ role, content, speaker }) => ({ role, content, speaker })),
           }),
           signal: controller.signal,
         });
@@ -281,7 +309,23 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
             const event = eventLine.slice(7).trim();
             const data = JSON.parse(dataLine.slice(6)) as Record<string, string>;
 
-            if (event === 'text') {
+            if (event === 'speaker') {
+              // A new voice in the room starts its own bubble. The first one
+              // takes over the placeholder the send already created.
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last && last.role === 'assistant' && last.content === '' && !last.speaker) {
+                  next[next.length - 1] = { ...last, speaker: data.name, speakerRole: data.role };
+                } else {
+                  next.push({
+                    role: 'assistant', content: '', tools: [],
+                    speaker: data.name, speakerRole: data.role, at: new Date().toISOString(),
+                  });
+                }
+                return next;
+              });
+            } else if (event === 'text') {
               update((m) => ({ ...m, content: m.content + data.delta }));
             } else if (event === 'tool') {
               update((m) => ({ ...m, tools: [...(m.tools ?? []), data.name] }));
@@ -337,6 +381,28 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           ))}
         </div>
       )}
+
+      {persona === ROOM_ID && (
+        <div className="imsg-room-picker">
+          <span className="muted">In the room:</span>
+          {staff.filter((p) => p.id !== ROOM_ID).map((p) => (
+            <button
+              key={p.id}
+              className={`room-chip ${roomMembers.includes(p.id) ? 'on' : ''}`}
+              onClick={() => toggleMember(p.id)}
+              title={p.role}
+            >
+              {p.name}
+            </button>
+          ))}
+          <span className="muted room-hint">
+            {roomMembers.length === 0
+              ? 'Pick at least one.'
+              : 'They answer in order and can see what the others said.'}
+          </span>
+        </div>
+      )}
+
       {messages.length > 0 && (
         <div className="imsg-bar">
           <span>
@@ -387,7 +453,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
               <div className={`imsg-row imsg-${m.role} ${endsRun ? 'imsg-run-end' : ''}`}>
                 {m.role === 'assistant' && (
                   <div className="imsg-avatar" aria-hidden="true">
-                    {startsRun ? 'P' : ''}
+                    {startsRun || m.speaker ? (m.speaker ?? who.name).charAt(0) : ''}
                   </div>
                 )}
                 <div className="imsg-stack">
@@ -397,6 +463,13 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                         <span key={`${tool}-${j}`}>{TOOL_LABELS[tool] ?? tool}</span>
                       ))}
                     </div>
+                  )}
+
+                  {m.speaker && (
+                    <span className="imsg-speaker">
+                      {m.speaker}
+                      {m.speakerRole && <span className="muted"> · {m.speakerRole}</span>}
+                    </span>
                   )}
 
                   {streaming ? (
@@ -418,6 +491,10 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                         )}
                       </div>
                     )
+                  )}
+
+                  {m.role === 'assistant' && m.content && !streaming && (
+                    <SaveToPlayer orgId={orgId} body={m.content} source={m.speaker ?? who.name} />
                   )}
 
                   {endsRun && m.at && !streaming && (
@@ -478,5 +555,67 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * Keeps an answer on a player's file.
+ *
+ * A pitch-count plan for a starter coming off the injured list is worth
+ * nothing in a thread you will have scrolled past by the time he is throwing
+ * again. This offers the players the answer actually names — matched against
+ * the league's own index, the same way the names in it are linked — so filing
+ * it is one click rather than a copy, a search and a paste.
+ */
+function SaveToPlayer({ orgId, body, source }: { orgId: number; body: string; source: string }) {
+  const [open, setOpen] = useState(false);
+  const [found, setFound] = useState<Array<[number, string]>>([]);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const look = async () => {
+    if (open) return setOpen(false);
+    setOpen(true);
+    const entries = await nameIndex(orgId);
+    // Longest first, so "Gerrit Cole" is offered rather than a shorter name
+    // that happens to sit inside it
+    setFound(
+      entries
+        .filter(([, name]) => body.includes(name))
+        .sort((a, b) => b[1].length - a[1].length)
+        .slice(0, 6)
+    );
+  };
+
+  const save = async (id: number, name: string) => {
+    try {
+      await apiPost('/api/player-notes', { player_id: id, player_name: name, source, body });
+      setSaved(name);
+      setOpen(false);
+    } catch {
+      setSaved(null);
+    }
+  };
+
+  if (saved) return <span className="imsg-saved muted">Saved to {saved}’s file</span>;
+
+  return (
+    <span className="imsg-save">
+      <button className="link-button" onClick={look}>
+        {open ? 'Cancel' : 'Save to a player’s file'}
+      </button>
+      {open && (
+        <span className="imsg-save-list">
+          {found.length === 0 ? (
+            <span className="muted">No players named in this answer.</span>
+          ) : (
+            found.map(([id, name]) => (
+              <button key={id} className="room-chip" onClick={() => void save(id, name)}>
+                {name}
+              </button>
+            ))
+          )}
+        </span>
+      )}
+    </span>
   );
 }

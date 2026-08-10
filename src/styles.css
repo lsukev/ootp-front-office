@@ -1639,3 +1639,37 @@ button.cta {
 
 .tenure { margin-bottom: 22px; }
 .tenure h2 { margin-bottom: 2px; }
+
+/* ── The room, and notes kept on a player ─────────────────── */
+
+.imsg-room-picker {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.room-chip {
+  font-size: 11px; padding: 3px 9px; border-radius: 999px;
+  background: transparent; color: var(--muted);
+}
+.room-chip.on { border-color: var(--accent); color: var(--accent); }
+.room-hint { flex-basis: 100%; font-size: 11px; }
+
+.imsg-speaker {
+  font-family: var(--font-display); font-size: 11px; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 1px;
+}
+.imsg-save { font-size: 11px; }
+.imsg-save-list { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; }
+.imsg-saved { font-size: 11px; }
+
+.staff-note {
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.staff-note-head { font-size: 12px; margin-bottom: 4px; }
+.staff-note-head strong { font-family: var(--font-display); letter-spacing: 0.04em; }
+.staff-note-x { float: right; font-size: 11px; }
+.staff-note p { margin: 4px 0; font-size: 13px; }

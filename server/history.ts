@@ -38,6 +38,30 @@ historyDb.exec(`
     updated_at TEXT,
     PRIMARY KEY (save_name, player_id)
   );
+  /*
+   * Notes kept on a player, one row each rather than one field overwritten.
+   *
+   * The watchlist already had a note, but it holds a single string tied to
+   * watching the man — no good for the thing this is actually for, which is
+   * keeping what a member of staff told you. A pitch-count plan for a starter
+   * coming off the injured list is worth nothing in a chat thread you will
+   * have scrolled past by the time he is throwing again; it belongs on his
+   * page, with who said it and the date of the game when they did.
+   *
+   * Lives in history.db so it survives re-importing the save, which wipes and
+   * rebuilds the league database entirely.
+   */
+  CREATE TABLE IF NOT EXISTS player_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    save_name TEXT NOT NULL,
+    player_id INTEGER NOT NULL,
+    player_name TEXT,
+    source TEXT,
+    body TEXT NOT NULL,
+    game_date TEXT,
+    created_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_notes_player ON player_notes (save_name, player_id);
 `);
 
 function currentSaveName(): string {
@@ -245,4 +269,53 @@ historyRoutes.get('/watchlist/:playerId', (req, res) => {
     .prepare(`SELECT note FROM watchlist WHERE save_name = ? AND player_id = ?`)
     .get(currentSaveName(), Number(req.params.playerId)) as { note: string } | undefined;
   res.json({ watched: !!row, note: row?.note ?? '' });
+});
+
+// ── Notes on a player ───────────────────────────────────────────────────
+
+historyRoutes.get('/player-notes/:playerId', (req, res) => {
+  const rows = historyDb
+    .prepare(
+      `SELECT id, player_id, player_name, source, body, game_date, created_at
+       FROM player_notes WHERE save_name = ? AND player_id = ?
+       ORDER BY id DESC`
+    )
+    .all(currentSaveName(), Number(req.params.playerId));
+  res.json({ notes: rows });
+});
+
+historyRoutes.post('/player-notes', (req, res) => {
+  const { player_id, player_name, source, body } = req.body as {
+    player_id?: number;
+    player_name?: string;
+    source?: string;
+    body?: string;
+  };
+  if (!Number.isFinite(Number(player_id)) || !body || !body.trim()) {
+    return res.status(400).json({ error: 'A player and some text are required' });
+  }
+  const info = historyDb
+    .prepare(
+      `INSERT INTO player_notes (save_name, player_id, player_name, source, body, game_date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      currentSaveName(),
+      Number(player_id),
+      player_name ?? null,
+      source ?? 'You',
+      body.trim(),
+      // The in-game date, not today's: a plan made in May is judged against the
+      // season, and the wall clock means nothing to a save being simmed
+      leagueGameDate(),
+      new Date().toISOString()
+    );
+  res.json({ ok: true, id: info.lastInsertRowid });
+});
+
+historyRoutes.delete('/player-notes/:id', (req, res) => {
+  historyDb
+    .prepare(`DELETE FROM player_notes WHERE save_name = ? AND id = ?`)
+    .run(currentSaveName(), Number(req.params.id));
+  res.json({ ok: true });
 });
