@@ -233,39 +233,126 @@ rosterOpsRoutes.get('/staff/:orgId', (req, res) => {
     })
     .filter(Boolean);
 
-  // Affiliate managers (development matters down on the farm)
+  /*
+   * The whole farm staff, not just the managers.
+   *
+   * Every affiliate carries a manager, a pitching coach and a hitting coach,
+   * and only one of the three was being shown. The men teaching your prospects
+   * to pitch and hit are arguably the ones who matter most down there.
+   */
   const affiliates = db
     .prepare(
-      `SELECT t.team_id, ${teamLabel} AS team_label, t.level, s.manager
+      `SELECT t.team_id, ${teamLabel} AS team_label, t.level,
+              s.manager, s.pitching_coach, s.hitting_coach
        FROM teams t JOIN team_roster_staff s ON s.team_id = t.team_id
        WHERE t.parent_team_id = ? ORDER BY t.level`
     )
-    .all(orgId) as Array<{ team_id: number; team_label: string; level: number; manager: number }>;
-  const farmManagers = affiliates
-    .map((a) => {
-      const c = db
-        .prepare(
-          `SELECT first_name || ' ' || last_name AS name, age, experience, teach_hitting, teach_pitching, handle_rookies
-           FROM coaches WHERE coach_id = ?`
-        )
-        .get(a.manager) as Record<string, number | string> | undefined;
-      return c
-        ? {
-            team: a.team_label,
-            levelName: LEVEL_NAMES[a.level] ?? 'R',
-            name: c.name,
-            age: c.age,
-            ratings: [
-              { label: 'Teach Hitting', value: c.teach_hitting as number },
-              { label: 'Teach Pitching', value: c.teach_pitching as number },
-              { label: 'Handle Rookies', value: c.handle_rookies as number },
-            ],
-          }
-        : null;
-    })
-    .filter(Boolean);
+    .all(orgId) as Array<{
+    team_id: number; team_label: string; level: number;
+    manager: number; pitching_coach: number; hitting_coach: number;
+  }>;
 
-  res.json({ staff, farmManagers });
+  const records = new Map(
+    (db.prepare(`SELECT team_id, w, l, pct FROM team_record`).all() as Array<{
+      team_id: number; w: number; l: number; pct: number;
+    }>).map((r) => [r.team_id, r])
+  );
+
+  const coachById = (id: number): Record<string, number | string> | undefined =>
+    id
+      ? (db.prepare(`SELECT * FROM coaches WHERE coach_id = ?`).get(id) as
+          | Record<string, number | string>
+          | undefined)
+      : undefined;
+
+  const FARM_SEATS: Array<[key: 'manager' | 'pitching_coach' | 'hitting_coach', label: string]> = [
+    ['manager', 'Manager'],
+    ['pitching_coach', 'Pitching Coach'],
+    ['hitting_coach', 'Hitting Coach'],
+  ];
+
+  const farmStaff = affiliates.map((a) => {
+    const rec = records.get(a.team_id);
+    return {
+      team: a.team_label,
+      team_id: a.team_id,
+      levelName: LEVEL_NAMES[a.level] ?? 'R',
+      record: rec && rec.w + rec.l > 0 ? { w: rec.w, l: rec.l, pct: rec.pct } : null,
+      coaches: FARM_SEATS.map(([key, label]) => {
+        const c = coachById(a[key]);
+        if (!c) return null;
+        return {
+          role: label,
+          coach_id: a[key],
+          name: `${c.first_name} ${c.last_name}`,
+          age: c.age as number,
+          experience: c.experience as number,
+          ratings: [
+            { label: 'Teach Hitting', value: c.teach_hitting as number },
+            { label: 'Teach Pitching', value: c.teach_pitching as number },
+            { label: 'Handle Rookies', value: c.handle_rookies as number },
+          ],
+        };
+      }).filter(Boolean),
+    };
+  });
+
+  /*
+   * Who down there is ready for a job up here.
+   *
+   * OOTP rates every coach for every seat, not only the one he occupies — a
+   * hitting coach carries a manager rating too — so each farm man is measured
+   * against the incumbent in each major-league seat rather than only against
+   * his own. That is what turns this from a list into a decision: your A-ball
+   * hitting coach out-rating the man managing your major-league club is worth
+   * knowing, and it is not visible anywhere else.
+   *
+   * The club's record is reported alongside but deliberately not scored into
+   * the ranking. A coach does not choose his roster, and a good man on a bad
+   * affiliate should not be buried for it.
+   */
+  const MLB_SEATS: Array<[valueField: string, label: string, occupation: number]> = [
+    ['manager_value', 'Manager', 2],
+    ['pitching_coach_value', 'Pitching Coach', 4],
+    ['hitting_coach_value', 'Hitting Coach', 5],
+  ];
+  /** Enough of a gap to be worth raising rather than noise in the ratings. */
+  const PROMOTION_MARGIN = 10;
+
+  const promotionCandidates = MLB_SEATS.flatMap(([field, label, occupation]) => {
+    const incumbent = db
+      .prepare(
+        `SELECT first_name || ' ' || last_name AS name, "${field}" AS value
+         FROM coaches WHERE team_id = ? AND occupation = ? LIMIT 1`
+      )
+      .get(orgId, occupation) as { name: string; value: number } | undefined;
+    if (!incumbent) return [];
+
+    return farmStaff
+      .flatMap((club) =>
+        (club.coaches as Array<Record<string, unknown>>).map((c) => {
+          const full = coachById(c.coach_id as number);
+          const value = Number(full?.[field] ?? 0);
+          return {
+            seat: label,
+            incumbent: incumbent.name,
+            incumbentValue: incumbent.value,
+            coach_id: c.coach_id as number,
+            name: c.name as string,
+            currentRole: c.role as string,
+            team: club.team,
+            levelName: club.levelName,
+            record: club.record,
+            age: c.age as number,
+            value,
+            gap: value - incumbent.value,
+          };
+        })
+      )
+      .filter((c) => c.gap >= PROMOTION_MARGIN);
+  }).sort((a, b) => b.gap - a.gap);
+
+  res.json({ staff, farmStaff, promotionCandidates });
 });
 
 // ── Draft prep ──────────────────────────────────────────────────────────
