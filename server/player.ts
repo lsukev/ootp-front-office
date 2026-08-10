@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { contactLeague, contactProfiles, situationalSplits } from './battedball.js';
 import { contractsByPlayer, mlbPercentiler, seasonYear, valuesByPlayer } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
 
@@ -349,8 +350,16 @@ playerRoutes.get('/player/:id', (req, res) => {
       })).filter((l) => l.category !== null)
     : [];
 
+  // Contact quality and the situations he has hit in — both only exist for a
+  // man who has actually batted, so a pitcher simply gets nulls
+  const contact = isPitcher ? null : (contactProfiles([id]).get(id) ?? null);
+  const splits = isPitcher ? [] : situationalSplits(id);
+
   res.json({
     player_id: id,
+    contact,
+    contactLeague: contact ? contactLeague() : null,
+    splits,
     name: `${p.first_name} ${p.last_name}`,
     nickname: (p.nick_name as string) || null,
     age: p.age,
