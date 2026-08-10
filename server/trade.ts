@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
+import { padDate } from './rosterops.js';
 
 export const tradeRoutes = Router();
 
@@ -135,6 +136,113 @@ tradeRoutes.get('/search-players', (req, res) => {
       value: values.get(r.player_id as number)?.overall ?? 0,
     }))
   );
+});
+
+const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
+
+/**
+ * The trade talk sitting in your OOTP inbox.
+ *
+ * Trade traffic reaches a manager as messages, and the export carries the
+ * structured part of them: who wrote, which club, and which player. That is
+ * enough to list them — "Would it make sense to target Luis Castillo?" is a
+ * question the app can already answer better than the message can.
+ *
+ * `sender_type = 0` with `recipient_id = 1` is mail written to the human
+ * manager rather than league news broadcast to everyone; requiring both clubs
+ * and a named player then separates the trade talk from the owner's PMs and
+ * the waiver notices, which share the same sender.
+ *
+ * Note these name one player each — the export has no message carrying both
+ * sides of a deal, so this is interest in a player rather than an offer with a
+ * price on it. The analyser below is where the price gets worked out.
+ */
+tradeRoutes.get('/trade-talk/:orgId', (req, res) => {
+  const orgId = Number(req.params.orgId);
+  if (!tableExists('messages') || !tableExists('players')) return res.json({ items: [] });
+  const rows = db
+    .prepare(
+      `SELECT m.message_id, m.subject, m.date, m.team_id_0 AS other_team, m.player_id_0 AS player_id,
+              p.first_name || ' ' || p.last_name AS name, p.age, p.position,
+              ${teamLabel} AS other_label, t.level
+       FROM messages m
+       JOIN players p ON p.player_id = m.player_id_0
+       LEFT JOIN teams t ON t.team_id = m.team_id_0
+       WHERE m.recipient_id = 1 AND m.sender_type = 0 AND m.deleted = 0
+         AND m.team_id_0 != 0 AND m.team_id_1 = ? AND m.player_id_0 != 0
+         AND p.retired = 0`
+    )
+    .all(orgId) as Array<Record<string, unknown>>;
+
+  const values = valuesByPlayer();
+  const { overallPct, talentPct } = mlbPercentiler(values);
+  const contracts = contractsByPlayer();
+  // The same player is asked about more than once as the season goes on; the
+  // newest message is the live one, and repeating him is just noise
+  const seen = new Set<number>();
+  const items = rows
+    // OOTP writes dates unpadded, so newest-first has to sort on a padded copy
+    .sort((a, b) => String(padDate(b.date) ?? '').localeCompare(String(padDate(a.date) ?? '')))
+    .filter((r) => !seen.has(r.player_id as number) && seen.add(r.player_id as number))
+    .map((r) => {
+      const id = r.player_id as number;
+      const c = contracts.get(id);
+      return {
+        message_id: r.message_id as number,
+        subject: r.subject as string,
+        date: r.date as string,
+        otherTeam: { orgId: r.other_team as number, label: (r.other_label as string) ?? 'Unknown' },
+        player: {
+          player_id: id,
+          name: r.name as string,
+          age: r.age as number,
+          positionName: POSITION_NAMES[r.position as number] ?? '?',
+          levelName: LEVEL_NAMES[r.level as number] ?? 'R',
+          overallPct: overallPct(id),
+          talentPct: talentPct(id),
+          salaryNow: c?.salaryNow ?? 0,
+          yearsAfterThis: c?.yearsAfterThis ?? 0,
+        },
+      };
+    });
+  res.json({ items });
+});
+
+/**
+ * One club's whole organisation, ready to pick from.
+ *
+ * Typing each name is the slow part of judging an offer — a five-man deal is
+ * five searches, and you are copying names off another screen while you do it.
+ * An offer already names a club, so this hands back that club's players to
+ * click through instead. Prospects are included because they are usually what
+ * the other side is asking for.
+ */
+tradeRoutes.get('/trade/roster/:teamId', (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
+  const rows = db
+    .prepare(
+      `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position,
+              ${teamLabel} AS team, t.level
+       FROM players p LEFT JOIN teams t ON t.team_id = p.team_id
+       WHERE p.organization_id = ? AND p.retired = 0 AND p.team_id > 0
+         AND p.player_id IN (SELECT player_id FROM team_roster WHERE list_id = 1)`
+    )
+    .all(teamId) as Array<Record<string, unknown>>;
+  const values = valuesByPlayer();
+  const players = rows
+    .map((r) => ({
+      player_id: r.player_id as number,
+      name: r.name as string,
+      age: r.age as number,
+      positionName: POSITION_NAMES[r.position as number] ?? '?',
+      team: r.team as string,
+      levelName: LEVEL_NAMES[r.level as number] ?? 'R',
+      value: values.get(r.player_id as number)?.overall ?? 0,
+    }))
+    // Best first: the men an offer is actually built around are at the top
+    .sort((a, b) => b.value - a.value);
+  res.json({ players });
 });
 
 export interface TradeSideSummary {

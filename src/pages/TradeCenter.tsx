@@ -21,6 +21,16 @@ interface SideSummary {
   totalValue: number; totalTalent: number; totalSalary: number;
 }
 interface Analysis { sideA: SideSummary; sideB: SideSummary; valueDiff: number; talentDiff: number; salaryDiff: number }
+interface TalkItem {
+  message_id: number;
+  subject: string;
+  date: string;
+  otherTeam: { orgId: number; label: string };
+  player: {
+    player_id: number; name: string; age: number; positionName: string; levelName: string;
+    overallPct: number | null; talentPct: number | null; salaryNow: number; yearsAfterThis: number;
+  };
+}
 
 const money = (n: number) => (Math.abs(n) >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n / 1000)}k`);
 
@@ -32,11 +42,49 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
   const [aiVerdict, setAiVerdict] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [talk, setTalk] = useState<TalkItem[]>([]);
+  const builderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setFits(null);
     apiGet<Fits>(`/api/trade/fits/${orgId}`).then(setFits).catch((e) => setError(e.message));
   }, [orgId]);
+
+  useEffect(() => {
+    setTalk([]);
+    apiGet<{ items: TalkItem[] }>(`/api/trade-talk/${orgId}`)
+      .then((r) => setTalk(r.items))
+      // The inbox is a bonus on top of the analyser, so a save without it
+      // should cost the page nothing
+      .catch(() => setTalk([]));
+  }, [orgId]);
+
+  /**
+   * Load a target into the builder and take the user to it.
+   *
+   * The message only names the man you would receive — what he costs is the
+   * open question, so the other side is left empty for you to fill in.
+   */
+  const review = (item: TalkItem) => {
+    setAnalysis(null);
+    setAiVerdict(null);
+    setSideB([{
+      player_id: item.player.player_id,
+      name: item.player.name,
+      age: item.player.age,
+      positionName: item.player.positionName,
+      team: item.otherTeam.label,
+      value: 0,
+    }]);
+    // After the paint, not before it: loading the player re-renders the builder,
+    // and a scroll begun in the same tick is cancelled by the layout change.
+    // Instant rather than smooth — smooth silently does nothing in some
+    // embedded browsers, and a jump that sometimes fails to happen is worse
+    // than one that always does.
+    requestAnimationFrame(() =>
+      builderRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
+    );
+  };
 
   const analyze = async () => {
     setError(null);
@@ -74,8 +122,39 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
     <div>
       {error && <div className="banner error">{error}</div>}
 
+      {talk.length > 0 && (
+        <>
+          <h2>Trade Talk in Your Inbox</h2>
+          <p className="muted hint-line">
+            Targets your staff has raised, newest first. OOTP's messages name the player and the
+            club but never the price, so "Review" loads him as the man you would receive and leaves
+            what you give up to you.
+          </p>
+          <div className="talk-grid">
+            {talk.map((t) => (
+              <div key={t.message_id} className="talk-card">
+                <span className="talk-date">{t.date}</span>
+                <p className="talk-subject">{t.subject}</p>
+                <p className="talk-player">
+                  <PlayerLink id={t.player.player_id}>{t.player.name}</PlayerLink>{' '}
+                  <span className="muted">
+                    {t.player.positionName} · {t.player.age} · {t.otherTeam.label}
+                  </span>
+                </p>
+                <p className="muted talk-line">
+                  Value {t.player.overallPct ?? '—'} · Talent {t.player.talentPct ?? '—'} ·{' '}
+                  {money(t.player.salaryNow)}
+                  {t.player.yearsAfterThis > 0 ? ` · ${t.player.yearsAfterThis}y after this` : ' · expiring'}
+                </p>
+                <button onClick={() => review(t)}>Review this target</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <h2>Trade Analyzer</h2>
-      <div className="trade-builder">
+      <div className="trade-builder" ref={builderRef}>
         <TradeSide title={`${orgLabel} send`} players={sideA} setPlayers={setSideA} />
         <div className="trade-middle">
           <button className="btn-feature" onClick={analyze} disabled={!sideA.length || !sideB.length}>

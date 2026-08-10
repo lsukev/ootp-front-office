@@ -274,7 +274,7 @@ rosterOpsRoutes.get('/staff/:orgId', (req, res) => {
  * OOTP writes dates unpadded — "2026-4-12" — which sorts wrong as text. Padding
  * them makes plain string comparison a valid date comparison.
  */
-function padDate(raw: unknown): string | null {
+export function padDate(raw: unknown): string | null {
   if (raw === null || raw === undefined) return null;
   // SQLite hands back whatever type the column holds, and a date OOTP left
   // blank arrives as a number. Anything unparseable becomes null rather than

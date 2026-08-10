@@ -265,6 +265,19 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
   const promoteSignals = [...(prospects.batters as Array<{ signal: string | null }>), ...(prospects.pitchers as Array<{ signal: string | null }>)]
     .filter((p) => p.signal !== null).length;
   const injuries = orgInjuries(orgId);
+  // Distinct players your staff has raised as trade targets, so the chip counts
+  // decisions to make rather than messages received
+  const tradeTalk = tableExists('messages')
+    ? (db
+        .prepare(
+          `SELECT COUNT(DISTINCT m.player_id_0) AS n FROM messages m
+           JOIN players p ON p.player_id = m.player_id_0
+           WHERE m.recipient_id = 1 AND m.sender_type = 0 AND m.deleted = 0
+             AND m.team_id_0 != 0 AND m.team_id_1 = ? AND m.player_id_0 != 0
+             AND p.retired = 0`
+        )
+        .get(orgId) as { n: number }).n
+    : 0;
   const crunchIssues = tableExists('players_roster_status')
     ? (db
         .prepare(
@@ -288,6 +301,7 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
       promoteSignals,
       injuredCount: injuries.length,
       crunchIssues,
+      tradeTalk,
     },
   });
 });

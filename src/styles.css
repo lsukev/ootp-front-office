@@ -613,6 +613,26 @@ thead th[onclick], thead th { user-select: none; }
 .fit-card p { margin: 5px 0; font-size: 13px; color: var(--muted); }
 .fit-card strong { color: var(--text); }
 
+/* ── Trade talk from the inbox ────────────────────────────── */
+
+.talk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.talk-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.talk-date { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.talk-subject { margin: 2px 0 4px; font-size: 13px; color: var(--text); font-style: italic; }
+.talk-player { margin: 0; font-size: 14px; }
+.talk-line { margin: 2px 0 8px; font-size: 12px; }
+/* Pushed to the bottom so the buttons line up across cards of unequal height */
+.talk-card button { margin-top: auto; align-self: flex-start; font-size: 12px; padding: 5px 12px; }
+
 /* ── Leaderboards / staff ─────────────────────────────────── */
 
 .leader-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 8px; }
