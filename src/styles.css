@@ -1673,3 +1673,7 @@ button.cta {
 .staff-note-head strong { font-family: var(--font-display); letter-spacing: 0.04em; }
 .staff-note-x { float: right; font-size: 11px; }
 .staff-note p { margin: 4px 0; font-size: 13px; }
+.imsg-save-search {
+  font-size: 11px; padding: 3px 8px; border-radius: 999px; width: 130px;
+  background: transparent; color: var(--text); border: 1px solid var(--border);
+}

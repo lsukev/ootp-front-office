@@ -374,6 +374,11 @@ function systemPrompt(orgId: number, persona: Persona): string {
     'and value rankings come from OOTP\'s own ratings, which are projections of talent rather than',
     'a record of what the player has done this season — mention that distinction when it matters.',
     '',
+    'Name a player in full — first name and surname — the first time you mention him in a reply.',
+    'After that, talk about him however you like. The app links names to their cards and files your',
+    'advice against the right man, and it can do neither from a surname or a pronoun. This matters',
+    'most on exactly the answers worth keeping: a plan for a pitcher is no use filed against nobody.',
+    '',
     'The user can see the app around them, so point them at the relevant page when it helps',
     '("the Pitching Staff page has the full bullpen availability").',
   ].join('\n');

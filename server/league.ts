@@ -121,14 +121,17 @@ leagueRoutes.get('/name-index/:orgId', (req, res) => {
   const orgId = Number(req.params.orgId);
   const rows = db
     .prepare(
-      `SELECT p.player_id AS id, p.first_name || ' ' || p.last_name AS name
+      `SELECT p.player_id AS id, p.first_name || ' ' || p.last_name AS name,
+              CASE WHEN p.organization_id = ? THEN 1 ELSE 0 END AS ours
        FROM players p
        JOIN teams t ON t.team_id = p.team_id
        WHERE p.retired = 0 AND p.first_name IS NOT NULL AND p.last_name IS NOT NULL
          AND (t.level = 1 OR p.organization_id = ?)`
     )
-    .all(orgId) as Array<{ id: number; name: string }>;
-  res.json({ names: rows.map((r) => [r.id, r.name] as const) });
+    .all(orgId, orgId) as Array<{ id: number; name: string; ours: number }>;
+  // The third field marks our own men, so a surname shared across the league
+  // can be offered with ours first rather than refused as ambiguous
+  res.json({ names: rows.map((r) => [r.id, r.name, r.ours] as const) });
 });
 
 leagueRoutes.get('/players', (req, res) => {

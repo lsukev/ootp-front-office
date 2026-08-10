@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPut } from './api';
-import { PlayerNames, nameIndex } from './PlayerNames';
+import { PlayerNames, nameIndex, type Entry } from './PlayerNames';
 
 /**
  * Ask-the-save chat. The server streams the answer over SSE and announces each
@@ -61,7 +61,7 @@ interface StaffMember { id: string; name: string; role: string }
 const ROOM_ID = 'room';
 
 const ROLE_LABEL: Record<string, string> = {
-  room: 'Everyone',
+  room: 'Group chat',
   analyst: 'Analyst',
   manager: 'Manager',
   pitching: 'Pitching Coach',
@@ -494,7 +494,14 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                   )}
 
                   {m.role === 'assistant' && m.content && !streaming && (
-                    <SaveToPlayer orgId={orgId} body={m.content} source={m.speaker ?? who.name} />
+                    <SaveToPlayer
+                      orgId={orgId}
+                      body={m.content}
+                      source={m.speaker ?? who.name}
+                      question={
+                        [...messages.slice(0, i)].reverse().find((p) => p.role === 'user')?.content ?? ''
+                      }
+                    />
                   )}
 
                   {endsRun && m.at && !streaming && (
@@ -558,32 +565,87 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   );
 }
 
+/** Suffixes that sit after a surname and should not be mistaken for one. */
+const SUFFIXES = new Set(['jr.', 'jr', 'sr.', 'sr', 'ii', 'iii', 'iv', 'v']);
+
+/**
+ * The surnames a full name could be referred to by.
+ *
+ * "Gerrit Cole" is called Cole; "Jazz Chisholm Jr." is called Chisholm, not
+ * "Chisholm Jr.", so a trailing suffix is stepped over rather than taken as
+ * the name.
+ */
+function surnamesOf(full: string): string[] {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length < 2) return [];
+  const last = parts[parts.length - 1];
+  const out = [last];
+  if (SUFFIXES.has(last.toLowerCase()) && parts.length > 2) out.push(parts[parts.length - 2]);
+  return out;
+}
+
 /**
  * Keeps an answer on a player's file.
  *
- * A pitch-count plan for a starter coming off the injured list is worth
- * nothing in a thread you will have scrolled past by the time he is throwing
- * again. This offers the players the answer actually names — matched against
- * the league's own index, the same way the names in it are linked — so filing
- * it is one click rather than a copy, a search and a paste.
+ * Finding who an answer is about is the hard half. Staff write the way people
+ * talk — "Cole", then "he" for six paragraphs — so matching full names alone
+ * found nobody in the very case this feature exists for. It now also accepts a
+ * surname, but only when exactly one man in the league answers to it, since a
+ * bare "Young" or "Price" could be half a dozen people or an ordinary word.
+ * The question that prompted the answer is searched too, because that is often
+ * where the name was said. Failing all of that, there is a search box: the
+ * control should never be a dead end.
  */
-function SaveToPlayer({ orgId, body, source }: { orgId: number; body: string; source: string }) {
+function SaveToPlayer({
+  orgId, body, source, question,
+}: { orgId: number; body: string; source: string; question: string }) {
   const [open, setOpen] = useState(false);
-  const [found, setFound] = useState<Array<[number, string]>>([]);
+  const [found, setFound] = useState<Array<[number, string, number?]>>([]);
+  const [entries, setEntries] = useState<Array<[number, string, number?]>>([]);
+  const [query, setQuery] = useState('');
   const [saved, setSaved] = useState<string | null>(null);
 
   const look = async () => {
     if (open) return setOpen(false);
     setOpen(true);
-    const entries = await nameIndex(orgId);
-    // Longest first, so "Gerrit Cole" is offered rather than a shorter name
-    // that happens to sit inside it
-    setFound(
-      entries
-        .filter(([, name]) => body.includes(name))
-        .sort((a, b) => b[1].length - a[1].length)
-        .slice(0, 6)
-    );
+    const all: Entry[] = await nameIndex(orgId);
+    setEntries(all);
+
+    const haystack = `${body}\n${question}`;
+    const hits = new Map<number, string>();
+
+    // A full name is unambiguous, so it is trusted wherever it appears
+    for (const [id, name] of all) if (haystack.includes(name)) hits.set(id, name);
+
+    /*
+     * Surnames are how people actually talk — "Cole", then "he" for six
+     * paragraphs. Several men can share one, so rather than guessing or giving
+     * up, every match is offered with our own players first: two names and one
+     * click beats "no players named in this answer", which is what this used
+     * to say about an answer plainly about Gerrit Cole.
+     */
+    const bySurname = new Map<string, Entry[]>();
+    for (const e of all) {
+      for (const sn of surnamesOf(e[1])) {
+        const list = bySurname.get(sn) ?? [];
+        list.push(e);
+        bySurname.set(sn, list);
+      }
+    }
+    const extra: Entry[] = [];
+    for (const [sn, people] of bySurname) {
+      if (new RegExp(`\\b${sn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(haystack)) {
+        for (const e of people) if (!hits.has(e[0])) extra.push(e);
+      }
+    }
+    // Ours first, then the shortest names, which are the likeliest referents
+    extra.sort((a, b) => (b[2] ?? 0) - (a[2] ?? 0) || a[1].length - b[1].length);
+
+    const list: Entry[] = [
+      ...[...hits.entries()].map(([id, name]) => [id, name] as Entry),
+      ...extra,
+    ];
+    setFound(list.slice(0, 8));
   };
 
   const save = async (id: number, name: string) => {
@@ -596,24 +658,38 @@ function SaveToPlayer({ orgId, body, source }: { orgId: number; body: string; so
     }
   };
 
+  const searched =
+    query.trim().length < 2
+      ? []
+      : entries
+          .filter(([, n]) => n.toLowerCase().includes(query.trim().toLowerCase()))
+          .slice(0, 6);
+
   if (saved) return <span className="imsg-saved muted">Saved to {saved}’s file</span>;
 
   return (
     <span className="imsg-save">
       <button className="link-button" onClick={look}>
-        {open ? 'Cancel' : 'Save to a player’s file'}
+        {open ? 'Cancel' : 'Save to a player\u2019s file'}
       </button>
       {open && (
         <span className="imsg-save-list">
-          {found.length === 0 ? (
-            <span className="muted">No players named in this answer.</span>
-          ) : (
-            found.map(([id, name]) => (
-              <button key={id} className="room-chip" onClick={() => void save(id, name)}>
-                {name}
-              </button>
-            ))
-          )}
+          {found.map(([id, name]) => (
+            <button key={id} className="room-chip on" onClick={() => void save(id, name)}>
+              {name}
+            </button>
+          ))}
+          <input
+            className="imsg-save-search"
+            placeholder={found.length ? 'or search\u2026' : 'search for a player\u2026'}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {searched.map(([id, name]) => (
+            <button key={`s${id}`} className="room-chip" onClick={() => void save(id, name)}>
+              {name}
+            </button>
+          ))}
         </span>
       )}
     </span>

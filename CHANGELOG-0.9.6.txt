@@ -1,0 +1,51 @@
+OOTP Front Office 0.9.6 — everything since 0.8.0
+
+New — Contact quality. OOTP records the exit velocity, launch angle and sprint speed of every batted ball and shows you none of it. The app now reads all 191,000 of them: average and max exit velocity, hard-hit rate, barrel rate, sweet-spot rate, ground/line/fly splits and measured sprint speed, on the player card with the league average beside each number, and as sortable columns on the roster.
+
+New — Expected slugging, and who is getting robbed. Every batted ball is scored by how balls of that speed and angle actually fared at that level this season, so the card can tell you a man is slugging .473 against .633 expected — he has hit the ball well and got nothing for it, and should improve without changing a thing.
+
+New — Game plans. Every game on the schedule has a Plan link: the opposing starter (confirmed or projected), your lineup card built against his hand, how your hitters have fared against him and against his club with every sample size shown, and their most dangerous bats by barrel rate.
+
+New — Situational splits on the player card: runners on, scoring position, RISP with two out, close and late, ahead and behind in the count, two strikes. Each carries its plate-appearance count, because a ten-at-bat line is not a finding.
+
+New — The rest of the front office. Peter is joined by your manager, pitching coach, hitting coach, trainer, scout and owner — the real ones from your save, by name. Each is built from his own record: how old he is, where he is from, what he did as a player, whether he bunts, whether he will use an opener, whether he trusts a stat line or a scout. They know each other by name and they know the club's record.
+
+New — The Room. Put up to four of them in a group and ask once. They answer in turn, each seeing what colleagues already said, told to add what those missed and to name the man they are disagreeing with.
+
+New — Notes on a player's file. Any answer can be filed on a player's page with one click, stamped with who said it and the in-game date. Ask the trainer how to handle a starter coming off the injured list, save it to his page, and it is there in July when he is activated.
+
+New — Trade talk from your OOTP inbox. The messages your staff send about trade targets are now counted on the dashboard and listed in the Trade Center, each with a Review button that loads that player into the analyser.
+
+New — Contracts grouped by what happens after this season: hitting free agency, arbitration, pre-arbitration, under contract. Click a group to filter.
+
+New — Farm system staff in full. All three seats at every affiliate instead of only the manager, plus a shortlist of who is ready for a job up here — OOTP rates every coach for every seat, so each man is measured against whoever holds the major-league job.
+
+New — Your Tenure on the Franchise page: one line per season you have run the club, with the totals above it. Every other page is about the team; this one is about you.
+
+New — Next season's budget is yours to set. OOTP does not publish a future budget, so the app assumed this year's held flat. Enter what you expect and every season after this one is measured against it.
+
+New — Peter keeps what he read. The assistant's transcript now holds the tool results, not just his own prose, so a follow-up question is answered from the evidence rather than from a summary of it.
+
+New — Career earnings on the player card, and fielding statistics on the roster.
+
+Fixed — Injured players were being written into tonight's lineup. They are now left out and named underneath, so a missing star reads as injured rather than as a broken card. Day-to-day men stay in, flagged.
+
+Fixed — Fielding assignment is now solved exactly rather than greedily. A man rated at one position who lost the first pass could never get back in, however much the card would improve. On the sample club that was worth about 190 points of bat and glove.
+
+Fixed — A drafted amateur's high-school season was counting as professional. It was inflating promotion signals, roster lines, player cards and the level averages every other prospect is judged against.
+
+Fixed — Dead money was being claimed on players who had simply been traded away. It only counts now when the club actually retained the salary.
+
+Fixed — Roster pages were showing players who are not on the roster, including complex-league and unassigned men.
+
+Fixed — Payroll now counts major-league contracts the way OOTP's own figure does.
+
+Fixed — The hover card was showing an old minor-league season instead of the current one, and now says which level a line came from.
+
+Fixed — The Coaching Staff page went blank in 0.9.2 and is back.
+
+Fixed — Pressing Plan on a game not yet played returned a server error.
+
+Fixed — Series cards on the schedule were spilling their contents past the edge.
+
+Fixed — The roster page took 1.6 seconds to load and now takes a tenth of one.

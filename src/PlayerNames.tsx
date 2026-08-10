@@ -12,7 +12,7 @@ import { PlayerLink } from './playerModal';
  * names are matched against the league's own index after the fact.
  */
 
-type Entry = [id: number, name: string];
+export type Entry = [id: number, name: string, ours?: number];
 
 let indexPromise: Promise<Entry[]> | null = null;
 let indexOrg: number | null = null;
