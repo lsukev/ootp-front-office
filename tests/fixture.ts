@@ -28,6 +28,8 @@ export const IDS = {
   retainedGuy: 13,
   /** Signed an extension that begins after the current deal. */
   extended: 14,
+  /** On the injured list — the best bat on the roster, and unavailable. */
+  injured: 31,
   /** Parked on the club with no roster spot; must not appear on the roster. */
   unrostered: 15,
   /** On a minor-league contract — not payroll. */
@@ -84,7 +86,9 @@ export function buildFixture(): string {
     CREATE TABLE players (
       player_id INTEGER, first_name TEXT, last_name TEXT, age INTEGER, position INTEGER, role INTEGER,
       bats INTEGER, throws INTEGER, uniform_number INTEGER, team_id INTEGER, organization_id INTEGER,
-      retired INTEGER, hidden INTEGER, draft_eligible INTEGER, college INTEGER
+      retired INTEGER, hidden INTEGER, draft_eligible INTEGER, college INTEGER,
+      injury_is_injured INTEGER DEFAULT 0, injury_dtd_injury INTEGER DEFAULT 0,
+      injury_left INTEGER DEFAULT 0
     );
     CREATE TABLE players_roster_status (
       player_id INTEGER, is_active INTEGER, is_on_dl INTEGER, is_on_dl60 INTEGER,
@@ -164,7 +168,12 @@ export function buildFixture(): string {
   team.run(IDS.aaaTeam, 'Farm', 'Hands', 'FRM', 2, IDS.league, IDS.mlbTeam);
   team.run(IDS.otherMlbTeam, 'Other', 'Club', 'OTH', 1, IDS.league, 0);
 
-  const player = db.prepare(`INSERT INTO players VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, 0, 0, 0, 0)`);
+  const player = db.prepare(
+    `INSERT INTO players (player_id, first_name, last_name, age, position, role, bats, throws,
+                          uniform_number, team_id, organization_id, retired, hidden,
+                          draft_eligible, college)
+     VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, 0, 0, 0, 0)`
+  );
   const status = db.prepare(`INSERT INTO players_roster_status VALUES (?, ?, 0, 0, 1, ?, ?, ?)`);
   const value = db.prepare(`INSERT INTO players_value VALUES (?, ?, ?, 100, 100, 100, ?, ?, ?)`);
   const roster = db.prepare(`INSERT INTO team_roster VALUES (?, ?, 1)`);
@@ -227,6 +236,22 @@ export function buildFixture(): string {
     years: 1, done: 0, salary: 4_000_000,
   });
 
+  // The best bat on the roster, and on the injured list. A lineup that starts
+  // him is unmistakable, and one that drops him without saying so is worse.
+  player.run(IDS.injured, 'Hurt', 'Star', 29, 9, 0, 31, IDS.mlbTeam, IDS.mlbTeam);
+  db.prepare(
+    `UPDATE players SET injury_is_injured = 1, injury_left = 12 WHERE player_id = ?`
+  ).run(IDS.injured);
+  db.prepare(
+    `INSERT INTO players_roster_status VALUES (?, 0, 1, 0, 1, 4.0, ?, 40)`
+  ).run(IDS.injured, 4 * 172);
+  value.run(IDS.injured, 2000, 2000, 2000, 65, 65);
+  roster.run(IDS.mlbTeam, IDS.injured);
+  contract(db, {
+    player: IDS.injured, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam,
+    years: 3, done: 0, salary: 20_000_000,
+  });
+
   const batting = db.prepare(
     `INSERT INTO players_batting VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
@@ -234,6 +259,7 @@ export function buildFixture(): string {
     `INSERT INTO players_fielding VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const allBatters = [IDS.starter, IDS.optioned, IDS.unrostered, IDS.minorDeal, IDS.boundary,
+                      IDS.injured,
                       ...fielders.map(([id]) => id)];
   for (const id of allBatters) {
     batting.run(id, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55);

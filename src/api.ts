@@ -342,6 +342,8 @@ export interface LineupSlot {
   /** OOTP's 20-80 fielding rating at the position he is assigned. */
   defRating?: number | null;
   bats: string;
+  /** Playable but carrying something, so the card flags him rather than deciding. */
+  dayToDay?: boolean;
   off: number;
   why: string;
   pa: number | null;
@@ -361,6 +363,15 @@ export interface LineupResponse {
   dhOverridden?: boolean;
   lineup: LineupSlot[];
   bench: Array<{ player_id: number; name: string; positionName: string; off: number }>;
+  /** On the roster but out tonight — named so a missing star reads as injured
+   *  rather than as a broken card. */
+  unavailable: Array<{
+    player_id: number;
+    name: string;
+    positionName: string;
+    status: string;
+    daysLeft: number | null;
+  }>;
 }
 
 export const getContracts = (orgId: number) => json<ContractsResponse>(`/api/contracts/${orgId}`);

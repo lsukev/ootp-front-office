@@ -174,8 +174,18 @@ export function Lineup({ teamId }: { teamId: number }) {
               {data.lineup.map((l) => (
                 <tr key={l.slot}>
                   <td className="slot-num">{l.slot}</td>
-                  <td className="name"><PlayerLink id={l.player_id}>{l.name}</PlayerLink></td>
+                  <td className="name">
+                    <PlayerLink id={l.player_id}>{l.name}</PlayerLink>
+                    {l.dayToDay && (
+                      <Tip
+                        label=" DTD"
+                        tip="Day-to-day. OOTP will let you play him, so he is still on the card — but check him before you post it."
+                      />
+                    )}
+                  </td>
                   <td>{l.positionName}</td>
+                  {/* A designated hitter is not fielding anywhere, so there is
+                      no rating to show — an empty glove is the honest answer */}
                   <td className="num">{l.defRating ?? '—'}</td>
                   <td>{l.bats}</td>
                   {/* A pitcher has no scouted offensive value; 0 would read as
@@ -194,6 +204,19 @@ export function Lineup({ teamId }: { teamId: number }) {
           {data.bench.length > 0 && (
             <p className="muted">
               Bench: {data.bench.map((b) => `${b.name} (${b.positionName})`).join(', ')}
+            </p>
+          )}
+          {data.unavailable.length > 0 && (
+            <p className="muted">
+              Unavailable:{' '}
+              {data.unavailable
+                .map(
+                  (u) =>
+                    `${u.name} (${u.positionName} · ${u.status}${
+                      u.daysLeft ? `, ${u.daysLeft}d` : ''
+                    })`
+                )
+                .join(', ')}
             </p>
           )}
         </>

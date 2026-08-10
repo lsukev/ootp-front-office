@@ -9,13 +9,49 @@ const POSITION_NAMES: Record<number, string> = {
   2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
 
-interface Candidate {
+/** OOTP's designated-hitter slot, carried through the fill as a position. */
+const DH_POS = 10;
+
+interface Unavailable {
+  status: string;
+  daysLeft: number | null;
+}
+
+/**
+ * Who cannot play tonight.
+ *
+ * The roster clause every other page shares deliberately counts the injured
+ * list, because a man on it is still on the roster and still paid. Tonight's
+ * lineup is the one place that is wrong: he is on the team and unavailable,
+ * and a card that starts him is worse than no card at all — it silently moves
+ * everyone else into the wrong spot around him.
+ *
+ * Day-to-day is left in. OOTP lets a manager play through it, so whether to is
+ * his call rather than the app's; it is flagged instead of decided.
+ */
+function unavailability(p: {
+  injury_is_injured: number | null;
+  injury_dtd_injury: number | null;
+  injury_left: number | null;
+  is_on_dl: number | null;
+  is_on_dl60: number | null;
+}): Unavailable | null {
+  const daysLeft = p.injury_left ?? null;
+  if (p.is_on_dl60 === 1) return { status: 'IL-60', daysLeft };
+  if (p.is_on_dl === 1) return { status: 'IL', daysLeft };
+  if (p.injury_is_injured === 1 && p.injury_dtd_injury !== 1) return { status: 'Injured', daysLeft };
+  return null;
+}
+
+export interface Candidate {
   player_id: number;
   name: string;
   age: number;
   position: number;
   positionName: string;
   bats: number;
+  /** Playable but carrying something — the manager's call, not the app's. */
+  dayToDay: boolean;
   off: number; // offensive value for the chosen platoon side
   contact: number;
   power: number;
@@ -118,6 +154,7 @@ function startingPitcherCandidate(teamId: number): Candidate | null {
     position: 1,
     positionName: 'P',
     bats: p.bats,
+    dayToDay: false,
     off: 0,
     contact: 0,
     power: 0,
@@ -125,6 +162,111 @@ function startingPitcherCandidate(teamId: number): Candidate | null {
     speed: 0,
     defense: {},
   };
+}
+
+/** Hardest position first down the defensive spectrum; the DH is appended. */
+const FIELD_POSITIONS = [2, 6, 8, 5, 4, 9, 7, 3];
+
+/**
+ * What a point of fielding rating is worth against a point of offensive value.
+ * Offence in this save spans roughly a thousand points and the rating spans
+ * sixty, so eight keeps a ten-point glove difference meaningful — about eighty
+ * points — without letting defence override a real bat.
+ */
+const DEF_POINTS_PER_RATING = 8;
+
+/** A position nobody is rated at still has to be manned; this is the last resort. */
+const UNMANNED_RATING = 20;
+
+/**
+ * What a player is worth at a position: his bat, adjusted for how well he
+ * fields it.
+ *
+ * The half point settles ties. Two men rated identically at a spot score
+ * identically, and the tie used to fall to whatever order the roster came back
+ * in — which is how an everyday second baseman ends up at DH while his backup
+ * fields with the same glove and a worse bat. Half a point cannot outweigh any
+ * real difference, since offensive value is whole numbers, but it settles a tie
+ * in favour of the man OOTP already lists there.
+ */
+function slotValue(c: Candidate, pos: number, rating: number): number {
+  return c.off + DEF_POINTS_PER_RATING * (rating - 50) + (c.position === pos ? 0.5 : 0);
+}
+
+/**
+ * Choose the best possible set of fielders, not merely a good one.
+ *
+ * This was a greedy fill followed by swapping pairs until nothing improved,
+ * and the swap only ever looked at men already on the field. A better fielder
+ * who lost the greedy pass could therefore never get back in, however much the
+ * card would improve — which is how a 60-glove centre fielder rated at exactly
+ * one position ends up off the lineup entirely while a 55 plays there. Putting
+ * him back needs two men to move at once, and a pair swap can only move one.
+ *
+ * Nine positions is small enough to stop approximating. This walks every
+ * candidate against every subset of filled positions and keeps the best total:
+ * a few thousand steps, and the answer is the optimum rather than wherever the
+ * search happened to stall.
+ */
+export function chooseFielders(
+  candidates: Candidate[],
+  slots: number[]
+): Map<number, Candidate> {
+  const slotCount = slots.length;
+  const FULL_MASK = (1 << slotCount) - 1;
+  const anyRated = slots.map((pos) => candidates.some((c) => (c.defense[pos] ?? 0) > 0));
+  const canPlay = (c: Candidate, slot: number): boolean =>
+    !anyRated[slot] || (c.defense[slots[slot]] ?? 0) > 0;
+  const score = (c: Candidate, slot: number): number =>
+    slotValue(c, slots[slot], anyRated[slot] ? (c.defense[slots[slot]] ?? 0) : UNMANNED_RATING);
+
+  let value = new Float64Array(1 << slotCount).fill(-Infinity);
+  value[0] = 0;
+  // Which slot each candidate took to reach each subset of filled positions;
+  // -1 means he sat, and is how the walk back knows to skip him
+  const tookSlot: Int8Array[] = [];
+  for (const c of candidates) {
+    const next = Float64Array.from(value);
+    const took = new Int8Array(1 << slotCount).fill(-1);
+    for (let mask = 0; mask <= FULL_MASK; mask++) {
+      if (value[mask] === -Infinity) continue;
+      for (let slot = 0; slot < slotCount; slot++) {
+        if (mask & (1 << slot)) continue;
+        if (!canPlay(c, slot)) continue;
+        const filled = mask | (1 << slot);
+        const total = value[mask] + score(c, slot);
+        if (total > next[filled]) {
+          next[filled] = total;
+          took[filled] = slot;
+        }
+      }
+    }
+    value = next;
+    tookSlot.push(took);
+  }
+
+  // Man as many positions as the roster allows, and among those, score best
+  const filledCount = (m: number): number => m.toString(2).split('1').length - 1;
+  let bestMask = 0;
+  for (let m = 0; m <= FULL_MASK; m++) {
+    if (value[m] === -Infinity) continue;
+    if (
+      filledCount(m) > filledCount(bestMask) ||
+      (filledCount(m) === filledCount(bestMask) && value[m] > value[bestMask])
+    ) {
+      bestMask = m;
+    }
+  }
+
+  const assigned = new Map<number, Candidate>();
+  let mask = bestMask;
+  for (let k = candidates.length - 1; k >= 0; k--) {
+    const slot = tookSlot[k][mask];
+    if (slot < 0) continue;
+    assigned.set(slots[slot], candidates[k]);
+    mask ^= 1 << slot;
+  }
+  return assigned;
 }
 
 lineupRoutes.get('/lineup/:teamId', (req, res) => {
@@ -148,7 +290,9 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
               f.fielding_rating_pos2 AS d2, f.fielding_rating_pos3 AS d3,
               f.fielding_rating_pos4 AS d4, f.fielding_rating_pos5 AS d5,
               f.fielding_rating_pos6 AS d6, f.fielding_rating_pos7 AS d7,
-              f.fielding_rating_pos8 AS d8, f.fielding_rating_pos9 AS d9
+              f.fielding_rating_pos8 AS d8, f.fielding_rating_pos9 AS d9,
+              p.injury_is_injured, p.injury_dtd_injury, p.injury_left,
+              rs.is_on_dl, rs.is_on_dl60
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_fielding f ON f.player_id = p.player_id
@@ -160,97 +304,55 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     bats: number; contact: number | null; power: number | null; eye: number | null; speed: number | null;
     d2: number | null; d3: number | null; d4: number | null; d5: number | null;
     d6: number | null; d7: number | null; d8: number | null; d9: number | null;
+    injury_is_injured: number | null; injury_dtd_injury: number | null; injury_left: number | null;
+    is_on_dl: number | null; is_on_dl60: number | null;
   }>;
 
-  const candidates: Candidate[] = raw.map((p) => {
-    const v = values.get(p.player_id);
-    return {
+  const unavailable = raw
+    .map((p) => ({ p, out: unavailability(p) }))
+    .filter((r): r is { p: (typeof raw)[number]; out: Unavailable } => r.out !== null)
+    .map(({ p, out }) => ({
       player_id: p.player_id,
       name: `${p.first_name} ${p.last_name}`,
-      age: p.age,
-      position: p.position,
       positionName: POSITION_NAMES[p.position] ?? '?',
-      bats: p.bats,
-      off: (vs === 'r' ? v?.offenseVsR : v?.offenseVsL) ?? v?.offense ?? 0,
-      contact: p.contact ?? 0,
-      power: p.power ?? 0,
-      eye: p.eye ?? 0,
-      speed: p.speed ?? 0,
-      defense: {
-        2: p.d2 ?? 0, 3: p.d3 ?? 0, 4: p.d4 ?? 0, 5: p.d5 ?? 0,
-        6: p.d6 ?? 0, 7: p.d7 ?? 0, 8: p.d8 ?? 0, 9: p.d9 ?? 0,
-      },
-    };
-  });
+      status: out.status,
+      daysLeft: out.daysLeft,
+    }));
+  const sidelined = new Set(unavailable.map((u) => u.player_id));
 
-  /**
-   * Fill the field, weighing the glove as well as the bat.
-   *
-   * This used to take the best bat whose listed position matched and stop
-   * there, which ignored two things: whether he can actually field the spot,
-   * and that most players are rated at several. OOTP publishes a 20-80 rating
-   * per position — 0 meaning he cannot play there — so a man is now considered
-   * anywhere he is rated, and ranked on offence adjusted for how well he
-   * fields it.
-   *
-   * Positions are filled hardest-first down the defensive spectrum. Filling
-   * greedily in numeric order would hand first base to the only catcher on the
-   * roster and leave the position empty.
-   */
-  const FILL_ORDER = [2, 6, 8, 5, 4, 9, 7, 3];
+  const candidates: Candidate[] = raw
+    .filter((p) => !sidelined.has(p.player_id))
+    .map((p) => {
+      const v = values.get(p.player_id);
+      return {
+        player_id: p.player_id,
+        name: `${p.first_name} ${p.last_name}`,
+        age: p.age,
+        position: p.position,
+        positionName: POSITION_NAMES[p.position] ?? '?',
+        bats: p.bats,
+        dayToDay: p.injury_dtd_injury === 1,
+        off: (vs === 'r' ? v?.offenseVsR : v?.offenseVsL) ?? v?.offense ?? 0,
+        contact: p.contact ?? 0,
+        power: p.power ?? 0,
+        eye: p.eye ?? 0,
+        speed: p.speed ?? 0,
+        defense: {
+          2: p.d2 ?? 0, 3: p.d3 ?? 0, 4: p.d4 ?? 0, 5: p.d5 ?? 0,
+          6: p.d6 ?? 0, 7: p.d7 ?? 0, 8: p.d8 ?? 0, 9: p.d9 ?? 0,
+          // Anyone can DH, and nobody fields it, so it scores as a neutral
+          // glove — which makes the bat the only thing separating candidates
+          [DH_POS]: 50,
+        },
+      };
+    });
 
-  /**
-   * What a point of fielding rating is worth against a point of offensive
-   * value. Offence in this save spans roughly a thousand points and the rating
-   * spans sixty, so eight keeps a ten-point glove difference meaningful —
-   * about eighty points — without letting defence override a real bat.
-   */
-  const DEF_POINTS_PER_RATING = 8;
-  const fieldingScore = (c: Candidate, pos: number): number =>
-    c.off + DEF_POINTS_PER_RATING * ((c.defense[pos] ?? 0) - 50);
-
-  const assigned = new Map<number, Candidate>(); // position -> player
-  const used = new Set<number>();
-  for (const pos of FILL_ORDER) {
-    const rated = candidates.filter((c) => !used.has(c.player_id) && (c.defense[pos] ?? 0) > 0);
-    // A short roster, or an export without fielding ratings, falls back to the
-    // old behaviour rather than leaving the position unmanned
-    const pool = rated.length > 0 ? rated : candidates.filter((c) => c.position === pos && !used.has(c.player_id));
-    const best = [...pool].sort((a, b) => fieldingScore(b, pos) - fieldingScore(a, pos))[0];
-    if (best) {
-      assigned.set(pos, best);
-      used.add(best.player_id);
-    }
-  }
-
-  /**
-   * Greedy alone is not enough: filling centre field before right hands it to
-   * the biggest bat on the roster even when he is a poor centre fielder and a
-   * good one is still unassigned. Swapping any two men improves the total when
-   * both are better suited the other way round, so keep swapping until nothing
-   * does. Eight positions make this trivial to run to completion.
-   */
-  const spots = [...assigned.keys()];
-  for (let pass = 0; pass < 8; pass++) {
-    let improved = false;
-    for (let i = 0; i < spots.length; i++) {
-      for (let j = i + 1; j < spots.length; j++) {
-        const [a, b] = [spots[i], spots[j]];
-        const pa = assigned.get(a)!;
-        const pb = assigned.get(b)!;
-        // Neither may be swapped into a position he cannot play
-        if ((pa.defense[b] ?? 0) === 0 || (pb.defense[a] ?? 0) === 0) continue;
-        const now = fieldingScore(pa, a) + fieldingScore(pb, b);
-        const swapped = fieldingScore(pb, a) + fieldingScore(pa, b);
-        if (swapped > now) {
-          assigned.set(a, pb);
-          assigned.set(b, pa);
-          improved = true;
-        }
-      }
-    }
-    if (!improved) break;
-  }
+  const leagueUsesDH = usesDH(teamId);
+  const dh = dhParam === 'auto' ? leagueUsesDH : dhParam === 'on';
+  const FILL_ORDER = dh ? [...FIELD_POSITIONS, DH_POS] : [...FIELD_POSITIONS];
+  const assigned = chooseFielders(candidates, FILL_ORDER);
+  const used = new Set([...assigned.values()].map((c) => c.player_id));
+  const spots = FILL_ORDER.filter((pos) => assigned.has(pos));
 
   const starters: Candidate[] = spots.map((pos) => {
     const c = assigned.get(pos)!;
@@ -258,21 +360,18 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       ...c,
       position: pos,
       positionName: POSITION_NAMES[pos] ?? c.positionName,
-      playedRating: c.defense[pos] ?? 0,
+      // The DH's neutral 50 is a scoring device, not a glove he is using
+      playedRating: pos === DH_POS ? undefined : (c.defense[pos] ?? 0),
     };
   });
-  const leagueUsesDH = usesDH(teamId);
-  const dh = dhParam === 'auto' ? leagueUsesDH : dhParam === 'on';
   const remaining = candidates.filter((c) => !used.has(c.player_id)).sort((a, b) => b.off - a.off);
-  // With a DH the ninth bat is the best one left over. Without one, only the
-  // eight fielders bat and the pitcher takes the ninth slot himself.
+  // Without a DH only the eight fielders bat and the pitcher takes the ninth
+  // slot himself. A position left unmanned by a short roster is backfilled
+  // with the best bat still standing rather than left empty.
   const fieldersNeeded = dh ? 9 : 8;
   while (starters.length < fieldersNeeded && remaining.length) {
     const extra = remaining.shift()!;
-    starters.push({
-      ...extra,
-      positionName: dh && starters.length === 8 ? 'DH' : extra.positionName,
-    });
+    starters.push(extra);
     used.add(extra.player_id);
   }
   if (starters.length < fieldersNeeded) {
@@ -334,6 +433,7 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
         positionName: l.player.positionName,
         defRating: l.player.playedRating ?? null,
         bats: { 1: 'R', 2: 'L', 3: 'S' }[l.player.bats] ?? '?',
+        dayToDay: l.player.dayToDay === true,
         off: l.player.off,
         speed: l.player.speed,
         power: l.player.power,
@@ -351,5 +451,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       positionName: c.positionName,
       off: c.off,
     })),
+    // Named rather than silently dropped: a coach who does not see why his
+    // best hitter is missing will assume the card is broken
+    unavailable,
   });
 });
