@@ -76,29 +76,37 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
     : null;
 
   // Players in the organization, PLUS anyone this club still pays after a trade
-  // or release — contract_team_id points back here while the player has moved
-  // on. Without that dead money the total misses OOTP's own payroll figure.
+  // or release.
   //
-  // Membership is judged on organization_id, NOT team_id. A player optioned to
+  // Membership is judged on organization_id, NOT team_id: a player optioned to
   // the affiliate keeps the organization but takes the affiliate's team_id, so
   // comparing team_id billed the club's own farmhands as money owed to men who
-  // had left — Anthony Volpe and Carlos Rodón among them in the sample save.
+  // had left.
+  //
+  // A contract_team_id pointing at another club does NOT by itself mean that
+  // club is paying. It is the club of record, and OOTP leaves it behind when a
+  // player moves: in the sample save Chase Silseth is charged to the Angels
+  // while playing in the Yankees system with nothing retained. Trading a player
+  // away without retaining salary hands the whole remaining deal to the club
+  // acquiring him, and the old club owes nothing — so the retained flag, not
+  // contract_team_id, decides whether money is really owed.
   const rows = db
     .prepare(
       `SELECT c.*, p.first_name, p.last_name, p.age, p.position, p.retired,
               p.team_id AS current_team_id, p.organization_id AS current_org,
+              c.retained AS retained,
               rs.mlb_service_years AS service_years
        FROM players_contract c
        JOIN players p ON p.player_id = c.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = c.player_id
-       WHERE (c.team_id = ? OR c.contract_team_id = ?)
-         AND p.retired = 0 AND c.years >= 1`
+       WHERE p.retired = 0 AND c.years >= 1
+         AND (p.organization_id = ? OR (c.contract_team_id = ? AND c.retained != 0))`
     )
     .all(orgId, orgId) as Array<ContractRow & {
     first_name: string; last_name: string; age: number; position: number;
     no_trade: number; last_year_team_option: number; last_year_player_option: number;
     last_year_vesting_option: number; service_years: number | null;
-    current_team_id: number; current_org: number | null;
+    current_team_id: number; current_org: number | null; retained: number | null;
   }>;
 
   // Signed extensions that begin after the current deal expires
@@ -134,8 +142,8 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
       return {
         player_id: c.player_id,
         name: `${c.first_name} ${c.last_name}`,
-        // Salary owed to someone who has left the organization altogether
-        deadMoney: c.current_org !== orgId,
+        // Owed to someone who has left AND whose salary this club retained
+        deadMoney: c.current_org !== orgId && (c.retained ?? 0) !== 0,
         age: c.age,
         positionName: POSITION_NAMES[c.position] ?? '?',
         salaryNow: byYear[0] ?? 0,
