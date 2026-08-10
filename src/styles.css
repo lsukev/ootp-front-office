@@ -356,6 +356,30 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 /* A signed extension is settled business, not a decision to make */
 .flag-locked { border-color: var(--good); color: var(--good); }
 
+/* Offseason status chips: counts you can click to filter the contract table */
+.status-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 2px; }
+.status-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 132px;
+  padding: 9px 14px;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+.status-chip strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.05;
+  color: var(--accent);
+}
+.status-chip span { font-size: 12px; }
+.status-chip.active { border-color: var(--accent); background: var(--panel-raised); }
+
+
 /* ── Player hover card ────────────────────────────────────────── */
 
 /* inline-flex keeps the anchor from adding a line box of its own inside prose */
