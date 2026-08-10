@@ -7,6 +7,7 @@ import { DATA_DIR } from './config.js';
 import { aiModel, getApiKey } from './settings.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
+import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
 
 export const chatRoutes = Router();
 
@@ -19,7 +20,10 @@ export const chatRoutes = Router();
  * it in the data directory means it survives restarts, updates and a change of
  * port, which is what a conversation you can pick up later actually requires.
  */
-const historyPath = (orgId: number) => path.join(DATA_DIR, `chat-${orgId}.json`);
+const suffix = (persona: string) => (persona === 'analyst' ? '' : `-${persona}`);
+/** Peter keeps the original filename so threads written before this survive. */
+const historyPath = (orgId: number, persona: string) =>
+  path.join(DATA_DIR, `chat-${orgId}${suffix(persona)}.json`);
 
 /**
  * A cap on the saved thread, high enough that reaching it means a season's
@@ -28,9 +32,20 @@ const historyPath = (orgId: number) => path.join(DATA_DIR, `chat-${orgId}.json`)
  */
 const KEEP_TURNS = 1000;
 
+/** Who this club can put on the phone. */
+chatRoutes.get('/staff/:orgId', (req, res) => {
+  const people = personasFor(Number(req.params.orgId));
+  res.json({ staff: people.map((p) => ({ id: p.id, name: p.name, role: p.role })) });
+});
+
+const personaParam = (req: { query: Record<string, unknown> }): string => {
+  const raw = String(req.query.persona ?? 'analyst');
+  return /^[a-z]+$/.test(raw) ? raw : 'analyst';
+};
+
 chatRoutes.get('/chat-history/:orgId', (req, res) => {
   try {
-    const raw = fs.readFileSync(historyPath(Number(req.params.orgId)), 'utf8');
+    const raw = fs.readFileSync(historyPath(Number(req.params.orgId), personaParam(req)), 'utf8');
     const parsed: unknown = JSON.parse(raw);
     res.json(Array.isArray(parsed) ? parsed : []);
   } catch {
@@ -42,7 +57,10 @@ chatRoutes.put('/chat-history/:orgId', (req, res) => {
   const body = req.body as unknown;
   if (!Array.isArray(body)) return res.status(400).json({ error: 'Expected an array of messages' });
   try {
-    fs.writeFileSync(historyPath(Number(req.params.orgId)), JSON.stringify(body.slice(-KEEP_TURNS)));
+    fs.writeFileSync(
+      historyPath(Number(req.params.orgId), personaParam(req)),
+      JSON.stringify(body.slice(-KEEP_TURNS))
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -295,8 +313,13 @@ function defaultOrgId(): number {
   return any?.team_id ?? 1;
 }
 
-/** Orients the model in the save so it doesn't have to burn a tool call on basics. */
-function systemPrompt(orgId: number): string {
+/**
+ * Orients the model in the save so it doesn't have to burn a tool call on
+ * basics, then hands over to whichever member of staff is speaking. Everything
+ * below the brief is shared: the rules about only trusting the tools, and what
+ * the numbers mean, are true no matter who is talking.
+ */
+function systemPrompt(orgId: number, persona: Persona): string {
   const team = db
     .prepare(
       `SELECT name, nickname, league_id FROM teams WHERE team_id = ?`
@@ -307,9 +330,7 @@ function systemPrompt(orgId: number): string {
   const date = team ? currentGameDate(team.league_id) : null;
 
   return [
-    'Your name is Peter. You are the front-office analyst inside OOTP Front Office, a desktop',
-    'companion app for a saved Out of the Park Baseball league. You are talking to the general',
-    'manager, who is your boss. Introduce yourself by name only if asked who you are.',
+    personaBrief(persona),
     '',
     'This is a text-message conversation, so write like one: short messages, plain sentences, no',
     'greeting or sign-off on every reply. You can be dry and opinionated the way a trusted analyst',
@@ -323,7 +344,7 @@ function systemPrompt(orgId: number): string {
     'from memory: real-world knowledge about a same-named player is almost always wrong here,',
     'because the sim has diverged. If the tools cannot answer something, say so plainly.',
     '',
-    'Answer like a good analyst talking to a colleague: lead with the answer, then the evidence.',
+    'Lead with the answer, then the evidence.',
     'Cite the numbers you used. Keep it conversational — no headers or bullet lists unless the',
     'user asks for a rundown of several things. When a number is surprising, say why it might be',
     '(small sample, park, level) rather than presenting it flatly.',
@@ -356,7 +377,8 @@ interface ChatMessage {
  *
  * Storing the tool results means it does not have to remember what it read.
  */
-const contextPath = (orgId: number) => path.join(DATA_DIR, `chat-context-${orgId}.json`);
+const contextPath = (orgId: number, persona: string) =>
+  path.join(DATA_DIR, `chat-context-${orgId}${suffix(persona)}.json`);
 
 interface StoredContext {
   /** The visible thread as it stood when this transcript was written. */
@@ -462,17 +484,17 @@ function stripThinking(messages: Anthropic.MessageParam[]): Anthropic.MessagePar
   });
 }
 
-function saveContext(orgId: number, ctx: StoredContext): void {
+function saveContext(orgId: number, persona: string, ctx: StoredContext): void {
   try {
-    fs.writeFileSync(contextPath(orgId), JSON.stringify(ctx));
+    fs.writeFileSync(contextPath(orgId, persona), JSON.stringify(ctx));
   } catch {
     // A thread that cannot be written to disk is still worth having in the window
   }
 }
 
-function loadContext(orgId: number): StoredContext | null {
+function loadContext(orgId: number, persona: string): StoredContext | null {
   try {
-    const parsed = JSON.parse(fs.readFileSync(contextPath(orgId), 'utf8')) as StoredContext;
+    const parsed = JSON.parse(fs.readFileSync(contextPath(orgId, persona), 'utf8')) as StoredContext;
     if (!Array.isArray(parsed?.visible) || !Array.isArray(parsed?.messages)) return null;
     return parsed;
   } catch {
@@ -481,7 +503,11 @@ function loadContext(orgId: number): StoredContext | null {
 }
 
 chatRoutes.post('/chat', async (req, res) => {
-  const { messages: history, orgId } = req.body as { messages?: ChatMessage[]; orgId?: number };
+  const { messages: history, orgId, persona: personaId } = req.body as {
+    messages?: ChatMessage[];
+    orgId?: number;
+    persona?: string;
+  };
   if (!tableExists('players')) {
     return res.status(400).json({ error: 'No data imported yet — pick a save first.' });
   }
@@ -492,6 +518,10 @@ chatRoutes.post('/chat', async (req, res) => {
   if (!key) return res.status(401).json({ error: NO_KEY_MESSAGE });
 
   const team = Number.isFinite(Number(orgId)) ? Number(orgId) : defaultOrgId();
+  // A club that has fired its scout cannot put one on the phone, so an unknown
+  // or vacant seat falls back to the analyst rather than answering as nobody
+  const persona = personaById(team, String(personaId ?? 'analyst')) ??
+    personasFor(team)[0];
 
   // Server-sent events: the answer streams in, and tool calls are announced as
   // they happen so the user sees the assistant working rather than a spinner.
@@ -509,7 +539,7 @@ chatRoutes.post('/chat', async (req, res) => {
   // one it belongs to. Anything else — a cleared conversation, a thread edited
   // elsewhere — rebuilds from what the client sent, which costs only the
   // evidence and never produces a mismatched reply.
-  const stored = loadContext(team);
+  const stored = loadContext(team, persona.id);
   const resuming = stored !== null && continuesThread(stored.visible, history);
   const messages: Anthropic.MessageParam[] = resuming ? trimTranscript(stored.messages) : [];
   stripCachePoints(messages);
@@ -525,7 +555,7 @@ chatRoutes.post('/chat', async (req, res) => {
   // The tools and the system prompt are identical on every call and sit ahead
   // of the conversation, so one breakpoint here caches both.
   const system: Anthropic.TextBlockParam[] = [
-    { type: 'text', text: systemPrompt(team), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: systemPrompt(team, persona), cache_control: { type: 'ephemeral' } },
   ];
 
   // Kept so the stored transcript ends exactly where the window does, which is
@@ -588,7 +618,7 @@ chatRoutes.post('/chat', async (req, res) => {
     // call whose result never arrived is one the API refuses outright, so a
     // failed turn keeps the last good transcript rather than poisoning it.
     stripCachePoints(messages);
-    saveContext(team, {
+    saveContext(team, persona.id, {
       visible: [...history, { role: 'assistant', content: answer }],
       messages: stripThinking(messages),
     });

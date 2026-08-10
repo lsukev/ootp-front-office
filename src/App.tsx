@@ -310,7 +310,7 @@ export function App() {
                 setChatUsed(true);
                 setChatOpen((v) => !v);
               }}
-              title="Message Peter, your front-office analyst"
+              title="Message your front office"
             >
               ✦ Ask
             </button>
@@ -394,12 +394,12 @@ export function App() {
               {chatOpen && <div className="chat-scrim" onClick={() => setChatOpen(false)} />}
               <aside
                 className={`chat-drawer ${chatOpen ? '' : 'chat-hidden'}`}
-                aria-label="Message Peter, your front-office analyst"
+                aria-label="Message your front office"
                 aria-hidden={!chatOpen}
                 {...(chatOpen ? {} : { inert: '' })}
               >
                 <header className="chat-head">
-                  <strong>Peter</strong>
+                  <strong>Front Office</strong>
                   <button className="chat-close" onClick={() => setChatOpen(false)} title="Close">
                     ✕
                   </button>

@@ -1548,3 +1548,25 @@ button.cta {
 .next-budget input { width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
 .next-budget-unit { color: var(--muted); }
 .next-budget .muted { font-size: 12px; }
+
+/* ── Chat: who you are talking to ─────────────────────────── */
+
+.imsg-staff {
+  display: flex; gap: 4px; overflow-x: auto; padding: 6px 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.imsg-staff-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 5px 5px 0 0;
+  color: var(--muted);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.imsg-staff-tab:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,0.04); }
+.imsg-staff-tab.active { color: var(--accent); border-bottom-color: var(--accent); }

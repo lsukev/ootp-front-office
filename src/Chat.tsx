@@ -47,6 +47,40 @@ const TOOL_LABELS: Record<string, string> = {
   get_teams: 'looking up teams',
 };
 
+interface StaffMember { id: string; name: string; role: string }
+
+/** Peter is always available; the rest depend on who the club has hired. */
+const FALLBACK_STAFF: StaffMember[] = [{ id: 'analyst', name: 'Peter', role: 'front-office analyst' }];
+
+/** Openers worth asking each of them, since what they are for differs. */
+const STARTERS_BY_PERSONA: Record<string, string[]> = {
+  analyst: [
+    'How is my team actually playing so far?',
+    'Who should I call up from the minors?',
+    'Which contracts should I worry about?',
+  ],
+  manager: [
+    'Who should I start tonight?',
+    'Who needs a day off?',
+    'How do you want to use the bullpen this week?',
+  ],
+  pitching: [
+    'Who can pitch tonight?',
+    'Is anyone being overworked?',
+    'Who is due for a step forward?',
+  ],
+  scout: [
+    'Which prospect is closest to helping us?',
+    'Who is overrated on our farm?',
+    'What should I be looking for in the draft?',
+  ],
+  owner: [
+    'Can we afford to add salary?',
+    'Is this roster worth what we are paying for it?',
+    'What do you expect from this season?',
+  ],
+};
+
 const STARTERS = [
   'How is my team actually playing so far?',
   'Who should I call up from the minors?',
@@ -82,28 +116,30 @@ const valid = (parsed: unknown): Message[] =>
  * gone. Anything already in localStorage is migrated up once so nobody loses a
  * conversation they still have.
  */
-async function loadHistory(orgId: number): Promise<Message[]> {
+async function loadHistory(orgId: number, persona: string): Promise<Message[]> {
   let stored: Message[] = [];
   try {
-    stored = valid(await apiGet<unknown>(`/api/chat-history/${orgId}`));
+    stored = valid(await apiGet<unknown>(`/api/chat-history/${orgId}?persona=${persona}`));
   } catch {
     // No server (a static export) — fall through to whatever is local
   }
   if (stored.length > 0) return stored;
+  // Only Peter ever had a local-only thread to recover; the rest are new
+  if (persona !== 'analyst') return [];
   try {
     const raw = localStorage.getItem(storageKey(orgId));
     const local = raw ? valid(JSON.parse(raw)) : [];
-    if (local.length > 0) void saveHistory(orgId, local);
+    if (local.length > 0) void saveHistory(orgId, persona, local);
     return local;
   } catch {
     return [];
   }
 }
 
-async function saveHistory(orgId: number, messages: Message[]): Promise<void> {
+async function saveHistory(orgId: number, persona: string, messages: Message[]): Promise<void> {
   const trimmed = messages.slice(-KEEP);
   try {
-    await apiPut(`/api/chat-history/${orgId}`, trimmed);
+    await apiPut(`/api/chat-history/${orgId}?persona=${persona}`, trimmed);
   } catch {
     // Keep a local copy as a backstop when the server cannot be reached
     try {
@@ -121,22 +157,38 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [staff, setStaff] = useState<StaffMember[]>(FALLBACK_STAFF);
+  const [persona, setPersona] = useState('analyst');
+
+  // Who this club has on the payroll. A save missing a seat simply shows fewer
+  // tabs rather than offering a conversation with nobody.
+  useEffect(() => {
+    apiGet<{ staff: StaffMember[] }>(`/api/staff/${orgId}`)
+      .then((r) => {
+        const people = r.staff.length > 0 ? r.staff : FALLBACK_STAFF;
+        setStaff(people);
+        setPersona((cur) => (people.some((p) => p.id === cur) ? cur : people[0].id));
+      })
+      .catch(() => setStaff(FALLBACK_STAFF));
+  }, [orgId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
-  // Each organization keeps its own thread, restored when you switch back
+  // Every person on every club keeps their own thread, restored when you come
+  // back to them — the manager should not see what the owner was told
   useEffect(() => {
     let cancelled = false;
     setError(null);
-    void loadHistory(orgId).then((m) => {
+    setMessages([]);
+    void loadHistory(orgId, persona).then((m) => {
       if (!cancelled) setMessages(m);
     });
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, persona]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -150,7 +202,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
       setMessages([...history, { role: 'assistant', content: '', tools: [], at: now }]);
       // Save the question now: if the answer errors or is stopped, the thread
       // still reflects what was asked
-      void saveHistory(orgId, history);
+      void saveHistory(orgId, persona, history);
       setInput('');
       setBusy(true);
       setError(null);
@@ -172,6 +224,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             orgId,
+            persona,
             messages: history.map(({ role, content }) => ({ role, content })),
           }),
           signal: controller.signal,
@@ -221,7 +274,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           const last = prev[prev.length - 1];
           const next =
             last?.role === 'assistant' && !last.content.trim() ? prev.slice(0, -1) : prev;
-          void saveHistory(orgId, next);
+          void saveHistory(orgId, persona, next);
           return next;
         });
       }
@@ -233,11 +286,30 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
-    void saveHistory(orgId, []);
-  }, [orgId]);
+    void saveHistory(orgId, persona, []);
+  }, [orgId, persona]);
+
+  const who = staff.find((p) => p.id === persona) ?? FALLBACK_STAFF[0];
+  const starters = STARTERS_BY_PERSONA[persona] ?? STARTERS;
 
   return (
     <div className="imsg">
+      {staff.length > 1 && (
+        <div className="imsg-staff" role="tablist" aria-label="Who to talk to">
+          {staff.map((p) => (
+            <button
+              key={p.id}
+              role="tab"
+              aria-selected={p.id === persona}
+              className={`imsg-staff-tab ${p.id === persona ? 'active' : ''}`}
+              onClick={() => setPersona(p.id)}
+              title={p.role}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
       {messages.length > 0 && (
         <div className="imsg-bar">
           <span>
@@ -254,15 +326,15 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         {messages.length === 0 && (
           <div className="imsg-intro">
             <div className="imsg-avatar imsg-avatar-lg" aria-hidden="true">
-              P
+              {who.name.charAt(0)}
             </div>
             <p>
-              <strong className="imsg-name">Peter</strong> is your front-office analyst. Ask him
-              anything about {orgLabel} or the league — he looks every number up in your save before
-              answering rather than working from memory.
+              <strong className="imsg-name">{who.name}</strong> is your {who.role}. Ask him about{' '}
+              {orgLabel} or the league — every number comes out of your save rather than his memory,
+              and he answers from where he sits, so he will not always agree with the others.
             </p>
             <div className="imsg-starters">
-              {STARTERS.map((s) => (
+              {starters.map((s) => (
                 <button key={s} onClick={() => void ask(s)} disabled={busy}>
                   {s}
                 </button>
@@ -345,7 +417,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
             value={input}
             rows={1}
             placeholder="Message"
-            aria-label={`Message Peter about ${orgLabel}`}
+            aria-label={`Message ${who.name} about ${orgLabel}`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               // Enter sends; Shift+Enter is a newline
