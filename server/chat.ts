@@ -207,6 +207,17 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_injuries',
+    description:
+      'Everyone in the organisation currently hurt: status (day-to-day, IL, IL-60), days left, ' +
+      'and what level they are at. The first thing to check before saying anyone is available.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
+  {
     name: 'get_prospects',
     description: 'Minor leaguers ranked by promotion signal, with the reasoning behind each ranking.',
     input_schema: {
@@ -291,6 +302,8 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
       return cap(await callOwnApi(`lineup/${Number(input.team_id)}?vs=${input.vs === 'l' ? 'l' : 'r'}`));
     case 'get_payroll':
       return cap(await callOwnApi(`payroll/${Number(input.team_id)}`));
+    case 'get_injuries':
+      return cap(await callOwnApi(`injuries/${Number(input.team_id)}`));
     case 'get_prospects':
       return cap(await callOwnApi(`prospects/${Number(input.team_id)}`));
     case 'get_leaderboards':

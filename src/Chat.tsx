@@ -42,12 +42,28 @@ const TOOL_LABELS: Record<string, string> = {
   get_schedule: 'reading the schedule',
   get_lineup: 'building a lineup',
   get_payroll: 'looking at the books',
+  get_injuries: 'checking the training room',
   get_prospects: 'reviewing prospects',
   get_leaderboards: 'checking league leaders',
   get_teams: 'looking up teams',
 };
 
 interface StaffMember { id: string; name: string; role: string }
+
+/**
+ * Short titles for the tabs. The full role reads well in a sentence but not in
+ * a strip of five, and a name on its own is no help at all to anyone who does
+ * not already know who Drew Toussaint is.
+ */
+const ROLE_LABEL: Record<string, string> = {
+  analyst: 'Analyst',
+  manager: 'Manager',
+  pitching: 'Pitching Coach',
+  hitting: 'Hitting Coach',
+  trainer: 'Trainer',
+  scout: 'Scout',
+  owner: 'Owner',
+};
 
 /** Peter is always available; the rest depend on who the club has hired. */
 const FALLBACK_STAFF: StaffMember[] = [{ id: 'analyst', name: 'Peter', role: 'front-office analyst' }];
@@ -68,6 +84,16 @@ const STARTERS_BY_PERSONA: Record<string, string[]> = {
     'Who can pitch tonight?',
     'Is anyone being overworked?',
     'Who is due for a step forward?',
+  ],
+  hitting: [
+    'Who is pressing at the plate right now?',
+    'Is anyone hitting into bad luck?',
+    'Which of our young bats is closest to figuring it out?',
+  ],
+  trainer: [
+    'Who is hurt and how long are they out?',
+    'Is anyone at risk of breaking down?',
+    'Who is close to a rehab assignment?',
   ],
   scout: [
     'Which prospect is closest to helping us?',
@@ -303,9 +329,10 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
               aria-selected={p.id === persona}
               className={`imsg-staff-tab ${p.id === persona ? 'active' : ''}`}
               onClick={() => setPersona(p.id)}
-              title={p.role}
+              title={`${p.name} — ${p.role}`}
             >
-              {p.name}
+              <span className="imsg-staff-name">{p.name}</span>
+              <span className="imsg-staff-role">{ROLE_LABEL[p.id] ?? p.role}</span>
             </button>
           ))}
         </div>

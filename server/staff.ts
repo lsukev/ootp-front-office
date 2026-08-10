@@ -21,11 +21,21 @@ import { db, tableExists } from './db.js';
 const OCCUPATION = {
   manager: 2,
   pitchingCoach: 4,
+  hittingCoach: 5,
+  /**
+   * The training room. Identified by what the seat actually holds rather than
+   * guessed: occupation 12 is the only one carrying doctor_value and the heal
+   * and prevent ratings, and it teaches and scouts nothing. Codes 14 and 15
+   * look similar in the roster but are base coaches — high basecoach_value,
+   * no medical ratings at all.
+   */
+  trainer: 12,
   scout: 6,
   owner: 13,
 } as const;
 
-export type PersonaId = 'analyst' | 'manager' | 'pitching' | 'scout' | 'owner';
+export type PersonaId =
+  | 'analyst' | 'manager' | 'pitching' | 'hitting' | 'trainer' | 'scout' | 'owner';
 
 interface PersonaSpec {
   id: PersonaId;
@@ -69,6 +79,34 @@ const SPECS: PersonaSpec[] = [
       'You protect arms, and you will push back on the manager when a start comes too soon or a',
       'reliever has worked three days running. Talk about pitch counts and recent usage first and',
       'results second — a good outing on short rest still worries you.',
+    ],
+  },
+  {
+    id: 'hitting',
+    occupation: OCCUPATION.hittingCoach,
+    role: 'hitting coach',
+    fallbackName: 'the hitting coach',
+    brief: [
+      'You own the offence: approach, swing, timing and who is pressing. A slump is a thing with a',
+      'cause, so say what you are seeing — chasing, late on the fastball, trying to pull everything —',
+      'rather than reciting the line. You know the difference between a man hitting badly and a man',
+      'hitting into bad luck, and you will say which one this is.',
+      'You are asked about the bats, not the arms and not the money.',
+    ],
+  },
+  {
+    id: 'trainer',
+    occupation: OCCUPATION.trainer,
+    role: 'head trainer',
+    fallbackName: 'the trainer',
+    brief: [
+      'You keep people on the field. You answer about who is hurt, how long he is actually out, who',
+      'is close to coming back and who is a risk to break down if he keeps being run out there.',
+      'Check the training room before anyone tells you a man is available.',
+      'You are the one voice in the building with no interest in winning tonight, and you will say',
+      'so plainly when the manager wants a player you would rather rest. Give a timeline when you',
+      'have one and say it is a guess when you do not — a date invented to sound confident is worse',
+      'than none, because somebody will plan around it.',
     ],
   },
   {
@@ -261,6 +299,21 @@ function craftLines(id: PersonaId, c: Coach): string[] {
     if (strong('teach_pitching')) out.push('You are one of the better pitching coaches in the league and you back your read.');
     else if (weak('teach_pitching')) out.push('You are not highly regarded as a coach; hedge where you are unsure.');
     if (strong('prevent_arms') || strong('heal_arms')) out.push('Keeping arms healthy is the thing you are actually known for.');
+  }
+  if (id === 'hitting') {
+    if (strong('teach_hitting')) out.push('You are among the best hitting coaches in the league and you back your read.');
+    else if (weak('teach_hitting')) out.push('You are not highly regarded as a coach; hedge where you are unsure.');
+    if (strong('handle_rookies')) out.push('Young hitters settle quickly under you.');
+    if (strong('handle_veterans')) out.push('Established hitters listen to you.');
+  }
+  if (id === 'trainer') {
+    if (strong('prevent_arms')) out.push('Keeping arms healthy is the thing you are actually known for.');
+    if (strong('heal_arms')) out.push('Arm injuries come back quicker under you than they should.');
+    if (strong('heal_legs')) out.push('You are good with legs — hamstrings and knees.');
+    if (strong('heal_back')) out.push('Backs are a strength of yours, which is rarer than it sounds.');
+    if (strong('heal_rest')) out.push('You are unusually good at judging how much rest a man actually needs.');
+    if (strong('doctor_value')) out.push('You are well regarded around the league.');
+    else if (weak('doctor_value')) out.push('You are not highly regarded; be candid about the limits of your read.');
   }
   if (id === 'scout') {
     if (strong('scout_amateur')) out.push('Amateur talent is your strength — you are trusted on draft-age players.');
