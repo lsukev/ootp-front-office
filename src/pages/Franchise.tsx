@@ -32,15 +32,28 @@ const money = (v: number | null): string => {
   return Math.abs(v) >= 1_000_000 ? `$${(v / 1_000_000).toFixed(0)}M` : `$${Math.round(v / 1000)}K`;
 };
 
+interface Tenure {
+  seasons: Array<{
+    year: number; club: string; w: number; l: number; pct: number | null;
+    finish: number; gb: number | null;
+    madePlayoffs: boolean; wonPlayoffs: boolean; fired: boolean;
+  }>;
+  totals: { seasons: number; w: number; l: number; playoffs: number; titles: number; pct: number | null };
+}
+
 export function Franchise({ orgId }: { orgId: number }) {
   const [data, setData] = useState<FranchiseData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(40);
+  const [tenure, setTenure] = useState<Tenure | null>(null);
 
   useEffect(() => {
     setData(null);
     setError(null);
     setLimit(40);
+    // Your own record rather than the club's. Absent on a save exported before
+    // OOTP tracked it, and empty until you have finished a season.
+    apiGet<Tenure>(`/api/tenure/${orgId}`).then(setTenure).catch(() => setTenure(null));
     apiGet<FranchiseData>(`/api/franchise/${orgId}`).then(setData).catch((e) => setError(e.message));
   }, [orgId]);
 
@@ -74,6 +87,59 @@ export function Franchise({ orgId }: { orgId: number }) {
 
   return (
     <div>
+      {tenure && tenure.seasons.length > 0 && (
+        <section className="tenure">
+          <h2>Your Tenure</h2>
+          <p className="muted hint-line">
+            Every other page here is about the club. This one is about you — one line per season
+            you have run it, added to as you go.
+          </p>
+          <div className="finance-grid">
+            <div className="finance-card">
+              <span className="muted">Seasons</span>
+              <strong>{tenure.totals.seasons}</strong>
+            </div>
+            <div className="finance-card">
+              <span className="muted">Record</span>
+              <strong>{tenure.totals.w}-{tenure.totals.l}</strong>
+              <span className="muted">
+                {tenure.totals.pct === null ? '' : tenure.totals.pct.toFixed(3).replace(/^0\./, '.')}
+              </span>
+            </div>
+            <div className="finance-card">
+              <span className="muted">Playoffs</span>
+              <strong>{tenure.totals.playoffs}</strong>
+            </div>
+            <div className="finance-card">
+              <span className="muted">Titles</span>
+              <strong>{tenure.totals.titles}</strong>
+            </div>
+          </div>
+          <table className="mini">
+            <thead>
+              <tr><th>Year</th><th>Club</th><th>W-L</th><th>PCT</th><th>Finish</th><th>GB</th><th></th></tr>
+            </thead>
+            <tbody>
+              {tenure.seasons.map((t) => (
+                <tr key={`${t.year}-${t.club}`}>
+                  <td>{t.year}</td>
+                  <td>{t.club}</td>
+                  <td className="num">{t.w}-{t.l}</td>
+                  <td className="num">{t.pct !== null ? t.pct.toFixed(3).replace(/^0\./, '.') : '—'}</td>
+                  <td className="num">{t.finish || '—'}</td>
+                  <td className="num">{t.gb ? t.gb : '—'}</td>
+                  <td>
+                    {t.wonPlayoffs && <span className="good-text">Won it all</span>}
+                    {!t.wonPlayoffs && t.madePlayoffs && <span>Made the playoffs</span>}
+                    {t.fired && <span className="bad-text"> Fired</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       <div className="finance-grid">
         <div className="finance-card">
           <span className="muted">Seasons</span>

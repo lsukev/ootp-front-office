@@ -3,7 +3,7 @@ import { getRoster, getTeams, type RosterPlayer, type RosterResponse, type Team 
 import { PlayerLink, Tip, TIP_OA } from '../playerModal';
 import { ColumnPicker } from '../ColumnPicker';
 import {
-  DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, isFieldingStat, loadColumns,
+  DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, isContactStat, isFieldingStat, loadColumns,
   plusColor, saveColumns, type StatGroup,
 } from '../stats';
 import { Th } from '../Th';
@@ -174,10 +174,15 @@ function RosterTable({
               {columns.map((key) => {
                 const def = findStat(group, key);
                 if (!def) return null;
-                const value = (isFieldingStat(key) ? p.fielding?.[key] : stats?.[key]) ?? null;
+                const value =
+                  (isFieldingStat(key)
+                    ? p.fielding?.[key]
+                    : isContactStat(key)
+                      ? p.contact?.[key]
+                      : stats?.[key]) ?? null;
                 return (
                   <td key={key} className="num" style={{ color: plusColor(def, value) }}>
-                    {stats ? formatStat(def, value, stats) : ''}
+                    {isContactStat(key) || stats ? formatStat(def, value, stats ?? {}) : ''}
                   </td>
                 );
               })}
@@ -221,9 +226,11 @@ function compareBy(a: RosterPlayer, b: RosterPlayer, key: string, group: StatGro
       const statKey = key.slice(2);
       const stats = isFieldingStat(statKey)
         ? p.fielding
-        : group === 'pitching'
-          ? p.pitching
-          : p.batting;
+        : isContactStat(statKey)
+          ? p.contact
+          : group === 'pitching'
+            ? p.pitching
+            : p.batting;
       const v = stats?.[statKey];
       // Missing stats sort last regardless of direction
       return v === null || v === undefined ? -Infinity : v;

@@ -1580,3 +1580,46 @@ button.cta {
 }
 .imsg-staff-tab:hover:not(:disabled) { color: var(--text); background: rgba(255,255,255,0.04); }
 .imsg-staff-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Contact quality on the player card ───────────────────── */
+
+.contact-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;
+  margin-bottom: 6px;
+}
+.contact-stat {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.contact-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.contact-value { font-family: var(--font-display); font-size: 18px; font-variant-numeric: tabular-nums; }
+.contact-league { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.contact-line { font-size: 12px; margin: 2px 0 6px; }
+.contact-luck { font-size: 13px; margin: 4px 0 0; }
+
+/* ── Game plan, opened from the schedule ──────────────────── */
+
+.game-plan {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 10px;
+}
+.game-plan-loading { padding: 8px 0 2px; font-size: 13px; }
+.game-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.game-plan-head strong { font-family: var(--font-display); letter-spacing: 0.04em; font-size: 14px; }
+.game-plan-starter { margin: 4px 0 10px; font-size: 13px; }
+.game-plan-cols {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
+}
+.game-plan-cols h4 {
+  font-family: var(--font-display); font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 0 0 5px;
+}
+.game-plan-lineup { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.7; }
+.series-plan { text-align: right; white-space: nowrap; }
+
+.tenure { margin-bottom: 22px; }
+.tenure h2 { margin-bottom: 2px; }

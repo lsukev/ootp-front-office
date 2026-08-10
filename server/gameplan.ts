@@ -218,3 +218,82 @@ gameplanRoutes.get('/game-plan/:teamId/:gameId', (req, res) => {
     opponent: scoutOpponent(oppId),
   });
 });
+
+/**
+ * Your own record, which is the one story the app never told.
+ *
+ * Every other page is about the club; this is about the man running it. OOTP
+ * keeps a row per season for the human manager — record, where he finished,
+ * whether he made the playoffs, whether he was fired — and it grows by one
+ * line every year you play.
+ */
+gameplanRoutes.get('/tenure/:teamId', (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!tableExists('human_manager_history_record')) return res.json({ seasons: [] });
+
+  const records = db
+    .prepare(
+      `SELECT year, team_id, g, w, l, pos, pct, gb FROM human_manager_history_record ORDER BY year`
+    )
+    .all() as Array<{ year: number; team_id: number; g: number; w: number; l: number; pos: number; pct: number; gb: number | null }>;
+
+  const extra = tableExists('human_manager_history')
+    ? (db
+        .prepare(
+          `SELECT year, team_id, made_playoffs, won_playoffs, fired,
+                  best_hitter_id, best_pitcher_id, best_rookie_id
+           FROM human_manager_history`
+        )
+        .all() as Array<Record<string, number>>)
+    : [];
+  const byYear = new Map(extra.map((e) => [`${e.year}:${e.team_id}`, e]));
+
+  const nameOf = (id: number | undefined): string | null => {
+    if (!id) return null;
+    const p = db
+      .prepare(`SELECT first_name || ' ' || last_name AS n FROM players WHERE player_id = ?`)
+      .get(id) as { n: string } | undefined;
+    return p?.n ?? null;
+  };
+
+  const labels = new Map(
+    (db.prepare(`SELECT team_id, ${teamLabel} AS label FROM teams t`).all() as Array<{ team_id: number; label: string }>)
+      .map((r) => [r.team_id, r.label])
+  );
+
+  const seasons = records.map((r) => {
+    const e = byYear.get(`${r.year}:${r.team_id}`);
+    return {
+      year: r.year,
+      club: labels.get(r.team_id) ?? 'Unknown',
+      g: r.g, w: r.w, l: r.l,
+      pct: r.pct,
+      finish: r.pos,
+      gb: r.gb,
+      madePlayoffs: e?.made_playoffs === 1,
+      wonPlayoffs: e?.won_playoffs === 1,
+      fired: e?.fired === 1,
+      bestHitter: nameOf(e?.best_hitter_id),
+      bestPitcher: nameOf(e?.best_pitcher_id),
+      bestRookie: nameOf(e?.best_rookie_id),
+    };
+  });
+
+  const totals = seasons.reduce(
+    (a, s) => ({
+      seasons: a.seasons + 1,
+      w: a.w + s.w,
+      l: a.l + s.l,
+      playoffs: a.playoffs + (s.madePlayoffs ? 1 : 0),
+      titles: a.titles + (s.wonPlayoffs ? 1 : 0),
+    }),
+    { seasons: 0, w: 0, l: 0, playoffs: 0, titles: 0 }
+  );
+
+  res.json({
+    seasons,
+    totals: { ...totals, pct: totals.w + totals.l > 0 ? totals.w / (totals.w + totals.l) : null },
+    // The current club, so a page opened on someone else's team says so
+    teamId,
+  });
+});

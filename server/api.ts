@@ -18,6 +18,7 @@ import { clearValuationCaches, valuesByPlayer } from './valuation.js';
 import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
+import { contactProfiles } from './battedball.js';
 import { gameplanRoutes } from './gameplan.js';
 import { aiRoutes } from './ai.js';
 import { logoRoutes } from './logos.js';
@@ -282,17 +283,30 @@ api.get('/roster/:teamId', (req, res) => {
     if (!byTable.has(table)) byTable.set(table, []);
     byTable.get(table)!.push({ key, column });
   }
+  /**
+   * Only this roster's men. The stat blocks below were being computed for every
+   * player in the league — some twelve thousand rows and as many calls into the
+   * stat engine — to display forty of them.
+   */
+  const rosterIds = players.map((p) => p.player_id as number);
+  const idFilter = rosterIds.length > 0 ? `AND player_id IN (${rosterIds.map(() => '?').join(',')})` : '';
+
   const ratingsByPlayer = new Map<number, Record<string, unknown>>();
   for (const [table, specs] of byTable) {
     if (!tableColumns(table).includes('player_id')) continue;
     const sel = specs.map((s) => `"${s.column}" AS "${s.key}"`).join(', ');
+    // Every ratings table was being read whole — every player in the save,
+    // several times over — to fill in one roster
     const rows = db
-      .prepare(`SELECT player_id, ${sel} FROM "${table}"`)
-      .all() as Array<Record<string, unknown> & { player_id: number }>;
+      .prepare(`SELECT player_id, ${sel} FROM "${table}" WHERE player_id IN (${rosterIds.map(() => '?').join(',')})`)
+      .all(...rosterIds) as Array<Record<string, unknown> & { player_id: number }>;
     for (const row of rows) {
-      const existing = ratingsByPlayer.get(row.player_id) ?? {};
       const { player_id, ...rest } = row;
-      ratingsByPlayer.set(player_id, { ...existing, ...rest });
+      // Mutated in place rather than rebuilt: the spread was copying the whole
+      // accumulated object once per row
+      const existing = ratingsByPlayer.get(player_id);
+      if (existing) Object.assign(existing, rest);
+      else ratingsByPlayer.set(player_id, rest);
     }
   }
 
@@ -322,9 +336,9 @@ api.get('/roster/:teamId', (req, res) => {
          FROM players_career_batting_stats
          -- A drafted amateur's school season lives here under no league at
          -- all, and summing it in credits him with what he did to schoolboys
-         WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
+         WHERE year = ? AND split_id = 1 AND league_id != 0 ${idFilter} GROUP BY player_id`
       )
-      .all(statYear) as Array<Record<string, number>>;
+      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
     for (const row of rows) {
       battingByPlayer.set(row.player_id, computeBatting(row, baseline, teamId));
     }
@@ -332,6 +346,10 @@ api.get('/roster/:teamId', (req, res) => {
 
   // OOTP's own 20-80 grades, for cross-checking against the game's own screens
   const playerValues = valuesByPlayer();
+
+  // Contact quality for the whole roster in one pass — the batted-ball table is
+  // large, so it is queried once per page rather than once per player
+  const contactByPlayer = contactProfiles(players.map((p) => p.player_id as number));
 
   // Season fielding for the roster's optional defensive columns. Summed across
   // positions: a utility man's total workload is the useful number in a roster
@@ -348,9 +366,9 @@ api.get('/roster/:teamId', (req, res) => {
          -- dropped this year entirely. Each year carries exactly one split id,
          -- so leaving it out cannot double count. Batting and pitching are
          -- different — they really do split 1/2/3 — and keep their filter.
-         WHERE year = ? GROUP BY player_id`
+         WHERE year = ? ${idFilter} GROUP BY player_id`
       )
-      .all(statYear) as Array<Record<string, number>>;
+      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
     for (const r of rows) {
       const chances = (r.po ?? 0) + (r.a ?? 0) + (r.e ?? 0);
       const innings = r.finn ?? 0;
@@ -378,9 +396,9 @@ api.get('/roster/:teamId', (req, res) => {
                 SUM(gs) AS gs, SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld,
                 SUM(war) AS war
          FROM players_career_pitching_stats
-         WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
+         WHERE year = ? AND split_id = 1 AND league_id != 0 ${idFilter} GROUP BY player_id`
       )
-      .all(statYear) as Array<Record<string, number>>;
+      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
     for (const row of rows) {
       pitchingByPlayer.set(row.player_id, computePitching(row, baseline, teamId));
     }
@@ -408,6 +426,7 @@ api.get('/roster/:teamId', (req, res) => {
       potRating: playerValues.get(id)?.potRating ?? null,
       batting: battingByPlayer.get(id) ?? null,
       pitching: pitchingByPlayer.get(id) ?? null,
+      contact: contactByPlayer.get(id) ?? null,
     };
   });
 

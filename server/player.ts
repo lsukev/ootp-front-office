@@ -355,9 +355,19 @@ playerRoutes.get('/player/:id', (req, res) => {
   const contact = isPitcher ? null : (contactProfiles([id]).get(id) ?? null);
   const splits = isPitcher ? [] : situationalSplits(id);
 
+  const earnings = tableExists('players_salary_history')
+    ? (db
+        .prepare(
+          `SELECT SUM(salary) AS total, MIN(year) AS first, MAX(year) AS last
+           FROM players_salary_history WHERE player_id = ? AND year > 0`
+        )
+        .get(id) as { total: number | null; first: number | null; last: number | null })
+    : null;
+
   res.json({
     player_id: id,
     contact,
+    careerEarnings: earnings?.total ?? null,
     contactLeague: contact ? contactLeague() : null,
     splits,
     name: `${p.first_name} ${p.last_name}`,

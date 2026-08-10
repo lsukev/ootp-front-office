@@ -439,6 +439,67 @@ function Dossier({ d }: { d: PlayerDossier }) {
         </section>
       )}
 
+      {d.contact && (d.contact.battedBalls ?? 0) > 0 && (
+        <section>
+          <h3>
+            <Tip
+              label="Contact Quality"
+              tip="Measured from every batted ball he has hit — OOTP records the exit velocity and launch angle of each one and shows none of it. Strikeouts and walks are excluded: they have no batted ball, so they belong in neither the numerator nor the denominator."
+            />
+          </h3>
+          <div className="contact-grid">
+            <ContactStat label="Avg exit velo" value={d.contact.avgExitVelo} unit=" mph" league={d.contactLeague?.avgExitVelo} />
+            <ContactStat label="Hardest hit" value={d.contact.maxExitVelo} unit=" mph" />
+            <ContactStat label="Hard-hit" value={d.contact.hardHitPct} unit="%" league={d.contactLeague?.hardHitPct} />
+            <ContactStat label="Barrels" value={d.contact.barrelPct} unit="%" league={d.contactLeague?.barrelPct} />
+            <ContactStat label="Sweet spot" value={d.contact.sweetSpotPct} unit="%" />
+            <ContactStat label="Sprint speed" value={d.contact.sprintSpeed} unit="" league={d.contactLeague?.sprintSpeed} />
+          </div>
+          <p className="muted contact-line">
+            Ground balls {d.contact.gbPct ?? '—'}% · line drives {d.contact.ldPct ?? '—'}% · fly balls{' '}
+            {d.contact.fbPct ?? '—'}% &middot; {d.contact.battedBalls} batted balls
+          </p>
+          {d.contact.slgLuck !== null && d.contact.slgLuck !== undefined && (
+            <p className={`contact-luck ${d.contact.slgLuck <= -0.06 ? 'good-text' : d.contact.slgLuck >= 0.06 ? 'bad-text' : 'muted'}`}>
+              {/* Framed as what to expect next, since that is the only reason
+                  the gap is worth knowing */}
+              Slugging {fmt3(d.contact.slg)} against {fmt3(d.contact.xslg)} expected from his contact
+              {d.contact.slgLuck <= -0.06 && ' — he has hit the ball better than the results show, and should improve without changing anything.'}
+              {d.contact.slgLuck >= 0.06 && ' — the results have outrun the contact, so expect some giveback.'}
+              {d.contact.slgLuck > -0.06 && d.contact.slgLuck < 0.06 && ' — his results match his contact.'}
+            </p>
+          )}
+        </section>
+      )}
+
+      {d.splits.length > 1 && (
+        <section>
+          <h3>
+            <Tip
+              label="Situational"
+              tip="Cut from the base-out state recorded on every plate appearance. Single-season splits are small samples — read the plate-appearance column before drawing a conclusion from any line here."
+            />
+          </h3>
+          <div className="history-scroll">
+            <table className="mini">
+              <thead>
+                <tr><th>Situation</th><th>PA</th><th>AVG</th><th>OPS</th></tr>
+              </thead>
+              <tbody>
+                {d.splits.map((s) => (
+                  <tr key={s.label}>
+                    <td>{s.label}</td>
+                    <td className="num">{s.pa}</td>
+                    <td className="num">{fmt3(s.ba)}</td>
+                    <td className="num">{fmt3(s.ops)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {d.injuryHistory.length > 0 && (
         <section>
           <h3>Injury History</h3>
@@ -526,4 +587,20 @@ function RatingRows({
 function Pct({ v }: { v: number | null }) {
   if (v === null) return <span className="muted">—</span>;
   return <span style={{ color: `hsl(${(v / 100) * 120}, 65%, 55%)` }}>{v}</span>;
+}
+
+/**
+ * One contact number, with the league's for scale. A raw "39.1% hard-hit"
+ * means nothing to anyone who does not already know the league sits at 29.4.
+ */
+function ContactStat({
+  label, value, unit, league,
+}: { label: string; value: number | null | undefined; unit: string; league?: number }) {
+  return (
+    <div className="contact-stat">
+      <span className="contact-label">{label}</span>
+      <span className="contact-value">{value === null || value === undefined ? '—' : `${value}${unit}`}</span>
+      {league !== undefined && <span className="contact-league">lg {league}{unit}</span>}
+    </div>
+  );
 }

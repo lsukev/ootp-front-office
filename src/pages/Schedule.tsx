@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
+import { GamePlan } from '../GamePlan';
 
 interface Probable { player_id: number; name: string; throws: string }
 interface Game {
@@ -54,6 +55,8 @@ export function Schedule({ teamId }: { teamId: number }) {
   const [data, setData] = useState<ScheduleData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'played'>('all');
+  /** Which game's plan is open. One at a time — this is a page you scan. */
+  const [planGame, setPlanGame] = useState<number | null>(null);
   const nextRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -206,10 +209,21 @@ export function Schedule({ teamId }: { teamId: number }) {
                           <span className="muted">—</span>
                         )}
                       </td>
+                      <td className="series-plan">
+                        <button
+                          className="link-button"
+                          onClick={() => setPlanGame(planGame === g.game_id ? null : g.game_id)}
+                        >
+                          {planGame === g.game_id ? 'Hide' : 'Plan'}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {planGame !== null && s.games.some((g) => g.game_id === planGame) && (
+                <GamePlan teamId={teamId} gameId={planGame} onClose={() => setPlanGame(null)} />
+              )}
             </div>
           );
         })}

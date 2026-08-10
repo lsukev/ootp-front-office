@@ -50,6 +50,8 @@ export interface RosterPlayer {
   potRating: number | null;
   batting: Record<string, number | null> | null;
   pitching: Record<string, number | null> | null;
+  /** Batted-ball quality. Null for pitchers and anyone yet to put one in play. */
+  contact: Record<string, number | null> | null;
 }
 
 export interface RosterResponse {
@@ -217,6 +219,12 @@ export interface PlayerDossier {
   pitchingYears: Array<Record<string, number | string | null>>;
   gameLogs: Array<Record<string, number | string | null>>;
   pitchingGameLogs: Array<Record<string, number | string | null>>;
+  /** Batted-ball quality, and the league's for scale. Null for pitchers. */
+  contact: Record<string, number | null> | null;
+  contactLeague: { avgExitVelo: number; hardHitPct: number; barrelPct: number; sprintSpeed: number } | null;
+  /** Base-out and count splits. Small samples — each carries its own PA count. */
+  splits: Array<{ label: string; pa: number; ba: number | null; ops: number | null }>;
+  careerEarnings: number | null;
   injuryHistory: Array<Record<string, number | string | null>>;
   currentInjury: { status: string; daysLeft: number | null } | null;
   awards?: Array<{ year: number; award: string; positionName: string | null; rank: number }>;

@@ -13,7 +13,7 @@ export interface StatDef {
   label: string;
   desc: string;
   format: StatFormat;
-  section: 'Counting' | 'Rate' | 'Advanced' | 'Fielding';
+  section: 'Counting' | 'Rate' | 'Advanced' | 'Fielding' | 'Contact';
   /** Lower is better — flips the color scale on plus/rate stats. */
   lowerIsBetter?: boolean;
 }
@@ -144,8 +144,30 @@ export function saveColumns(group: StatGroup, keys: string[]): void {
 /** Fielding is offered in both groups — everyone on the field has a glove. */
 export const statsFor = (group: StatGroup): StatDef[] =>
   group === 'batting'
-    ? [...BATTING_STATS, ...FIELDING_STATS]
+    ? [...BATTING_STATS, ...CONTACT_STATS, ...FIELDING_STATS]
     : [...PITCHING_STATS, ...FIELDING_STATS];
+
+/**
+ * Contact quality, measured from every batted ball rather than inferred from
+ * the line. OOTP records the exit velocity and launch angle of each one and
+ * shows none of it, so these are the columns the game itself cannot give you.
+ */
+export const CONTACT_STATS: StatDef[] = [
+  { key: 'avgExitVelo', label: 'EV', desc: 'Average exit velocity in mph across every batted ball. League average is around 86-87; 92 and up is genuine thump.', format: 'dec1', section: 'Contact' },
+  { key: 'maxExitVelo', label: 'Max EV', desc: 'His hardest-hit ball of the season, in mph. A high peak with a modest average means the power is real but intermittent.', format: 'dec1', section: 'Contact' },
+  { key: 'hardHitPct', label: 'Hard%', desc: 'Share of batted balls struck at 95 mph or more. The most stable contact-quality number there is — it settles long before batting average does.', format: 'dec1', section: 'Contact' },
+  { key: 'barrelPct', label: 'Brl%', desc: 'Share of batted balls hit hard enough, at an angle good enough, to be near-certain damage. The window opens at 98 mph and widens as the ball is hit harder.', format: 'dec1', section: 'Contact' },
+  { key: 'sweetSpotPct', label: 'Sweet%', desc: 'Share of batted balls launched between 8 and 32 degrees, the angles that produce line drives rather than choppers and popups.', format: 'dec1', section: 'Contact' },
+  { key: 'gbPct', label: 'GB%', desc: 'Share of batted balls hit on the ground (under 10 degrees).', format: 'dec1', section: 'Contact' },
+  { key: 'fbPct', label: 'FB%', desc: 'Share of batted balls hit in the air (25 to 50 degrees).', format: 'dec1', section: 'Contact' },
+  { key: 'sprintSpeed', label: 'Sprint', desc: 'Measured speed on the bases, averaged across his batted balls — what he actually does, rather than the scouted speed rating.', format: 'dec1', section: 'Contact' },
+  { key: 'xslg', label: 'xSLG', desc: 'What his contact usually produces: every batted ball scored by how balls of that speed and angle actually fared at his level this season.', format: 'avg3', section: 'Contact' },
+  { key: 'slgLuck', label: 'SLG±', desc: 'Actual slugging on batted balls minus expected. Strongly negative means he has hit the ball well and been robbed; strongly positive means the results have outrun the contact.', format: 'avg3', section: 'Contact' },
+];
+
+const CONTACT_KEYS = new Set(CONTACT_STATS.map((c) => c.key));
+/** Contact lives in its own block on the payload, like fielding. */
+export const isContactStat = (key: string): boolean => CONTACT_KEYS.has(key);
 
 const FIELDING_KEYS = new Set(FIELDING_STATS.map((f) => f.key));
 /** Fielding lives in its own block on the payload, not with the hitting line. */
