@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { healthOf } from './health.js';
 import { computePitching, leagueBaseline } from './stats.js';
 import { ON_ROSTER } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
@@ -92,7 +93,7 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
               pi.pitching_ratings_overall_movement AS movement,
               pi.pitching_ratings_misc_velocity AS velocity,
               p.injury_is_injured, p.injury_dtd_injury, p.injury_left,
-              rs.is_on_dl, rs.is_on_dl60
+              rs.is_on_dl, rs.is_on_dl60, rs.is_active
        FROM players p
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
@@ -103,7 +104,7 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
     throws: number; stamina: number | null; stuff: number | null; control: number | null;
     movement: number | null; velocity: number | null;
     injury_is_injured: number | null; injury_dtd_injury: number | null; injury_left: number | null;
-    is_on_dl: number | null; is_on_dl60: number | null;
+    is_on_dl: number | null; is_on_dl60: number | null; is_active: number | null;
   }>;
   if (roster.length === 0) return res.json({ rotation: [], bullpen: [], today: null });
 
@@ -175,13 +176,10 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
     }
   }
 
-  const injuryOf = (p: (typeof roster)[number]): { status: string; daysLeft: number | null } | null => {
-    if (p.is_on_dl60 === 1) return { status: 'IL-60', daysLeft: p.injury_left ?? null };
-    if (p.is_on_dl === 1) return { status: 'IL', daysLeft: p.injury_left ?? null };
-    if (p.injury_dtd_injury === 1) return { status: 'Day-to-day', daysLeft: p.injury_left ?? null };
-    if (p.injury_is_injured === 1) return { status: 'Injured', daysLeft: p.injury_left ?? null };
-    return null;
-  };
+  // Shared with the injury report and the lineup card, so a man cannot be
+  // available on one page and on the injured list on another
+  const injuryOf = (p: (typeof roster)[number]): { status: string; daysLeft: number | null } | null =>
+    healthOf(p);
 
   const describe = (p: (typeof roster)[number]) => {
     const apps = appearances.get(p.player_id) ?? [];

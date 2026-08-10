@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { healthOf, HURT_SQL } from './health.js';
 import { computeContracts } from './contracts.js';
 import { computeProspects } from './org.js';
 
@@ -62,24 +63,28 @@ export function orgInjuries(orgId: number) {
         `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position,
                 t.level, ${teamLabel} AS team_label,
                 p.injury_is_injured, p.injury_dtd_injury, p.injury_left,
-                rs.is_on_dl, rs.is_on_dl60, rs.dl_days_this_year
+                rs.is_on_dl, rs.is_on_dl60, rs.is_active, rs.dl_days_this_year
          FROM players p
          JOIN teams t ON t.team_id = p.team_id
          LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
          WHERE p.organization_id = ? AND p.retired = 0
-           AND (p.injury_is_injured = 1 OR p.injury_dtd_injury = 1 OR rs.is_on_dl = 1 OR rs.is_on_dl60 = 1)
+           AND ${HURT_SQL}
          ORDER BY t.level, p.injury_left DESC`
       )
       .all(orgId) as Array<Record<string, number | string | null>>
-  ).map((r) => ({
+  )
+    .map((r) => ({ r, health: healthOf(r as Record<string, number | null>) }))
+    // The SQL narrows it; healthOf has the final say, so the two agree
+    .filter((x) => x.health !== null)
+    .map(({ r, health }) => ({
     player_id: r.player_id,
     name: r.name,
     age: r.age,
     positionName: POSITION_NAMES[r.position as number] ?? '?',
     levelName: LEVEL_NAMES[r.level as number] ?? 'R',
     team: r.team_label,
-    status: r.is_on_dl60 === 1 ? 'IL-60' : r.is_on_dl === 1 ? 'IL' : r.injury_dtd_injury === 1 ? 'Day-to-day' : 'Injured',
-    daysLeft: r.injury_left ?? null,
+    status: health!.status,
+    daysLeft: health!.daysLeft,
     dlDaysThisYear: r.dl_days_this_year ?? null,
   }));
 }

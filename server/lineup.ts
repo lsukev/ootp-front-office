@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { healthOf, type Health, type HealthFields } from './health.js';
 import { ON_ROSTER, usesDH, valuesByPlayer } from './valuation.js';
 import { computeBatting, leagueBaseline } from './stats.js';
 
@@ -12,35 +13,21 @@ const POSITION_NAMES: Record<number, string> = {
 /** OOTP's designated-hitter slot, carried through the fill as a position. */
 const DH_POS = 10;
 
-interface Unavailable {
-  status: string;
-  daysLeft: number | null;
-}
-
 /**
  * Who cannot play tonight.
  *
  * The roster clause every other page shares deliberately counts the injured
  * list, because a man on it is still on the roster and still paid. Tonight's
  * lineup is the one place that is wrong: he is on the team and unavailable,
- * and a card that starts him is worse than no card at all — it silently moves
- * everyone else into the wrong spot around him.
+ * and a card that starts him is worse than no card at all.
  *
- * Day-to-day is left in. OOTP lets a manager play through it, so whether to is
- * his call rather than the app's; it is flagged instead of decided.
+ * The judgement itself lives in health.ts, shared with the injury report and
+ * the pitching staff — this used to read the injured-list flags directly and
+ * dropped a healthy active player whose old IL flag OOTP had never cleared.
  */
-function unavailability(p: {
-  injury_is_injured: number | null;
-  injury_dtd_injury: number | null;
-  injury_left: number | null;
-  is_on_dl: number | null;
-  is_on_dl60: number | null;
-}): Unavailable | null {
-  const daysLeft = p.injury_left ?? null;
-  if (p.is_on_dl60 === 1) return { status: 'IL-60', daysLeft };
-  if (p.is_on_dl === 1) return { status: 'IL', daysLeft };
-  if (p.injury_is_injured === 1 && p.injury_dtd_injury !== 1) return { status: 'Injured', daysLeft };
-  return null;
+function unavailability(p: HealthFields): Health | null {
+  const health = healthOf(p);
+  return health && !health.playable ? health : null;
 }
 
 export interface Candidate {
@@ -292,7 +279,7 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
               f.fielding_rating_pos6 AS d6, f.fielding_rating_pos7 AS d7,
               f.fielding_rating_pos8 AS d8, f.fielding_rating_pos9 AS d9,
               p.injury_is_injured, p.injury_dtd_injury, p.injury_left,
-              rs.is_on_dl, rs.is_on_dl60
+              rs.is_on_dl, rs.is_on_dl60, rs.is_active
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_fielding f ON f.player_id = p.player_id
@@ -305,12 +292,12 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     d2: number | null; d3: number | null; d4: number | null; d5: number | null;
     d6: number | null; d7: number | null; d8: number | null; d9: number | null;
     injury_is_injured: number | null; injury_dtd_injury: number | null; injury_left: number | null;
-    is_on_dl: number | null; is_on_dl60: number | null;
+    is_on_dl: number | null; is_on_dl60: number | null; is_active: number | null;
   }>;
 
   const unavailable = raw
     .map((p) => ({ p, out: unavailability(p) }))
-    .filter((r): r is { p: (typeof raw)[number]; out: Unavailable } => r.out !== null)
+    .filter((r): r is { p: (typeof raw)[number]; out: Health } => r.out !== null)
     .map(({ p, out }) => ({
       player_id: p.player_id,
       name: `${p.first_name} ${p.last_name}`,

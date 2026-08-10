@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
+import { HURT_SQL } from './health.js';
 import { DATA_DIR } from './config.js';
 import { aiModel, getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
@@ -67,7 +68,7 @@ function briefingContext(orgId: number) {
       `SELECT p.first_name || ' ' || p.last_name AS name, p.age, p.injury_left AS days_left, t.level
        FROM players p JOIN teams t ON t.team_id = p.team_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE p.organization_id = ? AND (p.injury_is_injured = 1 OR rs.is_on_dl = 1 OR rs.is_on_dl60 = 1)`
+       WHERE p.organization_id = ? AND ${HURT_SQL}`
     )
     .all(orgId);
   return {
