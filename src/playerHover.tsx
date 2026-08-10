@@ -38,20 +38,43 @@ const CARD_WIDTH = 290;
 const fmt3 = (v: unknown): string =>
   typeof v === 'number' ? v.toFixed(3).replace(/^0\./, '.') : '—';
 
-/** This season's line, whichever side of the ball the player is on. */
+const LEVEL_ORDER = ['MLB', 'AAA', 'AA', 'A', 'R'];
+
+/**
+ * The current season's line.
+ *
+ * Career rows arrive newest-first, and a player can have several rows for one
+ * year when he has moved between levels — so this takes the latest year and,
+ * within it, the highest level he reached. Reading from the end of the list
+ * instead showed Aaron Villa his A-ball season from a decade ago.
+ *
+ * The level is printed whenever it is not the majors. Rate stats are measured
+ * against the level they were compiled at, so ".267/.356/.419, 104 OPS+" means
+ * something very different at Triple-A than in the big leagues, and the card
+ * sits inches from ratings that are on a major-league scale.
+ */
 function currentLine(d: PlayerDossier): string | null {
-  const rows = d.isPitcher ? d.pitchingYears : d.battingYears;
-  const last = rows?.[rows.length - 1];
-  if (!last) return null;
+  const rows = (d.isPitcher ? d.pitchingYears : d.battingYears) ?? [];
+  if (rows.length === 0) return null;
+  const latestYear = rows[0]?.year;
+  const best = rows
+    .filter((r) => r.year === latestYear)
+    .sort(
+      (a, b) =>
+        LEVEL_ORDER.indexOf(String(a.levelName ?? 'MLB')) -
+        LEVEL_ORDER.indexOf(String(b.levelName ?? 'MLB'))
+    )[0];
+  if (!best) return null;
+
+  const level = best.levelName && best.levelName !== 'MLB' ? `${best.levelName} · ` : '';
   if (d.isPitcher) {
-    const ip = last.ip ?? last.IP;
-    const era = last.era ?? last.ERA;
+    const ip = best.ip;
+    const era = best.era;
     if (ip === undefined && era === undefined) return null;
-    return `${ip ?? '—'} IP · ${typeof era === 'number' ? era.toFixed(2) : '—'} ERA · ${last.k ?? last.K ?? '—'} K`;
+    return `${level}${ip ?? '—'} IP · ${typeof era === 'number' ? era.toFixed(2) : '—'} ERA · ${best.k ?? '—'} K`;
   }
-  const pa = last.pa ?? last.PA;
-  if (pa === undefined) return null;
-  return `${pa} PA · ${fmt3(last.avg)}/${fmt3(last.obp)}/${fmt3(last.slg)} · ${last.hr ?? 0} HR`;
+  if (best.pa === undefined) return null;
+  return `${level}${best.pa} PA · ${fmt3(best.avg)}/${fmt3(best.obp)}/${fmt3(best.slg)} · ${best.hr ?? 0} HR`;
 }
 
 function Card({ id, anchor }: { id: number; anchor: DOMRect }) {

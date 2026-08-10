@@ -263,6 +263,15 @@ export function buildFixture(): string {
      VALUES (?, 5, ?, ${ext.map(() => '?').join(', ')})`
   ).run(IDS.extended, SEASON + 1, ...ext);
 
+  // Two seasons at different levels, so the "current line" logic has something
+  // to get wrong: the older row is the gaudier one, exactly as in a real career.
+  const bat = db.prepare(
+    `INSERT INTO players_career_batting_stats
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 5, 1, ?, 10, 0, 1, 1, 30, 2, 1, 20, 25, 1.0)`
+  );
+  bat.run(IDS.starter, SEASON, IDS.mlbTeam, IDS.league, 1, 200, 180, 45, 8);
+  bat.run(IDS.starter, SEASON - 6, IDS.aaaTeam, IDS.league, 4, 400, 360, 130, 20);
+
   db.prepare(`INSERT INTO team_financials VALUES (?, 200000000, 18700000, 0, 0, 1, 1, 0, 0, 0, 0, 50)`).run(IDS.mlbTeam);
 
   db.close();
