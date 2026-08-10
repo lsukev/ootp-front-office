@@ -155,6 +155,21 @@ function RosterTable({
                 <PlayerLink id={p.player_id}>
                   {p.first_name} {p.last_name}
                 </PlayerLink>
+                {/* Anything other than plain availability is worth seeing on the
+                    row: a designated man is still on OOTP's roster list. */}
+                {p.standing && p.standing.label !== 'Active' && (
+                  <span
+                    className={`roster-standing ${p.standing.available ? '' : 'out'}`}
+                    title={
+                      p.standing.daysLeft
+                        ? `${p.standing.label} — ${p.standing.daysLeft} days left`
+                        : p.standing.label
+                    }
+                  >
+                    {p.standing.label}
+                    {p.standing.daysLeft ? ` ${p.standing.daysLeft}d` : ''}
+                  </span>
+                )}
               </td>
               <td>{p.age ?? ''}</td>
               <td>{p.positionName}</td>

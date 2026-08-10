@@ -95,7 +95,9 @@ export function buildFixture(): string {
     CREATE TABLE players_roster_status (
       player_id INTEGER, is_active INTEGER, is_on_dl INTEGER, is_on_dl60 INTEGER,
       is_on_secondary INTEGER, mlb_service_years REAL, mlb_service_days REAL,
-      mlb_service_days_this_year REAL
+      mlb_service_days_this_year REAL,
+      designated_for_assignment INTEGER DEFAULT 0, days_on_dfa_left INTEGER DEFAULT 0,
+      is_on_waivers INTEGER DEFAULT 0
     );
     CREATE TABLE team_roster (team_id INTEGER, player_id INTEGER, list_id INTEGER);
     CREATE TABLE coaches (
@@ -186,7 +188,12 @@ export function buildFixture(): string {
                           draft_eligible, college)
      VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, 0, 0, 0, 0)`
   );
-  const status = db.prepare(`INSERT INTO players_roster_status VALUES (?, ?, 0, 0, 1, ?, ?, ?)`);
+  const status = db.prepare(
+    `INSERT INTO players_roster_status
+       (player_id, is_active, is_on_dl, is_on_dl60, is_on_secondary,
+        mlb_service_years, mlb_service_days, mlb_service_days_this_year)
+     VALUES (?, ?, 0, 0, 1, ?, ?, ?)`
+  );
   const value = db.prepare(`INSERT INTO players_value VALUES (?, ?, ?, 100, 100, 100, ?, ?, ?)`);
   const roster = db.prepare(`INSERT INTO team_roster VALUES (?, ?, 1)`);
 
@@ -255,7 +262,10 @@ export function buildFixture(): string {
     `UPDATE players SET injury_is_injured = 1, injury_left = 12 WHERE player_id = ?`
   ).run(IDS.injured);
   db.prepare(
-    `INSERT INTO players_roster_status VALUES (?, 0, 1, 0, 1, 4.0, ?, 40)`
+    `INSERT INTO players_roster_status
+       (player_id, is_active, is_on_dl, is_on_dl60, is_on_secondary,
+        mlb_service_years, mlb_service_days, mlb_service_days_this_year)
+     VALUES (?, 0, 1, 0, 1, 4.0, ?, 40)`
   ).run(IDS.injured, 4 * 172);
   value.run(IDS.injured, 2000, 2000, 2000, 65, 65);
   roster.run(IDS.mlbTeam, IDS.injured);

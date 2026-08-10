@@ -19,6 +19,7 @@ import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
 import { contactProfiles } from './battedball.js';
+import { standingOf, type StandingFields } from './health.js';
 import { gameplanRoutes } from './gameplan.js';
 import { aiRoutes } from './ai.js';
 import { logoRoutes } from './logos.js';
@@ -347,6 +348,33 @@ api.get('/roster/:teamId', (req, res) => {
   // OOTP's own 20-80 grades, for cross-checking against the game's own screens
   const playerValues = valuesByPlayer();
 
+  /*
+   * Where each man stands: designated, on waivers, on the injured list, or
+   * simply active. OOTP's roster list keeps designated players on it, so
+   * without this a man on the DFA clock reads as a regular — which is exactly
+   * how the manager came to call one the starting third baseman.
+   */
+  const standingByPlayer = new Map<number, ReturnType<typeof standingOf>>();
+  if (tableExists('players_roster_status') && rosterIds.length > 0) {
+    // Named one at a time against the export's own schema: OOTP's roster-status
+    // table has varied, and a column this app expects but a save does not have
+    // would take the whole roster page down rather than losing one badge
+    const statusCols = tableColumns('players_roster_status');
+    const want = [
+      'is_active', 'is_on_dl', 'is_on_dl60',
+      'designated_for_assignment', 'days_on_dfa_left', 'is_on_waivers',
+    ].filter((c) => statusCols.includes(c));
+    const rows = db
+      .prepare(
+        `SELECT rs.player_id${want.map((c) => `, rs."${c}"`).join('')},
+                p.injury_is_injured, p.injury_dtd_injury, p.injury_left
+         FROM players_roster_status rs JOIN players p ON p.player_id = rs.player_id
+         WHERE rs.player_id IN (${rosterIds.map(() => '?').join(',')})`
+      )
+      .all(...rosterIds) as Array<StandingFields & { player_id: number }>;
+    for (const r of rows) standingByPlayer.set(r.player_id, standingOf(r));
+  }
+
   // Contact quality for the whole roster in one pass — the batted-ball table is
   // large, so it is queried once per page rather than once per player
   const contactByPlayer = contactProfiles(players.map((p) => p.player_id as number));
@@ -427,6 +455,7 @@ api.get('/roster/:teamId', (req, res) => {
       batting: battingByPlayer.get(id) ?? null,
       pitching: pitchingByPlayer.get(id) ?? null,
       contact: contactByPlayer.get(id) ?? null,
+      standing: standingByPlayer.get(id) ?? null,
     };
   });
 

@@ -61,3 +61,42 @@ export const HURT_SQL =
   `((rs.is_active = 1 AND (p.injury_is_injured = 1 OR p.injury_dtd_injury = 1))
     OR (rs.is_active != 1 AND (rs.is_on_dl = 1 OR rs.is_on_dl60 = 1
         OR p.injury_is_injured = 1 OR p.injury_dtd_injury = 1)))`;
+
+export interface StandingFields extends HealthFields {
+  designated_for_assignment?: number | null;
+  days_on_dfa_left?: number | null;
+  is_on_waivers?: number | null;
+}
+
+export interface Standing {
+  /** Short label: DFA, Waivers, IL-60, IL, Day-to-day, Active, Reserve. */
+  label: string;
+  daysLeft: number | null;
+  /** Whether he can be used tonight. False for DFA, waivers and the IL. */
+  available: boolean;
+}
+
+/**
+ * Where a man stands with the club, which is not the same as whether he is hurt.
+ *
+ * OOTP's own roster list keeps a designated player on it — he is still club
+ * property while the clock runs — so a page reading that list alone sees no
+ * difference between a starting third baseman and one who was DFA'd this
+ * morning. That is how the manager came to describe a designated player as the
+ * starting third baseman: the roster said he was there and nothing said
+ * otherwise.
+ *
+ * Designation and waivers come first because they outrank everything else: a
+ * man on the DFA clock is not available whatever his health says.
+ */
+export function standingOf(p: StandingFields): Standing {
+  if (p.designated_for_assignment === 1) {
+    return { label: 'DFA', daysLeft: p.days_on_dfa_left ?? null, available: false };
+  }
+  if (p.is_on_waivers === 1) {
+    return { label: 'Waivers', daysLeft: p.days_on_dfa_left ?? null, available: false };
+  }
+  const health = healthOf(p);
+  if (health) return { label: health.status, daysLeft: health.daysLeft, available: health.playable };
+  return { label: p.is_active === 1 ? 'Active' : 'Reserve', daysLeft: null, available: true };
+}

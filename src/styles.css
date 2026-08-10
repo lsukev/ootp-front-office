@@ -1678,3 +1678,9 @@ button.cta {
   background: transparent; color: var(--text); border: 1px solid var(--border);
 }
 .imsg-reply { font-size: 11px; margin-right: 8px; }
+.roster-standing {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  border: 1px solid var(--border); color: var(--muted); vertical-align: middle;
+}
+.roster-standing.out { border-color: var(--bad); color: var(--bad); }

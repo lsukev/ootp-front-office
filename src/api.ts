@@ -52,6 +52,8 @@ export interface RosterPlayer {
   pitching: Record<string, number | null> | null;
   /** Batted-ball quality. Null for pitchers and anyone yet to put one in play. */
   contact: Record<string, number | null> | null;
+  /** DFA, waivers, injured list or plain active — and whether he can be used. */
+  standing: { label: string; daysLeft: number | null; available: boolean } | null;
 }
 
 export interface RosterResponse {

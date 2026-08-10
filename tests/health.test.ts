@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { healthOf } from '../server/health.js';
+import { healthOf, standingOf } from '../server/health.js';
 
 /**
  * OOTP does not reliably clear the injured-list flags when a player is
@@ -69,5 +69,54 @@ describe('a healthy player', () => {
   it('has no injury status at all', () => {
     expect(healthOf({ is_active: 1 })).toBeNull();
     expect(healthOf({})).toBeNull();
+  });
+});
+
+/**
+ * Where a man stands with the club, which OOTP's roster list does not say.
+ * A designated player stays on that list while the clock runs, so the app saw
+ * no difference between him and a starter — and the manager duly described one
+ * as the starting third baseman on the day he was designated.
+ */
+describe('a designated player', () => {
+  const riley = {
+    is_active: 0,
+    is_on_dl: 0,
+    is_on_dl60: 0,
+    designated_for_assignment: 1,
+    days_on_dfa_left: 7,
+    is_on_waivers: 0,
+    injury_is_injured: 0,
+  };
+
+  it('is DFA with his clock, not active', () => {
+    const s = standingOf(riley);
+    expect(s.label).toBe('DFA');
+    expect(s.daysLeft).toBe(7);
+    expect(s.available).toBe(false);
+  });
+
+  it('stays DFA even while also on waivers, which is the commoner case', () => {
+    expect(standingOf({ ...riley, is_on_waivers: 1 }).label).toBe('DFA');
+  });
+
+  it('outranks health: designated is unavailable whatever his body says', () => {
+    expect(standingOf({ ...riley, is_active: 1, injury_is_injured: 0 }).available).toBe(false);
+  });
+});
+
+describe('everyone else', () => {
+  it('is plainly active when nothing is wrong', () => {
+    const s = standingOf({ is_active: 1 });
+    expect(s.label).toBe('Active');
+    expect(s.available).toBe(true);
+  });
+
+  it('carries the injury status when hurt', () => {
+    expect(standingOf({ is_active: 0, is_on_dl60: 1, injury_left: 40 }).label).toBe('IL-60');
+  });
+
+  it('is on waivers when waived without designation', () => {
+    expect(standingOf({ is_active: 0, is_on_waivers: 1 }).label).toBe('Waivers');
   });
 });
