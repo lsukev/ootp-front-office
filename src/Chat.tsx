@@ -349,7 +349,11 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         });
       }
     },
-    [busy, messages, orgId]
+    // persona and roomMembers belong here as much as the rest: toggling who is
+    // in the room changes neither `messages` nor `busy`, so without them this
+    // callback kept whichever members it had captured the last time a message
+    // arrived — which is to say the defaults, whatever the chips showed.
+    [busy, messages, orgId, persona, roomMembers]
   );
 
   const clear = useCallback(() => {
