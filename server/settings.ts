@@ -24,6 +24,11 @@ export interface Settings {
   /** Model id used by every AI feature. See models.ts for the picker's list. */
   model: string;
   /**
+   * Write overall and potential in fives, the way scouts talk. Display only —
+   * sorting and every calculation keep the exact grade.
+   */
+  roundRatingsToFive: boolean;
+  /**
    * What you expect the owner to hand you next season, per club, in dollars.
    *
    * OOTP does not publish a future budget — it is not set until the offseason —
@@ -38,6 +43,7 @@ const DEFAULTS: Settings = {
   autoImport: true,
   useTeamColors: true,
   nextSeasonBudget: {},
+  roundRatingsToFive: false,
   defaultOrgId: null,
   theme: 'system',
   model: 'claude-opus-5',

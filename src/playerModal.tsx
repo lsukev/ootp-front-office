@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
+import { formatRatingPair } from './ratingScale';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -196,10 +197,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
           {d.oaRating !== null && (
             <div className="card">
               <span className="card-label"><Tip label="OA → POT" tip={TIP_OA} /></span>
-              <span className="card-value">
-                {d.oaRating}
-                {d.potRating !== null && d.potRating !== d.oaRating ? ` → ${d.potRating}` : ''}
-              </span>
+              <span className="card-value">{formatRatingPair(d.oaRating, d.potRating, ' → ')}</span>
             </div>
           )}
           <div className="card">

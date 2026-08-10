@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getPlayer, type PlayerDossier } from './api';
+import { formatRating } from './ratingScale';
 
 /**
  * The card that appears when you rest on a player's name, the way OOTP shows a
@@ -119,9 +120,9 @@ function Card({ id, anchor }: { id: number; anchor: DOMRect }) {
           <div className="phover-grid">
             {data.oaRating !== null && (
               <span>
-                OA <b>{data.oaRating}</b>
+                OA <b>{formatRating(data.oaRating)}</b>
                 {data.potRating !== null && data.potRating !== data.oaRating && (
-                  <>→{data.potRating}</>
+                  <>→{formatRating(data.potRating)}</>
                 )}
               </span>
             )}

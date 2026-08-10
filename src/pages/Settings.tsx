@@ -19,6 +19,7 @@ export interface AppSettings {
   defaultOrgId: number | null;
   theme: 'system' | 'dark' | 'light';
   model: string;
+  roundRatingsToFive: boolean;
 }
 interface SettingsResponse {
   settings: AppSettings;
@@ -346,6 +347,25 @@ export function Settings({
               onChange={(e) => void update({ useTeamColors: e.target.checked })}
             />
             <span>{settings.useTeamColors ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <strong>Round overall and potential to fives</strong>
+            <div className="muted">
+              Scouting talks in fives — a man is a 55 or a 60, not a 57. Turn this on to read the
+              grades that way. Display only: sorting and every calculation keep the exact number,
+              so a 57 still ranks above a 56 when both are shown as 55.
+            </div>
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={settings.roundRatingsToFive}
+              onChange={(e) => void update({ roundRatingsToFive: e.target.checked })}
+            />
+            <span>{settings.roundRatingsToFive ? 'On' : 'Off'}</span>
           </label>
         </div>
 
