@@ -1,6 +1,6 @@
 {
   "name": "ootp-front-office",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "private": true,
   "type": "module",
   "main": "build/main.cjs",
