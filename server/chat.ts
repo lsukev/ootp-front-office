@@ -21,8 +21,12 @@ export const chatRoutes = Router();
  */
 const historyPath = (orgId: number) => path.join(DATA_DIR, `chat-${orgId}.json`);
 
-/** Enough turns to keep the thread coherent without growing without bound. */
-const KEEP_TURNS = 40;
+/**
+ * A cap on the saved thread, high enough that reaching it means a season's
+ * worth of conversation rather than an afternoon's. It exists so a file cannot
+ * grow forever, not to decide what is worth remembering.
+ */
+const KEEP_TURNS = 1000;
 
 chatRoutes.get('/chat-history/:orgId', (req, res) => {
   try {
@@ -340,6 +344,142 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * What the model has seen, which is not the same as what the window shows.
+ *
+ * The window keeps prose. The model's transcript also holds every tool call and
+ * every row those calls returned — and only the prose used to survive a
+ * question. So each new question arrived with the evidence stripped out and the
+ * assistant reasoning from its own summary of data it could no longer see,
+ * which is how it can describe a man under club control as heading for free
+ * agency and then correct itself the moment it is asked to look again.
+ *
+ * Storing the tool results means it does not have to remember what it read.
+ */
+const contextPath = (orgId: number) => path.join(DATA_DIR, `chat-context-${orgId}.json`);
+
+interface StoredContext {
+  /** The visible thread as it stood when this transcript was written. */
+  visible: ChatMessage[];
+  messages: Anthropic.MessageParam[];
+}
+
+/**
+ * A ceiling on what gets resent, in characters — roughly 100k tokens, well
+ * inside the context window of every model offered. Tool results are the bulk
+ * of it, and they are what makes keeping the thread worth anything.
+ */
+const CONTEXT_CHARS = 400_000;
+
+/**
+ * Drops the oldest exchanges once the transcript outgrows its budget.
+ *
+ * Cuts only immediately before a plain-text user message, because that is the
+ * only place the array stays valid: a tool result whose matching tool call has
+ * been dropped is a 400 from the API, not a shorter conversation.
+ */
+export function trimTranscript(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  let out = messages;
+  while (JSON.stringify(out).length > CONTEXT_CHARS) {
+    const cut = out.findIndex(
+      (m, i) => i > 0 && m.role === 'user' && typeof m.content === 'string'
+    );
+    if (cut === -1) break;
+    out = out.slice(cut);
+  }
+  return out;
+}
+
+/** True when the client's thread opens with exactly the thread already stored. */
+export function continuesThread(stored: ChatMessage[], history: ChatMessage[]): boolean {
+  if (stored.length === 0 || history.length < stored.length) return false;
+  return stored.every((m, i) => m.role === history[i].role && m.content === history[i].content);
+}
+
+/**
+ * Appends plain messages, skipping the empty ones an interrupted answer leaves
+ * behind and folding a repeated role into the message before it — two user
+ * messages in a row is a shape the API will not take.
+ */
+export function appendPlain(
+  messages: Anthropic.MessageParam[],
+  tail: readonly ChatMessage[]
+): void {
+  for (const m of tail) {
+    if (m.content.trim().length === 0) continue;
+    const last = messages[messages.length - 1];
+    if (last && last.role === m.role && typeof last.content === 'string') {
+      last.content = `${last.content}\n\n${m.content}`;
+      continue;
+    }
+    messages.push({ role: m.role, content: m.content });
+  }
+}
+
+function stripCachePoints(messages: Anthropic.MessageParam[]): void {
+  for (const m of messages) {
+    if (typeof m.content === 'string') continue;
+    for (const block of m.content) delete (block as { cache_control?: unknown }).cache_control;
+  }
+}
+
+/**
+ * Marks the end of the prompt as cacheable before each call.
+ *
+ * Every call resends the whole conversation, and the conversation now carries
+ * the tool results, so the prefix is both the expensive part and the part that
+ * never changes. Moving the breakpoint to the end each time means what was
+ * cached on the previous call is read back at a tenth of the price and only the
+ * new tail is written — which is what makes remembering everything affordable.
+ */
+function markCachePoint(messages: Anthropic.MessageParam[]): void {
+  stripCachePoints(messages);
+  const last = messages[messages.length - 1];
+  if (!last) return;
+  if (typeof last.content === 'string') {
+    last.content = [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }];
+    return;
+  }
+  const block = last.content[last.content.length - 1];
+  if (block) (block as { cache_control?: unknown }).cache_control = { type: 'ephemeral' };
+}
+
+/**
+ * Drops reasoning blocks before the transcript is stored.
+ *
+ * They are only required while a tool call is still in flight, and they carry a
+ * signature from the model that produced them — which the model selector in
+ * Settings makes a liability, since a thread started on one model would come
+ * back rejected after the user picks another.
+ */
+function stripThinking(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  return messages.flatMap((m) => {
+    if (m.role !== 'assistant' || typeof m.content === 'string') return [m];
+    const content = m.content.filter(
+      (b) => b.type !== 'thinking' && b.type !== 'redacted_thinking'
+    );
+    return content.length > 0 ? [{ ...m, content }] : [];
+  });
+}
+
+function saveContext(orgId: number, ctx: StoredContext): void {
+  try {
+    fs.writeFileSync(contextPath(orgId), JSON.stringify(ctx));
+  } catch {
+    // A thread that cannot be written to disk is still worth having in the window
+  }
+}
+
+function loadContext(orgId: number): StoredContext | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(contextPath(orgId), 'utf8')) as StoredContext;
+    if (!Array.isArray(parsed?.visible) || !Array.isArray(parsed?.messages)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 chatRoutes.post('/chat', async (req, res) => {
   const { messages: history, orgId } = req.body as { messages?: ChatMessage[]; orgId?: number };
   if (!tableExists('players')) {
@@ -364,9 +504,16 @@ chatRoutes.post('/chat', async (req, res) => {
   };
 
   const client = new Anthropic({ apiKey: key });
-  const messages: Anthropic.MessageParam[] = history
-    .filter((m) => m.content.trim().length > 0)
-    .map((m) => ({ role: m.role, content: m.content }));
+
+  // Resume the stored transcript, tool results and all, when this thread is the
+  // one it belongs to. Anything else — a cleared conversation, a thread edited
+  // elsewhere — rebuilds from what the client sent, which costs only the
+  // evidence and never produces a mismatched reply.
+  const stored = loadContext(team);
+  const resuming = stored !== null && continuesThread(stored.visible, history);
+  const messages: Anthropic.MessageParam[] = resuming ? trimTranscript(stored.messages) : [];
+  stripCachePoints(messages);
+  appendPlain(messages, resuming ? history.slice(stored.visible.length) : history);
 
   const model = aiModel();
   // Only send the thinking parameter to a model the API reports as supporting
@@ -375,20 +522,34 @@ chatRoutes.post('/chat', async (req, res) => {
   const thinking: Anthropic.ThinkingConfigParam | undefined =
     (await supportsAdaptiveThinking(model)) ? { type: 'adaptive' } : undefined;
 
+  // The tools and the system prompt are identical on every call and sit ahead
+  // of the conversation, so one breakpoint here caches both.
+  const system: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: systemPrompt(team), cache_control: { type: 'ephemeral' } },
+  ];
+
+  // Kept so the stored transcript ends exactly where the window does, which is
+  // what lets the next question recognise this thread as its own.
+  let answer = '';
+
   try {
     // Manual tool-use loop: run the model, execute whatever tools it asks for,
     // feed the results back, and repeat until it answers in plain text.
     for (let turn = 0; turn < 12; turn++) {
+      markCachePoint(messages);
       const stream = client.messages.stream({
         model,
         max_tokens: 8000,
         ...(thinking ? { thinking } : {}),
-        system: systemPrompt(team),
+        system,
         tools: TOOLS,
         messages,
       });
 
-      stream.on('text', (delta) => send('text', { delta }));
+      stream.on('text', (delta) => {
+        answer += delta;
+        send('text', { delta });
+      });
 
       const message = await stream.finalMessage();
 
@@ -422,6 +583,15 @@ chatRoutes.post('/chat', async (req, res) => {
       // All results for one assistant turn go back in a single user message
       messages.push({ role: 'user', content: results });
     }
+
+    // Only a completed answer is stored. A transcript left ending on a tool
+    // call whose result never arrived is one the API refuses outright, so a
+    // failed turn keeps the last good transcript rather than poisoning it.
+    stripCachePoints(messages);
+    saveContext(team, {
+      visible: [...history, { role: 'assistant', content: answer }],
+      messages: stripThinking(messages),
+    });
     send('done', {});
   } catch (err) {
     const e = err as Error & { status?: number };
