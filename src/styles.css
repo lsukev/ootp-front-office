@@ -1439,6 +1439,8 @@ button.cta {
   border-radius: 20px;
   padding: 4px 4px 4px 14px;
   background: var(--bg-deep);
+  /* The @ picker hangs above the box and is positioned against it */
+  position: relative;
 }
 .imsg-field:focus-within { border-color: var(--accent); }
 .imsg-field textarea {
@@ -1684,3 +1686,30 @@ button.cta {
   border: 1px solid var(--border); color: var(--muted); vertical-align: middle;
 }
 .roster-standing.out { border-color: var(--bad); color: var(--bad); }
+
+/* ── @ picker in the room ─────────────────────────────────── */
+
+.imsg-mentions {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.imsg-mentions button {
+  display: flex; align-items: baseline; gap: 8px;
+  background: transparent; border: none; border-radius: 5px;
+  padding: 5px 9px; text-align: left; width: 100%;
+}
+.imsg-mentions button.active { background: var(--panel-raised); }
+.imsg-mention-name { font-size: 13px; }
+.imsg-mention-role { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }

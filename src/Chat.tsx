@@ -234,6 +234,14 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
       return ['trainer', 'pitching', 'manager'];
     }
   });
+  /**
+   * The @ picker: which name fragment is being typed, and which row is
+   * highlighted. Null means no picker is open.
+   */
+  const [mention, setMention] = useState<{ query: string; at: number } | null>(null);
+  const [mentionRow, setMentionRow] = useState(0);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+
   const toggleMember = (id: string) =>
     setRoomMembers((cur) => {
       const next = cur.includes(id) ? cur.filter((m) => m !== id) : [...cur, id].slice(0, 4);
@@ -402,6 +410,47 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
     void saveHistory(orgId, persona, []);
   }, [orgId, persona]);
 
+  /**
+   * An @ opens the picker, the way a messaging app does.
+   *
+   * Only when the @ starts a word — an address in the middle of a sentence is
+   * not a mention — and only until a space is typed, at which point the name
+   * either matched or it did not.
+   */
+  const openMention = (text: string, caret: number) => {
+    const upto = text.slice(0, caret);
+    const at = upto.lastIndexOf('@');
+    if (at === -1) return setMention(null);
+    const before = at === 0 ? ' ' : upto[at - 1];
+    const query = upto.slice(at + 1);
+    if (!/\s/.test(before) || /\s/.test(query)) return setMention(null);
+    setMention({ query, at });
+    setMentionRow(0);
+  };
+
+  const mentionMatches =
+    mention === null
+      ? []
+      : staff
+          .filter((p) => p.id !== ROOM_ID)
+          .filter((p) => p.name.toLowerCase().includes(mention.query.toLowerCase()))
+          .slice(0, 6);
+
+  /** Replaces the half-typed @fragment with the full name and a trailing space. */
+  const pickMention = (p: StaffMember) => {
+    if (mention === null) return;
+    const box = boxRef.current;
+    const caret = box ? box.selectionStart : input.length;
+    setInput(`${input.slice(0, mention.at)}@${p.name} ${input.slice(caret)}`);
+    setMention(null);
+    // Put the caret after the name rather than leaving it where the fragment was
+    requestAnimationFrame(() => {
+      const pos = mention.at + p.name.length + 2;
+      box?.focus();
+      box?.setSelectionRange(pos, pos);
+    });
+  };
+
   const who = staff.find((p) => p.id === persona) ?? FALLBACK_STAFF[0];
   const starters = STARTERS_BY_PERSONA[persona] ?? STARTERS;
 
@@ -466,11 +515,21 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
             <div className="imsg-avatar imsg-avatar-lg" aria-hidden="true">
               {who.name.charAt(0)}
             </div>
-            <p>
-              <strong className="imsg-name">{who.name}</strong> is your {who.role}. Ask him about{' '}
-              {orgLabel} or the league — every number comes out of your save rather than his memory,
-              and he answers from where he sits, so he will not always agree with the others.
-            </p>
+            {persona === ROOM_ID ? (
+              <p>
+                Everyone you put in <strong className="imsg-name">the room</strong> answers the same
+                question in turn, each seeing what the others said. Ask about {orgLabel} or the
+                league — they will not always agree, which is the point. Start a message with a
+                name, or type @, to ask one of them alone.
+              </p>
+            ) : (
+              <p>
+                <strong className="imsg-name">{who.name}</strong> is your {who.role}. Ask him about{' '}
+                {orgLabel} or the league — every number comes out of your save rather than his
+                memory, and he answers from where he sits, so he will not always agree with the
+                others.
+              </p>
+            )}
             <div className="imsg-starters">
               {starters.map((s) => (
                 <button key={s} onClick={() => void ask(s)} disabled={busy}>
@@ -579,13 +638,56 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
         }}
       >
         <div className="imsg-field">
+          {mentionMatches.length > 0 && (
+            <div className="imsg-mentions" role="listbox" aria-label="Who to ask">
+              {mentionMatches.map((p, i) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="option"
+                  aria-selected={i === mentionRow}
+                  className={i === mentionRow ? 'active' : ''}
+                  // The picker closes on blur, so the click has to land first
+                  onMouseDown={(e) => { e.preventDefault(); pickMention(p); }}
+                  onMouseEnter={() => setMentionRow(i)}
+                >
+                  <span className="imsg-mention-name">{p.name}</span>
+                  <span className="imsg-mention-role">{ROLE_LABEL[p.id] ?? p.role}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
+            ref={boxRef}
             value={input}
             rows={1}
-            placeholder="Message"
+            placeholder={persona === ROOM_ID ? 'Message — @ to ask one person' : 'Message'}
             aria-label={`Message ${who.name} about ${orgLabel}`}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (persona === ROOM_ID) openMention(e.target.value, e.target.selectionStart ?? 0);
+            }}
+            onBlur={() => setMention(null)}
             onKeyDown={(e) => {
+              // While the picker is open it owns the keys a list needs
+              if (mentionMatches.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  return setMentionRow((r) => (r + 1) % mentionMatches.length);
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  return setMentionRow((r) => (r - 1 + mentionMatches.length) % mentionMatches.length);
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault();
+                  return pickMention(mentionMatches[mentionRow]);
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  return setMention(null);
+                }
+              }
               // Enter sends; Shift+Enter is a newline
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
