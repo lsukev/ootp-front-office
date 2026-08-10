@@ -243,8 +243,30 @@ api.get('/roster/:teamId', (req, res) => {
     pick('uniform_number') ? `"uniform_number"` : `NULL AS uniform_number`,
   ].join(', ');
 
+  /**
+   * Who is actually on this club's roster.
+   *
+   * `players.team_id` is not a roster. OOTP parks players on a club without
+   * giving them a spot — newly signed international free agents sit on the
+   * parent club until they are assigned, and unsigned veterans keep pointing at
+   * their last team — so a bare team_id swept 132 men across the league onto
+   * major-league roster pages who were not on those rosters.
+   *
+   * team_roster with list_id = 1 is OOTP's own answer and works at every level:
+   * for a major-league club it is the active roster plus the injured list, and
+   * for an affiliate it is that affiliate's full roster. The roster-status flags
+   * cannot be used here — is_active means "on the MLB active roster", so it
+   * would empty every minor-league page.
+   */
+  const useRosterList = tableExists('team_roster');
   const players = db
-    .prepare(`SELECT ${select} FROM players WHERE team_id = ?`)
+    .prepare(
+      useRosterList
+        ? `SELECT ${select} FROM players
+           WHERE player_id IN (SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1)`
+        : // An export without the table behaves as it always did
+          `SELECT ${select} FROM players WHERE team_id = ?`
+    )
     .all(teamId) as Record<string, unknown>[];
 
   // Attach ratings from wherever they live in this export's schema
