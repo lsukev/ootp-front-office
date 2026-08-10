@@ -60,6 +60,35 @@ interface StaffMember { id: string; name: string; role: string }
  */
 const ROOM_ID = 'room';
 
+/**
+ * Who a message is aimed at, when it is aimed at anybody.
+ *
+ * Typing "Hal what do you think about Austin Riley?" into a room of three got
+ * three answers, two of which were "I'm not Hal" — the room had no idea a name
+ * at the front of a sentence meant anything. A name at the start of the
+ * message, or anywhere with an @ in front of it, now sends the question to
+ * that man alone.
+ *
+ * Only those two positions count. Matching a name anywhere would catch every
+ * mention of a colleague inside an ordinary question, which is common in a
+ * room where they are told to refer to each other by name.
+ */
+function addressedMember(text: string, staff: StaffMember[]): StaffMember | null {
+  const hit = new Set<string>();
+  for (const p of staff) {
+    if (p.id === ROOM_ID) continue;
+    const parts = p.name.split(/\s+/);
+    for (const form of [p.name, parts[0], parts[parts.length - 1]]) {
+      if (!form || form.length < 2) continue;
+      const safe = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`^\\s*@?${safe}\\b`, 'i').test(text) || new RegExp(`@${safe}\\b`, 'i').test(text)) {
+        hit.add(p.id);
+      }
+    }
+  }
+  return hit.size === 1 ? (staff.find((p) => p.id === [...hit][0]) ?? null) : null;
+}
+
 const ROLE_LABEL: Record<string, string> = {
   room: 'Group chat',
   analyst: 'Analyst',
@@ -250,6 +279,16 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
       const text = question.trim();
       if (!text || busy) return;
 
+      // A question aimed at one man goes to him alone, and brings him into the
+      // room if he was not already in it — asking for someone is asking for him
+      const aimedAt = persona === ROOM_ID ? addressedMember(text, staff) : null;
+      let members = roomMembers;
+      if (aimedAt && !members.includes(aimedAt.id)) {
+        members = [...members, aimedAt.id].slice(-4);
+        setRoomMembers(members);
+        try { localStorage.setItem('ootp-room-members', JSON.stringify(members)); } catch { /* fine */ }
+      }
+
       const now = new Date().toISOString();
       const history: Message[] = [...messages, { role: 'user', content: text, at: now }];
       setMessages([...history, { role: 'assistant', content: '', tools: [], at: now }]);
@@ -278,7 +317,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           body: JSON.stringify({
             orgId,
             persona,
-            ...(persona === ROOM_ID ? { members: roomMembers } : {}),
+            ...(persona === ROOM_ID ? { members, addressed: aimedAt?.id } : {}),
             messages: history.map(({ role, content, speaker }) => ({ role, content, speaker })),
           }),
           signal: controller.signal,
@@ -402,7 +441,9 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           <span className="muted room-hint">
             {roomMembers.length === 0
               ? 'Pick at least one.'
-              : 'They answer in order and can see what the others said.'}
+              : 'They answer in order and see what the others said. Add or remove anyone at any ' +
+                'point — a new voice reads the conversation so far. Start a message with a name, ' +
+                'or put an @ in front of one, to ask that person alone.'}
           </span>
         </div>
       )}
@@ -495,6 +536,16 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                         )}
                       </div>
                     )
+                  )}
+
+                  {m.speaker && !streaming && m.content && (
+                    <button
+                      className="link-button imsg-reply"
+                      onClick={() => setInput((cur) => (cur ? cur : `${m.speaker!.split(' ')[0]} `))}
+                      title={`Ask ${m.speaker} directly`}
+                    >
+                      Reply to {m.speaker.split(' ')[0]}
+                    </button>
                   )}
 
                   {m.role === 'assistant' && m.content && !streaming && (

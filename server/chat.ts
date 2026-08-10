@@ -598,11 +598,15 @@ async function runToolLoop(opts: {
 const ROOM_LIMIT = 4;
 
 chatRoutes.post('/chat', async (req, res) => {
-  const { messages: history, orgId, persona: personaId, members: memberIds } = req.body as {
+  const {
+    messages: history, orgId, persona: personaId, members: memberIds, addressed,
+  } = req.body as {
     messages?: ChatMessage[];
     orgId?: number;
     persona?: string;
     members?: string[];
+    /** One member the question was aimed at, who then answers alone. */
+    addressed?: string;
   };
   if (!tableExists('players')) {
     return res.status(400).json({ error: 'No data imported yet — pick a save first.' });
@@ -626,7 +630,10 @@ chatRoutes.post('/chat', async (req, res) => {
         .filter((p): p is Persona => p !== undefined)
         .slice(0, ROOM_LIMIT)
     : [];
-  const speakers = isRoom ? (room.length > 0 ? room : [roster[0]]) : [solo];
+  // Asking for one man by name gets that man, not a chorus — three people
+  // answering "I'm not Hal" is the failure this avoids
+  const aimedAt = isRoom && addressed ? room.find((p) => p.id === addressed) : undefined;
+  const speakers = isRoom ? (aimedAt ? [aimedAt] : room.length > 0 ? room : [roster[0]]) : [solo];
 
   // Server-sent events: the answer streams in, and tool calls are announced as
   // they happen so the user sees the assistant working rather than a spinner.
@@ -722,7 +729,13 @@ chatRoutes.post('/chat', async (req, res) => {
               ? ` and ${others.map((o) => `${o.name} (${o.role})`).join(', ')}`
               : '') +
             '. This is a discussion rather than a memo: keep it short, speak only to the part ' +
-            'that is properly yours, and do not summarise what the others cover.',
+            'that is properly yours, and do not summarise what the others cover.' +
+            (aimedAt
+              ? ' The general manager has asked you directly by name, so answer it yourself ' +
+                'rather than saying whose call it is — he already knows, which is why he asked you.'
+              : '') +
+            ' You may be joining a conversation already under way; read what has been said before ' +
+            'adding to it, and do not reintroduce yourself or restate ground already covered.',
           cache_control: { type: 'ephemeral' },
         },
       ];

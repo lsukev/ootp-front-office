@@ -1677,3 +1677,4 @@ button.cta {
   font-size: 11px; padding: 3px 8px; border-radius: 999px; width: 130px;
   background: transparent; color: var(--text); border: 1px solid var(--border);
 }
+.imsg-reply { font-size: 11px; margin-right: 8px; }
