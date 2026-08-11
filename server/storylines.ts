@@ -121,12 +121,23 @@ function assembleContext(orgId: number) {
   };
 }
 
+/*
+ * Structured output takes a deliberately small slice of JSON Schema. Length and
+ * count keywords are not among it: `minItems` above 1 is rejected outright, and
+ * a rejected schema fails the whole request rather than degrading, which turned
+ * a page that sometimes read "placeholder" into one that would not generate at
+ * all.
+ *
+ * So the shape is declared here and the standards are stated in the
+ * descriptions, where the model reads them. What actually enforces them is
+ * usableStoryline below, after the response arrives — the only check that
+ * cannot be refused by the API.
+ */
 const STORYLINE_SCHEMA = {
   type: 'object' as const,
   properties: {
     storylines: {
       type: 'array' as const,
-      minItems: 5,
       items: {
         type: 'object' as const,
         properties: {
@@ -136,16 +147,16 @@ const STORYLINE_SCHEMA = {
           },
           headline: {
             type: 'string' as const,
-            description: 'A specific headline naming real players, numbers or dates from the data.',
-            minLength: 12,
+            description:
+              'A specific headline naming real players, numbers or dates from the data. At least ' +
+              'a dozen characters, never filler or placeholder text.',
           },
           body: {
             type: 'string' as const,
             description:
-              'Two to four sentences citing figures from the data provided. Never write filler ' +
-              'or placeholder text — if there is nothing to say about a category, omit it and ' +
-              'write about another.',
-            minLength: 80,
+              'Two to four sentences citing figures from the data provided, at least eighty ' +
+              'characters. Never write filler or placeholder text — if there is nothing to say ' +
+              'about a category, omit it and write about another.',
           },
         },
         required: ['category', 'headline', 'body'],
@@ -166,6 +177,8 @@ const STORYLINE_SCHEMA = {
  * again. Content this thin is now rejected before it can be stored.
  */
 const FILLER = /^\s*(placeholder|lorem ipsum|tbd|todo|n\/a|example|headline|body)\b/i;
+
+export { STORYLINE_SCHEMA };
 
 export function usableStoryline(s: Storyline): boolean {
   if (!s || typeof s.headline !== 'string' || typeof s.body !== 'string') return false;

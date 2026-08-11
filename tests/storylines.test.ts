@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { usableStoryline } from '../server/storylines.js';
+import { STORYLINE_SCHEMA, usableStoryline } from '../server/storylines.js';
 
 /**
  * A user's Storylines page read "placeholder" over and over, and pressing the
@@ -46,5 +46,36 @@ describe('storylines that should be thrown away', () => {
   it('rejects a malformed entry rather than throwing on it', () => {
     expect(usableStoryline({ category: 'The Club' } as never)).toBe(false);
     expect(usableStoryline(null as never)).toBe(false);
+  });
+});
+
+/**
+ * Structured output accepts a small slice of JSON Schema, and a schema it does
+ * not accept fails the entire request — a page that occasionally read
+ * "placeholder" became one that would not generate at all, because minItems: 5
+ * is rejected outright. Standards belong in the descriptions and in
+ * usableStoryline, not in keywords the API will refuse.
+ */
+describe('the storyline schema', () => {
+  const banned = ['minItems', 'maxItems', 'minLength', 'maxLength', 'pattern', 'minimum', 'maximum'];
+
+  const walk = (node: unknown, path: string, found: string[]): void => {
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (banned.includes(key)) found.push(`${path}.${key}`);
+      walk(value, `${path}.${key}`, found);
+    }
+  };
+
+  it('uses no keyword the API rejects', () => {
+    const found: string[] = [];
+    walk(STORYLINE_SCHEMA, 'schema', found);
+    expect(found).toEqual([]);
+  });
+
+  it('still tells the model what is wanted, in descriptions', () => {
+    const json = JSON.stringify(STORYLINE_SCHEMA);
+    expect(json).toContain('description');
+    expect(json.toLowerCase()).toContain('placeholder');
   });
 });
