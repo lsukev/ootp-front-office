@@ -6,7 +6,8 @@ import { jobStatus, startJob } from './jobs.js';
 import { HURT_SQL } from './health.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
-import { PROVIDERS, describeError, providerFor, type FallbackNotice } from './providers.js';
+import { PROVIDERS, describeError, providerFor, toolLoop, type FallbackNotice } from './providers.js';
+import { TOOLS, runTool } from './chat.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
@@ -223,6 +224,51 @@ const VERDICT_FORMAT =
   'then 4-6 sentences of reasoning that name players and cite figures, then a suggested ' +
   'adjustment if one would fix it. Under 220 words.';
 
+/**
+ * The trade desk, with the run of the organisation.
+ *
+ * It used to be handed the two sides of the deal and nothing else, which held
+ * up until the conversation moved past the deal itself. Asked who could cover
+ * shortstop from the farm, it answered that it had nothing in front of it
+ * beyond the players already named — true, and useless, and it said what it
+ * needed: the actual system list. It now has the same tools the staff chat
+ * does and can go and read the roster, the farm and anybody in the league.
+ */
+async function askTheDesk(
+  system: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  onFallback: (n: FallbackNotice) => void
+): Promise<string> {
+  const provider = activeProvider();
+  const key = getApiKey(provider);
+  if (!key) throw Object.assign(new Error(noKeyMessage()), { status: 401 });
+  try {
+    const { answer } = await toolLoop(provider)({
+      key,
+      model: aiModel(provider),
+      system,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      tools: TOOLS,
+      onText: () => {},
+      onTool: (name) => console.log('[trade] looked up', name),
+      runTool: (name, input) => runTool(name, input),
+      onFallback,
+      /*
+       * Enough to sweep the farm. Asked who could cover shortstop, it reads
+       * the roster of each affiliate in turn — six lookups before it has seen
+       * the whole system — and a cap that cuts it off mid-sweep produces a
+       * confident answer drawn from half the organisation.
+       */
+      maxTurns: 12,
+    });
+    return answer;
+  } catch (err) {
+    throw Object.assign(new Error(describeError(provider, err)), {
+      status: (err as { status?: number }).status,
+    });
+  }
+}
+
 interface TradeBody {
   orgId?: number;
   sideA?: number[];
@@ -254,10 +300,9 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
   try {
     const { voice, context } = tradeSetup(body);
     let notice: FallbackNotice | null = null;
-    const verdict = await callOpus(
+    const verdict = await askTheDesk(
       tradeSystem(voice, body.orgLabel) + VERDICT_FORMAT,
-      JSON.stringify(context, null, 1),
-      4000,
+      [{ role: 'user', content: JSON.stringify(context, null, 1) }],
       (n) => { notice = n; }
     );
     res.json({ verdict, voice: { name: voice.name, role: voice.role }, notice });
@@ -287,17 +332,20 @@ aiRoutes.post('/trade/ai-reply', async (req, res) => {
       .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
       // Enough to keep the argument coherent without resending an hour of it
       .slice(-12);
-    const reply = await callOpusThread(
+    const reply = await askTheDesk(
       tradeSystem(voice, body.orgLabel) +
         '\n\nYou have already given your verdict on this deal and are now being asked about it. ' +
         'Answer the question actually put to you, in a few sentences — no headings, and do not ' +
-        'restate the verdict unless it has changed. If it has changed, say so plainly.',
+        'restate the verdict unless it has changed. If it has changed, say so plainly.\n\n' +
+        'The question may move past the deal — who else could fill the hole, who is close in the ' +
+        'system, what the roster looks like without these men. Use your tools and go and read it ' +
+        'rather than saying you have not got the data: the roster, the farm and every player in ' +
+        'the league are yours to look up.',
       [
         { role: 'user', content: `The deal on the table:\n${JSON.stringify(context, null, 1)}` },
         ...history,
         { role: 'user', content: body.message.trim() },
       ],
-      2000,
       (n) => { notice = n; }
     );
     res.json({ reply, voice: { name: voice.name, role: voice.role }, notice });

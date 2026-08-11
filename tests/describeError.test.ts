@@ -44,6 +44,18 @@ describe('turning a failure into a sentence', () => {
     expect(busy).not.toMatch(/out of credit/i);
   });
 
+  it('does not send a free-tier user to a billing page they do not need', () => {
+    // Google says this for a per-minute limit that clears on its own, and it
+    // was being reported as an empty account
+    const said = describeError('gemini', {
+      status: 429,
+      message: 'You exceeded your current quota, please check your plan and billing details.',
+    });
+    expect(said).not.toMatch(/out of credit/i);
+    expect(said).toMatch(/wait a minute/i);
+    expect(said).toMatch(/allowance on your plan/i);
+  });
+
   it('says a rejected key is a rejected key', () => {
     expect(describeError('gemini', { status: 400, message: 'API key not valid. Please pass a valid API key.' }))
       .toMatch(/rejected your API key/i);

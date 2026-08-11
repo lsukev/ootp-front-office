@@ -108,7 +108,15 @@ function cap(value: unknown, maxChars = 60_000): string {
   );
 }
 
-const TOOLS: Anthropic.Tool[] = [
+/**
+ * The tools every voice in the building can reach for.
+ *
+ * Exported because the trade desk needs them too. Asked who could cover
+ * shortstop from the farm, it answered that it had nothing in front of it
+ * beyond the players already in the deal — which was true, and useless. It
+ * should be able to go and look, exactly as the staff chat does.
+ */
+export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'search_players',
     description:
@@ -251,7 +259,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ];
 
-async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
+export async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
     case 'search_players': {
       const params = new URLSearchParams();

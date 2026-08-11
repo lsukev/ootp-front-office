@@ -719,10 +719,28 @@ export function describeError(provider: ProviderId, err: unknown): string {
   if (status === 401 || status === 403 || /api[_ ]?key not valid|invalid[_ ]api[_ ]key|unauthorized/i.test(message)) {
     return `${where?.label ?? 'The service'} rejected your API key. Check it in Settings — it may have been revoked or copied incompletely.`;
   }
-  if (/insufficient|no credits|exceeded your current quota|billing|payment/i.test(message)) {
+  /*
+   * An empty account only where the service says so outright. Google's wording
+   * for a free tier's per-minute limit — "exceeded your current quota, please
+   * check your plan and billing details" — mentions billing while meaning wait
+   * a minute, so matching on that word alone sends somebody to buy credit they
+   * already have. Checked before the general 429 for the same reason.
+   */
+  if (/insufficient_quota|no credits|payment required|billing_?not_?active/i.test(message)) {
     return `Your ${where?.label ?? 'API'} account is out of credit. Add some at ${console_} and try again — nothing here is lost.`;
   }
   if (status === 429) {
+    // "Rate limit" says which it is; a bare "quota" genuinely could be either
+    if (/rate.?limit|too many requests/i.test(message)) {
+      return 'Too many requests in a short time. Wait a moment and try again — this clears by itself.';
+    }
+    if (/quota/i.test(message)) {
+      return (
+        `${where?.label ?? 'The service'} turned the request away for going over a limit — either ` +
+        `too many in the last minute, or the allowance on your plan. Wait a minute and try again; ` +
+        `if it keeps happening, check your usage at ${console_}.`
+      );
+    }
     return 'Too many requests in a short time. Wait a moment and try again — this clears by itself.';
   }
   if (status === 404) {
@@ -760,4 +778,62 @@ function unwrap(raw: string): string {
 function statusIn(raw: string): number | undefined {
   const match = /"code"\s*:\s*(\d{3})/.exec(raw) ?? /^(\d{3})\s/.exec(raw);
   return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * The same loop against Anthropic, for callers that are not the staff chat.
+ *
+ * The chat keeps its own in chat.ts, where the prompt-cache markers and the
+ * thinking parameter live and where every turn is streamed to the page as it
+ * arrives. This one is plain: it runs the tools, returns the finished text,
+ * and is what the trade desk uses to go and look something up mid-conversation.
+ */
+async function anthropicToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
+  const client = new Anthropic({ apiKey: o.key });
+  let answer = '';
+
+  for (let turn = 0; turn < o.maxTurns; turn++) {
+    const message = await client.messages.create({
+      model: o.model,
+      max_tokens: 4000,
+      system: o.system,
+      tools: o.tools,
+      messages: o.messages,
+    });
+    if (message.stop_reason === 'refusal') return { answer, refused: true };
+
+    for (const block of message.content) {
+      if (block.type === 'text') {
+        answer += block.text;
+        o.onText(block.text);
+      }
+    }
+
+    const uses = message.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    );
+    if (uses.length === 0) break;
+
+    o.messages.push({ role: 'assistant', content: message.content });
+    o.messages.push({
+      role: 'user',
+      content: await runAll(
+        o,
+        uses.map((u) => ({ id: u.id, name: u.name, input: (u.input ?? {}) as Record<string, unknown> }))
+      ),
+    });
+    // Each turn's text has already been handed over; keeping it would repeat it
+    answer = '';
+  }
+  return { answer, refused: false };
+}
+
+/**
+ * A tool loop for any provider, including Anthropic.
+ *
+ * Distinct from toolLoopFor above, which returns nothing for Anthropic on
+ * purpose: the chat has its own there and must keep it.
+ */
+export function toolLoop(provider: ProviderId): (o: ToolLoopOpts) => Promise<ToolLoopResult> {
+  return toolLoopFor(provider) ?? anthropicToolLoop;
 }
