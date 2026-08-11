@@ -62,3 +62,18 @@ describe('missing grades', () => {
     expect(formatRatingPair(57, null)).toBe('55');
   });
 });
+
+/**
+ * OOTP exports the grade twice: `oa` as shown on the player's page, and
+ * `oa_rating` as the same grade rounded to fives. The app reads `oa`, and the
+ * Settings toggle is meant to reproduce `oa_rating` rather than invent its own
+ * rounding — so the two must agree on every value the scale can hold.
+ */
+describe('the toggle reproduces OOTP’s own five-step grade', () => {
+  it('matches round(oa/5)*5 across the whole 20-80 range', () => {
+    setRatingRounding(true);
+    for (let oa = 20; oa <= 80; oa++) {
+      expect(formatRating(oa)).toBe(String(Math.round(oa / 5) * 5));
+    }
+  });
+});

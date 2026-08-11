@@ -1,4 +1,4 @@
-import { db, tableExists } from './db.js';
+import { db, tableExists, tableColumns } from './db.js';
 
 export interface ContractInfo {
   salaryNow: number;
@@ -256,11 +256,30 @@ export function valuesByPlayer(): Map<number, PlayerValue> {
   if (valueCache) return valueCache;
   const out = new Map<number, PlayerValue>();
   if (!tableExists('players_value')) return out;
+  /*
+   * Read `oa` and `pot`, not `oa_rating` and `pot_rating`.
+   *
+   * The export carries both and they are not the same number. `oa` is the
+   * grade OOTP prints on the player's page; `oa_rating` is that grade rounded
+   * to the nearest five — exactly round(oa/5)*5, which holds for every one of
+   * the 12,624 players in this save, and differs for three quarters of them.
+   * Reading the rounded one meant the app quietly disagreed with the game
+   * about most of the league: a 57 was shown as a 55.
+   *
+   * The five-step version is not lost — it is what the Settings toggle
+   * produces, by rounding, which reproduces oa_rating exactly.
+   *
+   * Falls back to the rounded column when a save does not carry the exact one,
+   * since a coarser grade is worth far more than a page that will not load.
+   */
+  const valueCols = tableColumns('players_value');
+  const oaCol = valueCols.includes('oa') ? 'oa' : 'oa_rating';
+  const potCol = valueCols.includes('pot') ? 'pot' : 'pot_rating';
   const rows = db
     .prepare(
       `SELECT player_id, overall_value, talent_value, offensive_value,
               offensive_value_vsl, offensive_value_vsr, pitching_value,
-              oa_rating, pot_rating
+              "${oaCol}" AS oa_rating, "${potCol}" AS pot_rating
        FROM players_value`
     )
     .all() as Array<Record<string, number>>;

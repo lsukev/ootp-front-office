@@ -113,7 +113,7 @@ export function buildFixture(): string {
     CREATE TABLE players_value (
       player_id INTEGER, overall_value REAL, talent_value REAL, offensive_value REAL,
       offensive_value_vsl REAL, offensive_value_vsr REAL, pitching_value REAL,
-      oa_rating REAL, pot_rating REAL
+      oa_rating REAL, pot_rating REAL, oa REAL, pot REAL
     );
     CREATE TABLE players_contract (
       player_id INTEGER, team_id INTEGER, contract_team_id INTEGER, season_year INTEGER,
@@ -194,7 +194,14 @@ export function buildFixture(): string {
         mlb_service_years, mlb_service_days, mlb_service_days_this_year)
      VALUES (?, ?, 0, 0, 1, ?, ?, ?)`
   );
-  const value = db.prepare(`INSERT INTO players_value VALUES (?, ?, ?, 100, 100, 100, ?, ?, ?)`);
+  // oa/pot are the exact grades OOTP shows; oa_rating/pot_rating are those
+  // rounded to fives, which is the relationship in a real export
+  const value = db.prepare(
+    `INSERT INTO players_value
+       (player_id, overall_value, talent_value, offensive_value, offensive_value_vsl,
+        offensive_value_vsr, pitching_value, oa_rating, pot_rating, oa, pot)
+     VALUES (?, ?, ?, 100, 100, 100, ?, ?, ?, ?, ?)`
+  );
   const roster = db.prepare(`INSERT INTO team_roster VALUES (?, ?, 1)`);
 
   //                 id            first        last         age pos role  num team           org
@@ -221,7 +228,7 @@ export function buildFixture(): string {
     [IDS.extended, 1500, 1500, 70], [IDS.unrostered, 200, 900, 20],
     [IDS.minorDeal, 300, 700, 30],
   ] as const) {
-    value.run(id, overall, talent, overall, oa, oa);
+    value.run(id, overall, talent, overall, oa, oa, oa, oa);
   }
 
   // Only these are on the club's roster list; the unrostered man is not
@@ -239,7 +246,7 @@ export function buildFixture(): string {
   for (const [i, [id, pos, last]] of fielders.entries()) {
     player.run(id, 'Fill', last, 27, pos, 0, 20 + i, IDS.mlbTeam, IDS.mlbTeam);
     status.run(id, 1, 3.0, 3 * 172, 40);
-    value.run(id, 900 - i * 10, 900 - i * 10, 900 - i * 10, 50, 50);
+    value.run(id, 900 - i * 10, 900 - i * 10, 900 - i * 10, 50, 50, 50, 50);
     roster.run(IDS.mlbTeam, id);
     contract(db, {
       player: id, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam, years: 2, done: 0, salary: 900_000,
@@ -248,7 +255,7 @@ export function buildFixture(): string {
 
   player.run(IDS.boundary, 'Near', 'Boundary', 29, 6, 0, 30, IDS.mlbTeam, IDS.mlbTeam);
   status.run(IDS.boundary, 1, 5.0, Math.round(5.1 * 172), 40);
-  value.run(IDS.boundary, 1000, 1000, 1000, 55, 55);
+  value.run(IDS.boundary, 1000, 1000, 1000, 55, 55, 55, 55);
   roster.run(IDS.mlbTeam, IDS.boundary);
   contract(db, {
     player: IDS.boundary, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam,
@@ -267,7 +274,8 @@ export function buildFixture(): string {
         mlb_service_years, mlb_service_days, mlb_service_days_this_year)
      VALUES (?, 0, 1, 0, 1, 4.0, ?, 40)`
   ).run(IDS.injured, 4 * 172);
-  value.run(IDS.injured, 2000, 2000, 2000, 65, 65);
+  // Exact 62, which OOTP would round to 60 — the case the app used to show
+  value.run(IDS.injured, 2000, 2000, 2000, 60, 60, 62, 62);
   roster.run(IDS.mlbTeam, IDS.injured);
   contract(db, {
     player: IDS.injured, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam,
@@ -332,7 +340,7 @@ export function buildFixture(): string {
   // on the strength of what he did to schoolboys.
   player.run(IDS.draftee, 'Prep', 'Draftee', 18, 6, 0, 32, IDS.aaaTeam, IDS.mlbTeam);
   status.run(IDS.draftee, 0, 0, 0, 0);
-  value.run(IDS.draftee, 400, 900, 400, 30, 60);
+  value.run(IDS.draftee, 400, 900, 400, 30, 60, 30, 60);
   roster.run(IDS.aaaTeam, IDS.draftee);
   batting.run(IDS.draftee, 50, 50, 50, 50, 50, 50, 55, 55, 55, 55, 55);
   fielding.run(IDS.draftee, 20, 50, 50, 50, 50, 50, 50, 50, 50);

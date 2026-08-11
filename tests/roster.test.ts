@@ -32,3 +32,19 @@ describe('roster membership', () => {
     expect(reg.oaRating).toBe(60);
   });
 });
+
+/**
+ * OOTP exports the grade twice: `oa` as printed on the player's page, and
+ * `oa_rating` as that grade rounded to fives. The app read the rounded one for
+ * a long time and so disagreed with the game about most of the league — a 57
+ * appeared as a 55. The fixture's injured star is a deliberate 62 whose
+ * rounded column says 60.
+ */
+describe('which grade the app quotes', () => {
+  it('uses the exact one OOTP prints, not the rounded one', async () => {
+    const { players } = await request(`/api/roster/${IDS.mlbTeam}`);
+    const him = players.find((p: { player_id: number }) => p.player_id === IDS.injured);
+    expect(him.oaRating).toBe(62);
+    expect(him.oaRating).not.toBe(60);
+  });
+});

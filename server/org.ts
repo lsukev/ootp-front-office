@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists } from './db.js';
+import { db, tableExists, tableColumns } from './db.js';
 
 export const orgRoutes = Router();
 
@@ -62,6 +62,14 @@ interface OrgPlayer {
   potOa: number | null;
 }
 
+/** Prefer OOTP's exact grade; fall back when a save only carries the rounded one. */
+const VALUE_OA = tableExists('players_value') && tableColumns('players_value').includes('oa')
+  ? 'v.oa'
+  : 'v.oa_rating';
+const VALUE_POT = tableExists('players_value') && tableColumns('players_value').includes('pot')
+  ? 'v.pot'
+  : 'v.pot_rating';
+
 function orgPlayers(orgId: number): OrgPlayer[] {
   return db
     .prepare(
@@ -77,7 +85,7 @@ function orgPlayers(orgId: number): OrgPlayer[] {
               pi.pitching_ratings_overall_control AS ctl,
               pi.pitching_ratings_talent_stuff AS stuP, pi.pitching_ratings_talent_movement AS movP,
               pi.pitching_ratings_talent_control AS ctlP,
-              v.oa_rating AS oa, v.pot_rating AS potOa
+              ${VALUE_OA} AS oa, ${VALUE_POT} AS potOa
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
