@@ -23,6 +23,8 @@ interface StorylineCache {
   gameDate: string | null;
   orgLabel: string;
   storylines: Storyline[];
+  /** Set when the chosen model could not be used and another answered. */
+  notice?: string | null;
 }
 
 const cachePath = (orgId: number) => path.join(DATA_DIR, `storylines-${orgId}.json`);
@@ -201,11 +203,13 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const key = getApiKey(provider);
   if (!key) throw Object.assign(new Error('missing-api-key'), { status: 401 });
 
+  let notice: string | null = null;
   const text = await providerFor(provider).complete({
     key,
     model: aiModel(provider),
     maxTokens: 16000,
     schema: STORYLINE_SCHEMA,
+    onFallback: (n) => { notice = n; },
     system:
       // The league is a simulation and the events are the save's, not the
       // world's. Saying so plainly is both accurate and necessary: without it
@@ -291,6 +295,7 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
     gameDate: context.gameDate,
     orgLabel: context.organization,
     storylines,
+    notice,
   };
   fs.writeFileSync(cachePath(orgId), JSON.stringify(cache, null, 2));
   return cache;

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { PROVIDERS, isProviderId, providerFor, strictSchema, DEFAULT_MODEL } from '../server/providers.js';
+import {
+  PROVIDERS, isProviderId, providerFor, strictSchema, modelUnavailable,
+  GEMINI_FALLBACK, DEFAULT_MODEL,
+} from '../server/providers.js';
 import { STORYLINE_SCHEMA } from '../server/storylines.js';
 
 /**
@@ -80,5 +83,43 @@ describe('a schema on its way to OpenAI', () => {
     const out = strictSchema(loose) as any;
     expect(out.additionalProperties).toBe(false);
     expect(out.required.sort()).toEqual(['a', 'b']);
+  });
+});
+
+/**
+ * Google's models endpoint is not a list of models you may call. Both
+ * gemini-2.5-pro and gemini-2.5-flash are returned by it and both answer a
+ * real request with 404 on a new key — verified against the live API — so the
+ * picker offers choices that fail and nothing in the list says which. Rather
+ * than hand that 404 to someone who wanted their storylines, the request is
+ * made again on a model known to answer.
+ *
+ * What matters is the line between the two kinds of failure. Retrying a rate
+ * limit or a bad key on a different model wastes money and fixes nothing.
+ */
+describe('telling an unusable model from a failed request', () => {
+  it('catches the 404 shapes Google actually returns', () => {
+    expect(modelUnavailable({ status: 404 })).toBe(true);
+    expect(
+      modelUnavailable({ message: 'This model models/gemini-2.5-pro is no longer available to new users.' })
+    ).toBe(true);
+    expect(modelUnavailable({ message: '{"error":{"code":404,"status":"NOT_FOUND"}}' })).toBe(true);
+  });
+
+  it('leaves the failures a different model would not fix', () => {
+    expect(modelUnavailable({ status: 429, message: 'You exceeded your current quota' })).toBe(false);
+    expect(modelUnavailable({ status: 401, message: 'API key not valid' })).toBe(false);
+    expect(modelUnavailable({ status: 500, message: 'internal error' })).toBe(false);
+    expect(modelUnavailable({ message: 'You have no credits remaining' })).toBe(false);
+  });
+
+  it('survives an error with nothing useful on it', () => {
+    expect(modelUnavailable(null)).toBe(false);
+    expect(modelUnavailable(new Error(''))).toBe(false);
+  });
+
+  it('falls back to a model that answered a real request', () => {
+    // Changing this means having called the new one for real first
+    expect(GEMINI_FALLBACK).toBe('gemini-3-flash-preview');
   });
 });

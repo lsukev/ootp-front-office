@@ -26,7 +26,14 @@ interface DashboardData {
   };
 }
 
-interface Briefing { generatedAt?: string; gameDate?: string | null; markdown: string | null; job?: JobStatus }
+interface Briefing {
+  generatedAt?: string;
+  gameDate?: string | null;
+  markdown: string | null;
+  /** Set when the chosen model could not be used and another answered. */
+  notice?: string | null;
+  job?: JobStatus;
+}
 
 export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (page: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -182,6 +189,7 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
             </button>
           </div>
           {briefingError && <div className="banner error">{briefingError}</div>}
+          {briefing?.notice && <div className="banner notice">{briefing.notice}</div>}
           {/* It keeps writing whether or not you stay on this page, so the
               previous briefing stays readable while the new one is made */}
           {briefingBusy && (

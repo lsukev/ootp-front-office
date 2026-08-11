@@ -44,6 +44,8 @@ export interface CompleteOpts {
   maxTokens: number;
   /** A JSON schema, when the answer has to parse. */
   schema?: JsonSchema;
+  /** Told when the chosen model could not be used and another answered. */
+  onFallback?: (notice: string) => void;
 }
 
 export interface ModelChoice {
@@ -183,8 +185,69 @@ export function strictSchema(schema: JsonSchema): JsonSchema {
 
 // ── Google Gemini ───────────────────────────────────────────────────────
 
+/**
+ * The model to fall back to when the chosen one cannot be called.
+ *
+ * Google's models endpoint is not a list of models you may use: gemini-2.5-pro
+ * and gemini-2.5-flash are both returned by it and both answer a real request
+ * with 404, "no longer available to new users". So the picker will offer
+ * choices that fail, and there is no way to tell which from the list alone.
+ * Rather than hand that 404 to someone who only wanted their storylines, the
+ * request is made again on a model known to answer, and they are told it
+ * happened so they can choose differently.
+ */
+export const GEMINI_FALLBACK = 'gemini-3-flash-preview';
+
+/** A model that cannot be called at all, as against a request that went wrong. */
+export function modelUnavailable(err: unknown): boolean {
+  const e = err as { status?: number; message?: string };
+  const message = e?.message ?? '';
+  return (
+    e?.status === 404 ||
+    /no longer available|not_?found|is not supported|does not exist|404/i.test(message)
+  );
+}
+
+function fallbackNotice(from: string, to: string): string {
+  return (
+    `${from} could not be used on your key — Google lists it but rejects it, which happens with ` +
+    `the older Gemini models on newer keys. This ran on ${to} instead. Pick a model that works ` +
+    `in Settings to stop seeing this.`
+  );
+}
+
 const gemini: Provider = {
-  async complete({ key, model, system, messages, maxTokens, schema }) {
+  async complete(opts) {
+    try {
+      return await geminiComplete(opts, opts.model);
+    } catch (err) {
+      if (!modelUnavailable(err) || opts.model === GEMINI_FALLBACK) throw err;
+      opts.onFallback?.(fallbackNotice(opts.model, GEMINI_FALLBACK));
+      console.warn(`[gemini] ${opts.model} unavailable, retrying on ${GEMINI_FALLBACK}`);
+      return geminiComplete(opts, GEMINI_FALLBACK);
+    }
+  },
+  async listModels(key) {
+    const client = new GoogleGenAI({ apiKey: key });
+    const out: ModelChoice[] = [];
+    for await (const m of await client.models.list()) {
+      const id = (m.name ?? '').replace(/^models\//, '');
+      // Only the ones that can answer a prompt at all
+      if (!id || !m.supportedActions?.includes('generateContent')) continue;
+      out.push({ id, label: m.displayName ?? id });
+    }
+    return out;
+  },
+
+  async validateKey(key) {
+    await new GoogleGenAI({ apiKey: key }).models.list();
+  },
+};
+
+async function geminiComplete(
+  { key, system, messages, maxTokens, schema }: CompleteOpts,
+  model: string
+): Promise<string> {
     const client = new GoogleGenAI({ apiKey: key });
     const response = await client.models.generateContent({
       model,
@@ -208,24 +271,7 @@ const gemini: Provider = {
     const text = response.text;
     if (!text) throw new Error('Empty response from model');
     return text;
-  },
-
-  async listModels(key) {
-    const client = new GoogleGenAI({ apiKey: key });
-    const out: ModelChoice[] = [];
-    for await (const m of await client.models.list()) {
-      const id = (m.name ?? '').replace(/^models\//, '');
-      // Only the ones that can answer a prompt at all
-      if (!id || !m.supportedActions?.includes('generateContent')) continue;
-      out.push({ id, label: m.displayName ?? id });
-    }
-    return out;
-  },
-
-  async validateKey(key) {
-    await new GoogleGenAI({ apiKey: key }).models.list();
-  },
-};
+}
 
 const IMPLEMENTATIONS: Record<ProviderId, Provider> = { anthropic, openai, gemini };
 
@@ -270,6 +316,8 @@ export interface ToolLoopOpts {
   onTool: (name: string) => void;
   runTool: (name: string, input: Record<string, unknown>) => Promise<string>;
   maxTurns: number;
+  /** Told when the chosen model could not be used and another answered. */
+  onFallback?: (notice: string) => void;
 }
 
 export interface ToolLoopResult {
@@ -504,12 +552,23 @@ export function toGeminiContents(messages: Anthropic.MessageParam[]): Array<{ ro
 }
 
 async function geminiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
+  try {
+    return await geminiLoop(o, o.model);
+  } catch (err) {
+    if (!modelUnavailable(err) || o.model === GEMINI_FALLBACK) throw err;
+    o.onFallback?.(fallbackNotice(o.model, GEMINI_FALLBACK));
+    console.warn(`[gemini] ${o.model} unavailable, retrying on ${GEMINI_FALLBACK}`);
+    return geminiLoop(o, GEMINI_FALLBACK);
+  }
+}
+
+async function geminiLoop(o: ToolLoopOpts, model: string): Promise<ToolLoopResult> {
   const client = new GoogleGenAI({ apiKey: o.key });
   let answer = '';
 
   for (let turn = 0; turn < o.maxTurns; turn++) {
     const stream = await client.models.generateContentStream({
-      model: o.model,
+      model,
       contents: toGeminiContents(o.messages),
       config: {
         systemInstruction: o.system,

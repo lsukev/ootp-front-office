@@ -183,6 +183,8 @@ export interface StorylineCache {
   orgLabel?: string;
   /** Null before any set has been written for this club. */
   storylines: Storyline[] | null;
+  /** Set when the chosen model could not be used and another answered. */
+  notice?: string | null;
   /** How a background generation is getting on, when one is or was running. */
   job?: { state: 'idle' | 'running' | 'done' | 'error'; startedAt: string | null; finishedAt: string | null; error: string | null };
 }

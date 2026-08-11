@@ -35,6 +35,7 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
       </div>
 
       {error && <div className="banner error">{error}</div>}
+      {data?.notice && <div className="banner notice">{data.notice}</div>}
       {generating && (
         <p className="muted generating">
           The beat writer is combing through standings, box scores, prospect reports and the payroll

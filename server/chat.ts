@@ -566,6 +566,7 @@ async function runToolLoop(opts: {
       onText: (delta) => send('text', { delta }),
       onTool: (name) => send('tool', { name }),
       runTool: (name, input) => runTool(name, input),
+      onFallback: (notice) => send('notice', { message: notice }),
       maxTurns: 12,
     });
   }

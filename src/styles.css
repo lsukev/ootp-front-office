@@ -272,6 +272,13 @@ select {
 
 .banner { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
 .banner.error { background: #3d1815; border: 1px solid #8b3a32; color: var(--bad); }
+/* The model was swapped for one that works, not a failure — stated without alarm */
+.banner.notice {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
 
 .save-list { display: flex; flex-direction: column; gap: 10px; max-width: 560px; }
 .save-card {
@@ -1463,6 +1470,16 @@ button.cta {
   font-size: 12px;
   background: rgba(220, 90, 90, 0.14);
   color: #e07b7b;
+}
+/* The model was swapped, not a failure — said plainly and without alarm */
+.imsg-notice {
+  margin: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 /* Compose bar */

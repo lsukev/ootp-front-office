@@ -28,15 +28,18 @@ function aiErrorStatus(e: Error & { status?: number }): { status: number; messag
   return { status: 500, message: e.message };
 }
 
-async function callOpus(system: string, user: string, maxTokens = 16000): Promise<string> {
-  return callOpusThread(system, [{ role: 'user', content: user }], maxTokens);
+async function callOpus(
+  system: string, user: string, maxTokens = 16000, onFallback?: (n: string) => void
+): Promise<string> {
+  return callOpusThread(system, [{ role: 'user', content: user }], maxTokens, onFallback);
 }
 
 /** The same call, for the places that carry a conversation rather than one turn. */
 async function callOpusThread(
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  maxTokens = 16000
+  maxTokens = 16000,
+  onFallback?: (notice: string) => void
 ): Promise<string> {
   const provider = activeProvider();
   const key = getApiKey(provider);
@@ -47,6 +50,7 @@ async function callOpusThread(
     system,
     messages,
     maxTokens,
+    onFallback,
   });
 }
 
@@ -108,6 +112,9 @@ aiRoutes.get('/briefing/:orgId', (req, res) => {
 /** The generation itself, so both the route and the importer can start it. */
 async function generateBriefing(orgId: number): Promise<void> {
   const context = briefingContext(orgId);
+  // A model that had to be swapped is worth saying so on the page rather than
+  // only in a log nobody opens
+  let notice: string | null = null;
   const markdown = await callOpus(
     `You are the assistant GM of the ${context.organization} in a saved game of Out of the Park ` +
     `Baseball, writing the weekly briefing for the GM. Everything below is from that save — the ` +
@@ -118,12 +125,14 @@ async function generateBriefing(orgId: number): Promise<void> {
     `Structure with short markdown headers (## Status, ## Decisions Needed, ## Watch List, ` +
     `## Recommendation of the Week). Keep it under 500 words.`,
     `Today is ${context.gameDate}, ${context.seasonYear} season. Organizational data:\n\n` +
-      JSON.stringify(context, null, 1)
+      JSON.stringify(context, null, 1),
+    16000,
+    (n) => { notice = n; }
   );
   fs.writeFileSync(
     briefingPath(orgId),
     JSON.stringify(
-      { generatedAt: new Date().toISOString(), gameDate: context.gameDate, markdown },
+      { generatedAt: new Date().toISOString(), gameDate: context.gameDate, markdown, notice },
       null,
       2
     )
@@ -228,12 +237,14 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
   const body = req.body as TradeBody;
   try {
     const { voice, context } = tradeSetup(body);
+    let notice: string | null = null;
     const verdict = await callOpus(
       tradeSystem(voice, body.orgLabel) + VERDICT_FORMAT,
       JSON.stringify(context, null, 1),
-      4000
+      4000,
+      (n) => { notice = n; }
     );
-    res.json({ verdict, voice: { name: voice.name, role: voice.role } });
+    res.json({ verdict, voice: { name: voice.name, role: voice.role }, notice });
   } catch (err) {
     const { status, message } = aiErrorStatus(err as Error);
     if (status === 500) console.error('[trade-eval] failed:', err);
@@ -255,6 +266,7 @@ aiRoutes.post('/trade/ai-reply', async (req, res) => {
   if (!body.message?.trim()) return res.status(400).json({ error: 'Nothing to send' });
   try {
     const { voice, context } = tradeSetup(body);
+    let notice: string | null = null;
     const history = (body.thread ?? [])
       .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
       // Enough to keep the argument coherent without resending an hour of it
@@ -269,9 +281,10 @@ aiRoutes.post('/trade/ai-reply', async (req, res) => {
         ...history,
         { role: 'user', content: body.message.trim() },
       ],
-      2000
+      2000,
+      (n) => { notice = n; }
     );
-    res.json({ reply, voice: { name: voice.name, role: voice.role } });
+    res.json({ reply, voice: { name: voice.name, role: voice.role }, notice });
   } catch (err) {
     const { status, message } = aiErrorStatus(err as Error);
     if (status === 500) console.error('[trade-reply] failed:', err);

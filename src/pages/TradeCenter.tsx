@@ -54,6 +54,9 @@ interface Voice {
   role: string;
 }
 
+/** Sent when the chosen model could not be used and another answered. */
+type Notice = string | null;
+
 interface TradeTurn {
   role: 'user' | 'assistant';
   content: string;
@@ -72,6 +75,7 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
   const [thread, setThread] = useState<TradeTurn[]>([]);
   const [voice, setVoice] = useState<Voice | null>(null);
   const [draft, setDraft] = useState('');
+  const [notice, setNotice] = useState<Notice>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [talk, setTalk] = useState<TalkItem[]>([]);
@@ -184,8 +188,11 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
     setAiBusy(true);
     setError(null);
     try {
-      const r = await apiPost<{ verdict: string; voice: Voice }>('/api/trade/ai-eval', deal());
+      const r = await apiPost<{ verdict: string; voice: Voice; notice: Notice }>(
+        '/api/trade/ai-eval', deal()
+      );
       setVoice(r.voice);
+      setNotice(r.notice ?? null);
       setThread([{ role: 'assistant', content: r.verdict }]);
     } catch (e) {
       setError((e as Error).message);
@@ -205,11 +212,10 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
     try {
       // The thread sent is the one without the new line in it — that goes as
       // the question, and sending it twice would have him answer it twice
-      const r = await apiPost<{ reply: string; voice: Voice }>('/api/trade/ai-reply', {
-        ...deal(),
-        thread,
-        message,
-      });
+      const r = await apiPost<{ reply: string; voice: Voice; notice: Notice }>(
+        '/api/trade/ai-reply', { ...deal(), thread, message }
+      );
+      setNotice(r.notice ?? null);
       setThread([...asked, { role: 'assistant', content: r.reply }]);
     } catch (e) {
       setError((e as Error).message);
@@ -333,6 +339,7 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
           />
         </div>
       )}
+      {notice && <div className="banner notice">{notice}</div>}
       {thread.length > 0 && (
         <div className="ai-verdict">
           {thread.map((turn, i) =>
