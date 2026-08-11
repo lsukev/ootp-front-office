@@ -525,9 +525,22 @@ export function tradeContext(orgId: number, giveIds: number[], getIds: number[])
   const values = valuesByPlayer();
   const mine = orgProfile(orgId, values);
 
+  // The same totals the Compare cards put on screen, so a verdict citing a
+  // number and the panel beside it can never disagree
+  const giveTotals = summarizeSide(giveIds);
+  const getTotals = summarizeSide(getIds);
+
   return {
     weGive: give,
     weReceive: get,
+    totals: {
+      valueSent: Math.round(giveTotals.totalValue),
+      valueReceived: Math.round(getTotals.totalValue),
+      talentSent: Math.round(giveTotals.totalTalent),
+      talentReceived: Math.round(getTotals.totalTalent),
+      salarySent: giveTotals.totalSalary,
+      salaryReceived: getTotals.totalSalary,
+    },
     whoTheyWouldDisplace: incumbents,
     clubNeeds: mine
       ? { weakestPositions: mine.weakest, surplusPositions: mine.surplus }

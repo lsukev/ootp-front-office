@@ -277,7 +277,21 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
           />
         </div>
       )}
-      {aiVerdict && <div className="ai-verdict">{aiVerdict.split('\n').map((l, i) => <p key={i}>{l.replace(/\*\*/g, '')}</p>)}</div>}
+      {aiVerdict && (
+        <div className="ai-verdict">
+          {aiVerdict
+            .split('\n')
+            .filter((l) => l.trim())
+            .map((line, i) => {
+              // The model writes markdown. Only the bold and heading markers
+              // ever show up here, and "## Verdict: Accept" was being printed
+              // with its hashes on the page.
+              const heading = /^#{1,6}\s+/.test(line);
+              const text = line.replace(/^#{1,6}\s+/, '').replace(/\*\*/g, '');
+              return heading ? <h4 key={i}>{text}</h4> : <p key={i}>{text}</p>;
+            })}
+        </div>
+      )}
 
       <h2>Trade Fits Around the League</h2>
       {!fits ? (

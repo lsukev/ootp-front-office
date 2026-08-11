@@ -147,7 +147,10 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
       `not major-league ready, say where he actually slots and when he might matter.\n` +
       `- Weigh it against what the club is short of. "clubNeeds" gives the weakest positions and ` +
       `the spare ones: value bought where you are already deep is worth less than the number says.\n` +
-      `- Then the ordinary things: age, contract years, salary, and what the money commits you to.\n\n` +
+      `- Then the ordinary things: age, contract years, salary, and what the money commits you to.\n` +
+      `- "totals" holds the same value, talent and salary figures shown on the page beside your ` +
+      `answer. Quote those if you quote totals at all, so the two never disagree — but a verdict ` +
+      `that is only those totals restated is not worth writing.\n\n` +
       `Answer in short markdown: a one-line **Verdict** (Accept / Reject / Needs a sweetener), then ` +
       `4-6 sentences of reasoning that name players and cite figures, then a suggested adjustment ` +
       `if one would fix it. Under 220 words. Never invent a number that is not below.`,
