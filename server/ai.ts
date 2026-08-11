@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { jobStatus, startJob } from './jobs.js';
 import { HURT_SQL } from './health.js';
 import { DATA_DIR } from './config.js';
-import { aiModel, getApiKey } from './settings.js';
+import { activeProvider, aiModel, getApiKey } from './settings.js';
+import { PROVIDERS, providerFor } from './providers.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
@@ -15,12 +15,15 @@ import { currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valu
 
 export const aiRoutes = Router();
 
-const NO_KEY_MESSAGE =
-  'No Anthropic API key set. Open Settings and add your key — you can get one at console.claude.com.';
+/** Names the provider actually selected, since it may not be Anthropic. */
+const noKeyMessage = (): string => {
+  const p = PROVIDERS.find((x) => x.id === activeProvider());
+  return `No ${p?.label ?? 'API'} key set. Open Settings and add your key — you can get one at ${p?.console ?? 'the provider console'}.`;
+};
 
 function aiErrorStatus(e: Error & { status?: number }): { status: number; message: string } {
   if (e.status === 401 || /api key|authentication/i.test(e.message)) {
-    return { status: 401, message: NO_KEY_MESSAGE };
+    return { status: 401, message: noKeyMessage() };
   }
   return { status: 500, message: e.message };
 }
@@ -35,19 +38,16 @@ async function callOpusThread(
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   maxTokens = 16000
 ): Promise<string> {
-  const key = getApiKey();
-  if (!key) throw Object.assign(new Error(NO_KEY_MESSAGE), { status: 401 });
-  const client = new Anthropic({ apiKey: key });
-  const response = await client.messages.create({
-    model: aiModel(),
-    max_tokens: maxTokens,
+  const provider = activeProvider();
+  const key = getApiKey(provider);
+  if (!key) throw Object.assign(new Error(noKeyMessage()), { status: 401 });
+  return providerFor(provider).complete({
+    key,
+    model: aiModel(provider),
     system,
     messages,
+    maxTokens,
   });
-  if (response.stop_reason === 'refusal') throw new Error('The model declined this request.');
-  const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') throw new Error('Empty response from model');
-  return text.text;
 }
 
 // ── GM Briefing ─────────────────────────────────────────────────────────

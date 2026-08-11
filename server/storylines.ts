@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
-import { aiModel, getApiKey } from './settings.js';
+import { activeProvider, aiModel, getApiKey } from './settings.js';
+import { providerFor } from './providers.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
@@ -197,13 +197,15 @@ export function usableStoryline(s: Storyline): boolean {
 
 async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const context = assembleContext(orgId);
-  const key = getApiKey();
+  const provider = activeProvider();
+  const key = getApiKey(provider);
   if (!key) throw Object.assign(new Error('missing-api-key'), { status: 401 });
-  const client = new Anthropic({ apiKey: key });
 
-  const response = await client.messages.create({
-    model: aiModel(),
-    max_tokens: 16000,
+  const text = await providerFor(provider).complete({
+    key,
+    model: aiModel(provider),
+    maxTokens: 16000,
+    schema: STORYLINE_SCHEMA,
     system:
       // The league is a simulation and the events are the save's, not the
       // world's. Saying so plainly is both accurate and necessary: without it
@@ -235,29 +237,13 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
           `data:\n\n${JSON.stringify(context, null, 1)}\n\nWrite the storylines.`,
       },
     ],
-    output_config: { format: { type: 'json_schema', schema: STORYLINE_SCHEMA } },
   });
 
-  if (response.stop_reason === 'refusal') {
-    // Worth logging in full: a refusal is rare enough that the details are the
-    // only way to tell a genuine one from a prompt that reads wrongly
-    console.error('[storylines] refusal from', aiModel(), JSON.stringify(response.content));
-    throw new Error(
-      `${aiModel()} declined this request. Storylines describes a simulated season, so this is ` +
-      'usually the model being cautious rather than anything wrong with your save — trying again, ' +
-      'or choosing a different model in Settings, normally clears it.'
-    );
-  }
-  if (response.stop_reason === 'max_tokens') {
-    throw new Error('Generation ran out of tokens — try again.');
-  }
-  const textBlock = response.content.find((b) => b.type === 'text');
-  if (!textBlock || textBlock.type !== 'text') throw new Error('Empty response from model');
   let parsed: { storylines?: Storyline[] };
   try {
-    parsed = JSON.parse(textBlock.text) as { storylines?: Storyline[] };
+    parsed = JSON.parse(text) as { storylines?: Storyline[] };
   } catch {
-    console.error('[storylines] response was not JSON:', textBlock.text.slice(0, 2000));
+    console.error('[storylines] response was not JSON:', text.slice(0, 2000));
     throw new Error(
       `${aiModel()} returned something that was not JSON. The raw reply is in the app's log.`
     );

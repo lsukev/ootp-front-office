@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
-import Anthropic from '@anthropic-ai/sdk';
 import { DATA_DIR, loadConfig } from './config.js';
+import {
+  DEFAULT_MODEL, PROVIDERS, isProviderId, providerFor, type ProviderId,
+} from './providers.js';
 import { startWatcher, stopWatcher } from './watcher.js';
 
 /**
@@ -23,6 +25,17 @@ export interface Settings {
   theme: 'system' | 'dark' | 'light';
   /** Model id used by every AI feature. See models.ts for the picker's list. */
   model: string;
+  /**
+   * Which service the AI features talk to. Anthropic unless changed — it is
+   * what the app was built against and the only one the chat's tool loop and
+   * prompt caching are native to.
+   */
+  provider: ProviderId;
+  /**
+   * The model chosen for each provider, remembered separately. Switching
+   * provider would otherwise leave a model id the new one has never heard of.
+   */
+  models: Partial<Record<ProviderId, string>>;
   /**
    * Write overall and potential in fives, the way scouts talk. Display only —
    * sorting and every calculation keep the exact grade.
@@ -47,6 +60,8 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
+  provider: 'anthropic',
+  models: {},
   autoImport: true,
   useTeamColors: true,
   nextSeasonBudget: {},
@@ -57,12 +72,28 @@ const DEFAULTS: Settings = {
   model: 'claude-opus-5',
 };
 
-/** The model every AI call site should use. */
-export function aiModel(): string {
-  // A hand-edited or truncated settings.json can put anything here, and every
-  // AI feature would fail on it — fall back rather than throw.
-  const chosen: unknown = loadSettings().model;
-  return (typeof chosen === 'string' && chosen.trim()) || DEFAULTS.model;
+/** Which service the AI features talk to. */
+export function activeProvider(): ProviderId {
+  const chosen: unknown = loadSettings().provider;
+  return isProviderId(chosen) ? chosen : DEFAULTS.provider;
+}
+
+/**
+ * The model every AI call site should use, for whichever provider is active.
+ *
+ * A hand-edited or truncated settings.json can put anything here, and every AI
+ * feature would fail on it — fall back rather than throw. The legacy top-level
+ * "model" is still honoured for Anthropic, so an existing choice survives.
+ */
+export function aiModel(provider: ProviderId = activeProvider()): string {
+  const settings = loadSettings();
+  const perProvider: unknown = settings.models?.[provider];
+  if (typeof perProvider === 'string' && perProvider.trim()) return perProvider.trim();
+  if (provider === 'anthropic') {
+    const legacy: unknown = settings.model;
+    if (typeof legacy === 'string' && legacy.trim()) return legacy.trim();
+  }
+  return DEFAULT_MODEL[provider];
 }
 
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
@@ -117,39 +148,55 @@ interface StoredKey {
   hint: string;
 }
 
-export function saveApiKey(key: string): void {
+/**
+ * Where each provider's key lives.
+ *
+ * The file used to hold one key, from when there was only one provider. That
+ * shape is still read and moved under "anthropic" the first time a key is
+ * touched, so nobody has to re-enter a key they already saved.
+ */
+type KeyFile = Partial<Record<ProviderId, StoredKey>>;
+
+/** The environment variable each provider honours, as its own SDK names it. */
+const ENV_VAR: Record<ProviderId, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+};
+
+function readKeyFile(): KeyFile {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(fs.readFileSync(KEY_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+  if (!raw || typeof raw !== 'object') return {};
+  // The old one-key file, recognised by having a value at the top level
+  if ('value' in (raw as Record<string, unknown>)) return { anthropic: raw as StoredKey };
+  return raw as KeyFile;
+}
+
+function writeKeyFile(next: KeyFile): void {
+  fs.writeFileSync(KEY_PATH, JSON.stringify(next, null, 2), { mode: 0o600 });
+}
+
+export function saveApiKey(key: string, provider: ProviderId = 'anthropic'): void {
   const trimmed = key.trim();
   const active = activeCrypto();
   const record: StoredKey = active
     ? { encrypted: true, value: active.encrypt(trimmed), hint: trimmed.slice(-4) }
     : { encrypted: false, value: trimmed, hint: trimmed.slice(-4) };
-  fs.writeFileSync(KEY_PATH, JSON.stringify(record, null, 2), { mode: 0o600 });
+  writeKeyFile({ ...readKeyFile(), [provider]: record });
 }
 
-export function clearApiKey(): void {
-  try {
-    fs.unlinkSync(KEY_PATH);
-  } catch {
-    // nothing stored
-  }
+export function clearApiKey(provider: ProviderId = 'anthropic'): void {
+  const next = readKeyFile();
+  delete next[provider];
+  writeKeyFile(next);
 }
 
-function readStoredKey(): StoredKey | null {
-  try {
-    return JSON.parse(fs.readFileSync(KEY_PATH, 'utf8')) as StoredKey;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The key the AI features should use. An environment variable still wins, so
- * anyone already using a .env file keeps working exactly as before.
- */
-export function getApiKey(): string | null {
-  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-  const stored = readStoredKey();
-  if (!stored) return null;
+function decrypt(stored: StoredKey): string | null {
   if (!stored.encrypted) return stored.value;
   try {
     const active = activeCrypto();
@@ -160,28 +207,44 @@ export function getApiKey(): string | null {
   }
 }
 
-export function apiKeyStatus(): {
+/**
+ * The key a provider should use. An environment variable still wins, so anyone
+ * already using a .env file keeps working exactly as before.
+ */
+export function getApiKey(provider: ProviderId = activeProvider()): string | null {
+  const fromEnv = process.env[ENV_VAR[provider]];
+  if (fromEnv) return fromEnv;
+  const stored = readKeyFile()[provider];
+  return stored ? decrypt(stored) : null;
+}
+
+export interface KeyStatus {
   configured: boolean;
   source: 'env' | 'stored' | null;
   hint: string | null;
   encrypted: boolean;
-  storageLabel: string;
-} {
-  const stored = readStoredKey();
+}
+
+export function apiKeyStatus(provider: ProviderId = activeProvider()): KeyStatus & { storageLabel: string } {
   const storageLabel = crypto ? crypto.label : 'a permission-restricted file (no OS keychain available)';
-  if (process.env.ANTHROPIC_API_KEY) {
-    return {
-      configured: true,
-      source: 'env',
-      hint: process.env.ANTHROPIC_API_KEY.slice(-4),
-      encrypted: false,
-      storageLabel,
-    };
+  return { ...statusOf(provider), storageLabel };
+}
+
+function statusOf(provider: ProviderId): KeyStatus {
+  const fromEnv = process.env[ENV_VAR[provider]];
+  if (fromEnv) {
+    return { configured: true, source: 'env', hint: fromEnv.slice(-4), encrypted: false };
   }
+  const stored = readKeyFile()[provider];
   if (stored) {
-    return { configured: true, source: 'stored', hint: stored.hint, encrypted: stored.encrypted, storageLabel };
+    return { configured: true, source: 'stored', hint: stored.hint, encrypted: stored.encrypted };
   }
-  return { configured: false, source: null, hint: null, encrypted: false, storageLabel };
+  return { configured: false, source: null, hint: null, encrypted: false };
+}
+
+/** Every provider's key state at once, for the Settings screen. */
+export function allKeyStatus(): Record<ProviderId, KeyStatus> {
+  return Object.fromEntries(PROVIDERS.map((p) => [p.id, statusOf(p.id)])) as Record<ProviderId, KeyStatus>;
 }
 
 // ── Routes ──────────────────────────────────────────────────────────────
@@ -232,11 +295,24 @@ settingsRoutes.post('/settings', (req, res) => {
   if (body.theme === 'system' || body.theme === 'dark' || body.theme === 'light') {
     next.theme = body.theme;
   }
+  if (isProviderId(body.provider)) next.provider = body.provider;
   // Model ids are validated by shape only. The catalogue comes from the API and
   // grows over time, so refusing anything not on today's list would block a
   // model released after this build shipped — the API rejects a bad id anyway.
-  if (typeof body.model === 'string' && /^[a-z0-9.\-]{3,64}$/i.test(body.model.trim())) {
-    next.model = body.model.trim();
+  const modelShape = /^[a-z0-9.\-]{3,64}$/i;
+  if (typeof body.model === 'string' && modelShape.test(body.model.trim())) {
+    // Sent without a provider, this means "the one I am using"
+    next.models = { ...next.models, [next.provider]: body.model.trim() };
+    if (next.provider === 'anthropic') next.model = body.model.trim();
+  }
+  if (body.models && typeof body.models === 'object') {
+    const models = { ...next.models };
+    for (const [id, value] of Object.entries(body.models)) {
+      if (isProviderId(id) && typeof value === 'string' && modelShape.test(value.trim())) {
+        models[id] = value.trim();
+      }
+    }
+    next.models = models;
   }
   writeSettings(next);
 
@@ -249,32 +325,50 @@ settingsRoutes.post('/settings', (req, res) => {
   res.json({ ok: true, settings: next });
 });
 
+/** Which key each provider expects, so a pasted one can be checked early. */
+const KEY_SHAPE: Record<ProviderId, { test: RegExp; hint: string }> = {
+  anthropic: { test: /^sk-ant-/, hint: 'Anthropic keys begin with "sk-ant-".' },
+  openai: { test: /^sk-/, hint: 'OpenAI keys begin with "sk-".' },
+  // Google's are a plain token with no prefix worth checking beyond length
+  gemini: { test: /^.{20,}$/, hint: 'That looks too short for a Gemini key.' },
+};
+
 /** Verifies a key against the API before saving, so a typo is caught here. */
 settingsRoutes.post('/settings/api-key', async (req, res) => {
-  const { key } = req.body as { key?: string };
+  const { key, provider: raw } = req.body as { key?: string; provider?: string };
+  const provider: ProviderId = isProviderId(raw) ? raw : 'anthropic';
   if (!key?.trim()) return res.status(400).json({ ok: false, error: 'Enter a key first.' });
   const candidate = key.trim();
-  if (!candidate.startsWith('sk-ant-')) {
-    return res.status(400).json({
-      ok: false,
-      error: 'That does not look like an Anthropic key — they begin with "sk-ant-".',
-    });
+  const shape = KEY_SHAPE[provider];
+  if (!shape.test.test(candidate)) {
+    return res.status(400).json({ ok: false, error: `That does not look right — ${shape.hint}` });
   }
   try {
     // A models list is the cheapest call that proves the key works
-    await new Anthropic({ apiKey: candidate }).models.list({ limit: 1 });
+    await providerFor(provider).validateKey(candidate);
   } catch (err) {
     const e = err as Error & { status?: number };
-    if (e.status === 401) {
+    if (e.status === 401 || e.status === 403) {
       return res.status(400).json({ ok: false, error: 'The API rejected that key. Check it and try again.' });
     }
     return res.status(400).json({ ok: false, error: `Could not verify the key: ${e.message}` });
   }
-  saveApiKey(candidate);
-  res.json({ ok: true, apiKey: apiKeyStatus() });
+  saveApiKey(candidate, provider);
+  res.json({ ok: true, apiKey: apiKeyStatus(), keys: allKeyStatus() });
 });
 
-settingsRoutes.delete('/settings/api-key', (_req, res) => {
-  clearApiKey();
-  res.json({ ok: true, apiKey: apiKeyStatus() });
+settingsRoutes.delete('/settings/api-key', (req, res) => {
+  const raw = (req.query.provider ?? req.body?.provider) as string | undefined;
+  clearApiKey(isProviderId(raw) ? raw : 'anthropic');
+  res.json({ ok: true, apiKey: apiKeyStatus(), keys: allKeyStatus() });
+});
+
+/** The choice on offer, so the Settings screen does not hard-code the list. */
+settingsRoutes.get('/settings/providers', (_req, res) => {
+  res.json({
+    // Each provider's resolved model travels with it, so a provider that has
+    // never been chosen still shows what it would use rather than a blank
+    providers: PROVIDERS.map((p) => ({ ...p, model: aiModel(p.id) })),
+    keys: allKeyStatus(),
+  });
 });

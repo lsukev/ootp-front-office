@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
-import { aiModel, getApiKey } from './settings.js';
+import { activeProvider, aiModel, getApiKey } from './settings.js';
+import { toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
@@ -535,14 +536,39 @@ function loadContext(orgId: number, persona: string): StoredContext | null {
  * Pulled out of the route so a room can run it once per person in turn.
  */
 async function runToolLoop(opts: {
-  client: Anthropic;
+  client: Anthropic | null;
+  provider: ProviderId;
+  key: string;
   model: string;
   thinking: Anthropic.ThinkingConfigParam | undefined;
   system: Anthropic.TextBlockParam[];
   messages: Anthropic.MessageParam[];
   send: (event: string, data: unknown) => void;
 }): Promise<{ answer: string; refused: boolean }> {
-  const { client, model, thinking, system, messages, send } = opts;
+  const { client, provider, key, model, thinking, system, messages, send } = opts;
+
+  /*
+   * Another service answers through the adapter in providers.ts, which speaks
+   * this same transcript shape at its edges. Anthropic keeps the path below,
+   * where the cache points and the thinking parameter belong — neither has an
+   * equivalent worth faking elsewhere.
+   */
+  const elsewhere = toolLoopFor(provider);
+  if (elsewhere || !client) {
+    if (!elsewhere) throw new Error(`No implementation for provider ${provider}`);
+    return elsewhere({
+      key,
+      model,
+      // The cache_control markers are Anthropic's; the text is the prompt
+      system: system.map((b) => b.text).join('\n\n'),
+      messages,
+      tools: TOOLS,
+      onText: (delta) => send('text', { delta }),
+      onTool: (name) => send('tool', { name }),
+      runTool: (name, input) => runTool(name, input),
+      maxTurns: 12,
+    });
+  }
   let answer = '';
   for (let turn = 0; turn < 12; turn++) {
     markCachePoint(messages);
@@ -645,13 +671,15 @@ chatRoutes.post('/chat', async (req, res) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  const client = new Anthropic({ apiKey: key });
-  const model = aiModel();
+  const provider = activeProvider();
+  const client = provider === 'anthropic' ? new Anthropic({ apiKey: key }) : null;
+  const model = aiModel(provider);
   // Only send the thinking parameter to a model the API reports as supporting
   // it. Omitting it is valid everywhere; sending it to a model that does not
   // take it is a 400, and the model is now the user's choice rather than ours.
   const thinking: Anthropic.ThinkingConfigParam | undefined =
     (await supportsAdaptiveThinking(model)) ? { type: 'adaptive' } : undefined;
+  const loop = { client, provider, key, model, thinking, send };
 
   try {
     if (!isRoom) {
@@ -668,7 +696,7 @@ chatRoutes.post('/chat', async (req, res) => {
       const system: Anthropic.TextBlockParam[] = [
         { type: 'text', text: systemPrompt(team, persona), cache_control: { type: 'ephemeral' } },
       ];
-      const { answer } = await runToolLoop({ client, model, thinking, system, messages, send });
+      const { answer } = await runToolLoop({ ...loop, system, messages });
 
       // Only a completed answer is stored. A transcript left ending on a tool
       // call whose result never arrived is one the API refuses outright, so a
@@ -740,7 +768,7 @@ chatRoutes.post('/chat', async (req, res) => {
         },
       ];
 
-      const { answer, refused } = await runToolLoop({ client, model, thinking, system, messages, send });
+      const { answer, refused } = await runToolLoop({ ...loop, system, messages });
       saidThisTurn.push({ name: person.name, role: person.role, text: answer });
       if (refused) break;
     }

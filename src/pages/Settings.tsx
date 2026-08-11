@@ -6,12 +6,26 @@ import {
 import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
 
+export type ProviderId = 'anthropic' | 'openai' | 'gemini';
+
 interface ApiKeyStatus {
   configured: boolean;
   source: 'env' | 'stored' | null;
   hint: string | null;
   encrypted: boolean;
-  storageLabel: string;
+  storageLabel?: string;
+}
+interface ProviderInfo {
+  id: ProviderId;
+  label: string;
+  keyLabel: string;
+  console: string;
+  /** What this provider would use right now, chosen or defaulted. */
+  model: string;
+}
+interface ProvidersResponse {
+  providers: ProviderInfo[];
+  keys: Record<ProviderId, ApiKeyStatus>;
 }
 export interface AppSettings {
   autoImport: boolean;
@@ -19,6 +33,8 @@ export interface AppSettings {
   defaultOrgId: number | null;
   theme: 'system' | 'dark' | 'light';
   model: string;
+  provider: ProviderId;
+  models: Partial<Record<ProviderId, string>>;
   roundRatingsToFive: boolean;
   autoGenerateAfterImport: boolean;
 }
@@ -27,6 +43,20 @@ interface SettingsResponse {
   apiKey: ApiKeyStatus;
   dataDir: string;
 }
+
+/** The placeholder for each provider's key, so the field looks like the real thing. */
+/** Named in the notice about an environment variable taking priority. */
+const ENV_VAR: Record<ProviderId, string> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  gemini: 'GEMINI_API_KEY',
+};
+
+const KEY_PLACEHOLDER: Record<ProviderId, string> = {
+  anthropic: 'sk-ant-…',
+  openai: 'sk-…',
+  gemini: 'AIza…',
+};
 interface ModelChoice {
   id: string;
   name: string;
@@ -50,6 +80,7 @@ export function Settings({
 }) {
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [providers, setProviders] = useState<ProvidersResponse | null>(null);
   const [keyInput, setKeyInput] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -61,13 +92,22 @@ export function Settings({
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const desktop = desktopBridge();
 
-  const loadModels = () => {
-    apiGet<ModelsResponse>('/api/models').then(setModels).catch(() => {});
+  /** The list belongs to a provider, so switching must fetch the new one. */
+  const loadModels = (provider?: ProviderId) => {
+    const q = provider ? `?provider=${provider}` : '';
+    apiGet<ModelsResponse>(`/api/models${q}`).then(setModels).catch(() => {});
+  };
+
+  const loadProviders = () => {
+    apiGet<ProvidersResponse>('/api/settings/providers').then(setProviders).catch(() => {});
   };
 
   useEffect(() => {
-    apiGet<SettingsResponse>('/api/settings').then(setData).catch(() => {});
-    loadModels();
+    apiGet<SettingsResponse>('/api/settings').then((r) => {
+      setData(r);
+      loadModels(r.settings.provider);
+    }).catch(() => {});
+    loadProviders();
   }, []);
 
   const update = async (patch: Partial<AppSettings>) => {
@@ -79,15 +119,21 @@ export function Settings({
   };
 
   const saveKey = async () => {
+    if (!data) return;
+    const provider = data.settings.provider;
     setKeyBusy(true);
     setKeyMessage(null);
     try {
-      const r = await apiPost<{ ok: boolean; apiKey: ApiKeyStatus }>('/api/settings/api-key', { key: keyInput });
+      const r = await apiPost<{ ok: boolean; apiKey: ApiKeyStatus; keys: ProvidersResponse['keys'] }>(
+        '/api/settings/api-key',
+        { key: keyInput, provider }
+      );
       setKeyInput('');
       setKeyMessage({ ok: true, text: 'Key verified and saved. The AI features are ready to use.' });
-      if (data) setData({ ...data, apiKey: r.apiKey });
+      setData({ ...data, apiKey: r.apiKey });
+      if (providers) setProviders({ ...providers, keys: r.keys });
       // The real model list needs a working key, so fetch it again now there is one
-      loadModels();
+      loadModels(provider);
     } catch (e) {
       setKeyMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -96,15 +142,38 @@ export function Settings({
   };
 
   const removeKey = async () => {
+    if (!data) return;
+    const provider = data.settings.provider;
     setKeyBusy(true);
     try {
-      const r = await apiDelete<{ apiKey: ApiKeyStatus }>('/api/settings/api-key');
-      if (data) setData({ ...data, apiKey: r.apiKey });
+      const r = await apiDelete<{ apiKey: ApiKeyStatus; keys: ProvidersResponse['keys'] }>(
+        `/api/settings/api-key?provider=${provider}`
+      );
+      setData({ ...data, apiKey: r.apiKey });
+      if (providers) setProviders({ ...providers, keys: r.keys });
       setKeyMessage({ ok: true, text: 'Key removed.' });
-      loadModels();
+      loadModels(provider);
     } finally {
       setKeyBusy(false);
     }
+  };
+
+  /**
+   * Switching service. Each remembers its own model, so this only changes
+   * which one is in use — nothing is lost by looking at another and coming back.
+   */
+  const switchProvider = async (provider: ProviderId) => {
+    if (!data) return;
+    setKeyMessage(null);
+    setKeyInput('');
+    const next = { ...data.settings, provider };
+    setData({ ...data, settings: next, apiKey: providers?.keys[provider] ?? data.apiKey });
+    onSettingsChanged(next);
+    setModels(null);
+    await apiPost('/api/settings', { provider });
+    loadModels(provider);
+    // The status carries the storage label, which the per-provider list omits
+    apiGet<SettingsResponse>('/api/settings').then(setData).catch(() => {});
   };
 
   const runExport = async () => {
@@ -143,15 +212,41 @@ export function Settings({
 
   if (!data) return <p className="muted">Loading settings…</p>;
   const { settings, apiKey } = data;
+  const current = providers?.providers.find((p) => p.id === settings.provider);
+  // Falls back to what the server says this provider would use — a provider
+  // never chosen before has no entry here, and a blank select is not an answer
+  const activeModel = settings.models?.[settings.provider] ?? current?.model ?? '';
 
   return (
     <div className="settings">
       <section className="settings-block">
         <h2>AI Features</h2>
         <p className="muted hint-line">
-          Storylines, the GM Briefing, and AI trade verdicts call the Anthropic API with your own key. Everything
-          else in the app works without one. Generations cost a few cents each.
+          Storylines, the GM Briefing, and AI trade verdicts call an AI service with your own key.
+          Everything else in the app works without one. Generations cost a few cents each.
         </p>
+
+        <div className="settings-row">
+          <div>
+            <strong>Service</strong>
+            <div className="muted">
+              Anthropic is what the app was built against, and the staff chat uses features only it
+              has — tool calling with prompt caching. The other two run the same prompts on your own
+              key if that is where your credit already is.
+            </div>
+          </div>
+          <select
+            value={settings.provider}
+            onChange={(e) => void switchProvider(e.target.value as ProviderId)}
+          >
+            {(providers?.providers ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+                {providers?.keys[p.id]?.configured ? ' ✓' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {apiKey.configured ? (
           <div className="key-state">
@@ -159,7 +254,7 @@ export function Settings({
             <span className="muted">
               ending in <code>…{apiKey.hint}</code>
               {apiKey.source === 'env'
-                ? ' — coming from an ANTHROPIC_API_KEY environment variable, which takes priority over anything set here.'
+                ? ` — coming from a ${ENV_VAR[settings.provider]} environment variable, which takes priority over anything set here.`
                 : apiKey.encrypted
                   ? ` — encrypted with ${apiKey.storageLabel}.`
                   : ` — stored in ${apiKey.storageLabel}.`}
@@ -169,7 +264,12 @@ export function Settings({
             )}
           </div>
         ) : (
-          <p className="muted">No key set — the AI features will explain this instead of failing.</p>
+          <p className="muted">
+            {/* keyLabel rather than the display label: "No Anthropic (Claude)
+                key set" reads badly, and "a Anthropic" worse still */}
+            No {current?.keyLabel ?? 'API key'} set — the AI features will explain this instead of
+            failing.
+          </p>
         )}
 
         {apiKey.source !== 'env' && (
@@ -177,7 +277,7 @@ export function Settings({
             <input
               className="trade-search folder-input"
               type="password"
-              placeholder="sk-ant-…"
+              placeholder={KEY_PLACEHOLDER[settings.provider]}
               value={keyInput}
               autoComplete="off"
               onChange={(e) => setKeyInput(e.target.value)}
@@ -192,9 +292,13 @@ export function Settings({
           <div className={`banner ${keyMessage.ok ? 'success' : 'error'}`}>{keyMessage.text}</div>
         )}
         <p className="muted hint-line">
-          Get a key at{' '}
-          <a href="https://console.claude.com" target="_blank" rel="noreferrer">console.claude.com</a>. It is
-          checked against the API before saving, so a typo is caught here rather than later.
+          {/* Each service keeps its own key, so switching back does not mean
+              pasting it again */}
+          Get your {current?.keyLabel ?? 'API key'} at{' '}
+          <a href={`https://${current?.console ?? ''}`} target="_blank" rel="noreferrer">
+            {current?.console}
+          </a>. It is checked against the API before saving, so a typo is caught here rather than
+          later. Keys are kept per service — the others stay saved while you use this one.
         </p>
 
         <div className="settings-row">
@@ -211,13 +315,16 @@ export function Settings({
             )}
           </div>
           <select
-            value={settings.model}
-            onChange={(e) => void update({ model: e.target.value })}
+            value={activeModel}
+            onChange={(e) => void update({
+              model: e.target.value,
+              models: { ...settings.models, [settings.provider]: e.target.value },
+            })}
           >
             {/* A model saved earlier may no longer be listed; keep it selectable
                 rather than silently snapping the user onto a different one */}
-            {models && !models.models.some((m) => m.id === settings.model) && (
-              <option value={settings.model}>{settings.model}</option>
+            {models && !models.models.some((m) => m.id === activeModel) && (
+              <option value={activeModel}>{activeModel}</option>
             )}
             {(models?.models ?? []).map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
