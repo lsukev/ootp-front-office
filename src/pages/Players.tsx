@@ -30,7 +30,27 @@ interface PlayersResponse {
 const LEVELS: Array<[string, string]> = [
   ['1', 'MLB'], ['2', 'AAA'], ['3', 'AA'], ['4', 'A'], ['6', 'Rookie'], ['all', 'All levels'],
 ];
+const POSITIONS: Array<[string, string]> = [
+  ['2', 'C'], ['3', '1B'], ['4', '2B'], ['5', '3B'], ['6', 'SS'],
+  ['7', 'LF'], ['8', 'CF'], ['9', 'RF'], ['10', 'DH'],
+];
+const ROLES: Array<[string, string]> = [['11', 'Starter'], ['12', 'Reliever'], ['13', 'Closer']];
+const HANDS: Array<[string, string]> = [['1', 'Right'], ['2', 'Left']];
 const PAGE = 100;
+
+/** Everything narrowing the list, so it can be cleared and counted as a set. */
+interface Filters {
+  position: string;
+  role: string;
+  bats: string;
+  throws: string;
+  minAge: string;
+  maxAge: string;
+  minPt: string;
+}
+const NO_FILTERS: Filters = {
+  position: '', role: '', bats: '', throws: '', minAge: '', maxAge: '', minPt: '',
+};
 
 export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
   const [query, setQuery] = useState('');
@@ -38,6 +58,7 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
   const [level, setLevel] = useState('1');
   const [scope, setScope] = useState<'league' | 'org' | 'fa'>('league');
   const [group, setGroup] = useState<StatGroup>('batting');
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<PlayersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +88,16 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
       params.set('level', level);
       if (scope === 'org') params.set('orgId', String(orgId));
     }
+    for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
     apiGet<PlayersResponse>(`/api/players?${params}`).then(setData).catch((e) => setError(e.message));
-  }, [debounced, level, scope, group, offset, orgId]);
+  }, [debounced, level, scope, group, offset, orgId, filters]);
+
+  // Changing what you are looking for should not leave you on page four of it
+  const setFilter = (key: keyof Filters, value: string) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+    setOffset(0);
+  };
+  const active = Object.values(filters).filter(Boolean).length;
 
   const columns = group === 'batting' ? battingCols : pitchingCols;
   const setColumns = (keys: string[]) => {
@@ -109,6 +138,44 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
               <option key={v} value={v}>{label}</option>
             ))}
           </select>
+        )}
+        {/* Position for a hitter, role for a pitcher — the same question of
+            what job he does, asked the way each side of the game asks it */}
+        <select
+          value={group === 'pitching' ? filters.role : filters.position}
+          onChange={(e) => setFilter(group === 'pitching' ? 'role' : 'position', e.target.value)}
+        >
+          <option value="">Any position</option>
+          {(group === 'pitching' ? ROLES : POSITIONS).map(([v, label]) => (
+            <option key={v} value={v}>{label}</option>
+          ))}
+        </select>
+        <select value={filters.bats} onChange={(e) => setFilter('bats', e.target.value)}>
+          <option value="">Bats any</option>
+          {HANDS.map(([v, label]) => <option key={v} value={v}>Bats {label.toLowerCase()}</option>)}
+        </select>
+        <select value={filters.throws} onChange={(e) => setFilter('throws', e.target.value)}>
+          <option value="">Throws any</option>
+          {HANDS.map(([v, label]) => <option key={v} value={v}>Throws {label.toLowerCase()}</option>)}
+        </select>
+        <input
+          className="filter-num" type="number" min={16} max={50} placeholder="Age from"
+          value={filters.minAge} onChange={(e) => setFilter('minAge', e.target.value)}
+        />
+        <input
+          className="filter-num" type="number" min={16} max={50} placeholder="to"
+          value={filters.maxAge} onChange={(e) => setFilter('maxAge', e.target.value)}
+        />
+        {/* Without a floor the list is mostly men with four plate appearances */}
+        <input
+          className="filter-num filter-pt" type="number" min={0} step={10}
+          placeholder={group === 'pitching' ? 'Min outs' : 'Min PA'}
+          value={filters.minPt} onChange={(e) => setFilter('minPt', e.target.value)}
+        />
+        {active > 0 && (
+          <button onClick={() => { setFilters(NO_FILTERS); setOffset(0); }}>
+            Clear {active} filter{active === 1 ? '' : 's'}
+          </button>
         )}
         <div className="col-picker-wrap">
           <button onClick={() => setPickerOpen((v) => !v)}>⚙ Columns</button>

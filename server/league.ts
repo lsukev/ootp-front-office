@@ -145,6 +145,24 @@ leagueRoutes.get('/players', (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 100), 300);
   const offset = Math.max(Number(req.query.offset ?? 0), 0);
 
+  /*
+   * The narrowing that makes a list of four hundred and sixty men usable.
+   * Every one of these is a plain column on players, so they cost nothing to
+   * apply and can be combined freely — which is the point: a left-handed
+   * shortstop under 25 is a question the roster page could not answer at all.
+   */
+  const num = (v: unknown): number | null => {
+    const n = Number(v);
+    return v !== undefined && v !== '' && Number.isFinite(n) ? n : null;
+  };
+  const position = num(req.query.position);
+  const role = num(req.query.role);
+  const bats = num(req.query.bats);
+  const throws = num(req.query.throws);
+  const minAge = num(req.query.minAge);
+  const maxAge = num(req.query.maxAge);
+  const minPt = num(req.query.minPt);
+
   const where: string[] = ['p.retired = 0'];
   const params: Array<string | number> = [];
   if (freeAgents) {
@@ -166,6 +184,15 @@ leagueRoutes.get('/players', (req, res) => {
   }
   where.push(group === 'pitching' ? 'p.position = 1' : 'p.position != 1');
 
+  // Position for a hitter, role for a pitcher — the same question either way
+  if (position !== null) { where.push('p.position = ?'); params.push(position); }
+  if (role !== null) { where.push('p.role = ?'); params.push(role); }
+  // A switch hitter answers to both sides rather than to neither
+  if (bats !== null) { where.push('(p.bats = ? OR p.bats = 3)'); params.push(bats); }
+  if (throws !== null) { where.push('p.throws = ?'); params.push(throws); }
+  if (minAge !== null) { where.push('p.age >= ?'); params.push(minAge); }
+  if (maxAge !== null) { where.push('p.age <= ?'); params.push(maxAge); }
+
   const statYear = tableExists('players_career_batting_stats')
     ? (db.prepare(`SELECT MAX(year) AS y FROM players_career_batting_stats`).get() as { y: number }).y
     : null;
@@ -185,13 +212,27 @@ leagueRoutes.get('/players', (req, res) => {
     ? 'COALESCE(pt.pt, 0) DESC, p.last_name, p.first_name'
     : 'p.last_name, p.first_name';
 
+  /*
+   * A playing-time floor is the one filter that cannot come from the players
+   * table, so it rides on the join that already exists for the sort order —
+   * and the count has to carry the same join, or the total describes a
+   * different set of players than the rows beneath it.
+   */
+  const ptWhere = [...where];
+  const ptParams = [...params];
+  if (minPt !== null && statYear !== null) {
+    ptWhere.push('COALESCE(pt.pt, 0) >= ?');
+    ptParams.push(minPt);
+  }
+
   const total = (
     db
       .prepare(
         `SELECT COUNT(*) AS n FROM players p LEFT JOIN teams t ON t.team_id = p.team_id
-         WHERE ${where.join(' AND ')}`
+         ${ptJoin}
+         WHERE ${ptWhere.join(' AND ')}`
       )
-      .get(...params) as { n: number }
+      .get(...ptParams) as { n: number }
   ).n;
 
   const rows = db
@@ -201,11 +242,11 @@ leagueRoutes.get('/players', (req, res) => {
               CASE WHEN t.team_id IS NULL THEN NULL ELSE ${teamLabel} END AS team, t.abbr
        FROM players p LEFT JOIN teams t ON t.team_id = p.team_id
        ${ptJoin}
-       WHERE ${where.join(' AND ')}
+       WHERE ${ptWhere.join(' AND ')}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
-    .all(...params, limit, offset) as Array<Record<string, number | string | null>>;
+    .all(...ptParams, limit, offset) as Array<Record<string, number | string | null>>;
 
   const ids = rows.map((r) => r.player_id as number);
   const statsById = new Map<number, Record<string, number | null>>();

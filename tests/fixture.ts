@@ -20,6 +20,10 @@ export const IDS = {
   otherMlbTeam: 3,
   /** On the major-league roster. */
   starter: 10,
+  /** Bats and throws left, so the hand filters have something to find. */
+  lefty: 60,
+  /** Bats both, and must answer to a search for either side. */
+  switcher: 61,
   /** Optioned to Triple-A, still on a major-league contract. */
   optioned: 11,
   /** Traded away, nothing retained — the old club owes nothing. */
@@ -90,7 +94,10 @@ export function buildFixture(): string {
       bats INTEGER, throws INTEGER, uniform_number INTEGER, team_id INTEGER, organization_id INTEGER,
       retired INTEGER, hidden INTEGER, draft_eligible INTEGER, college INTEGER,
       injury_is_injured INTEGER DEFAULT 0, injury_dtd_injury INTEGER DEFAULT 0,
-      injury_left INTEGER DEFAULT 0
+      injury_left INTEGER DEFAULT 0,
+      -- Player Search reads this to offer free agents, and had no coverage at
+      -- all until the search filters were tested
+      free_agent INTEGER DEFAULT 0
     );
     CREATE TABLE players_roster_status (
       player_id INTEGER, is_active INTEGER, is_on_dl INTEGER, is_on_dl60 INTEGER,
@@ -217,6 +224,21 @@ export function buildFixture(): string {
 
   //                 id            first        last         age pos role  num team           org
   player.run(IDS.starter, 'Reg', 'Ular', 28, 6, 0, 1, IDS.mlbTeam, IDS.mlbTeam);
+
+  /*
+   * Somebody who does not bat right-handed. Every other player here does, so a
+   * search for left-handed hitters returned nothing and read as a broken
+   * filter — and the switch hitter is the one that matters, because he must
+   * answer to a search for either side.
+   */
+  const handed = db.prepare(
+    `INSERT INTO players (player_id, first_name, last_name, age, position, role, bats, throws,
+                          uniform_number, team_id, organization_id, retired, hidden,
+                          draft_eligible, college)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, 60, ?, ?, 0, 0, 0, 0)`
+  );
+  handed.run(IDS.lefty, 'Lefty', 'Swinger', 27, 6, 2, 2, IDS.mlbTeam, IDS.mlbTeam);
+  handed.run(IDS.switcher, 'Switch', 'Hitter', 24, 6, 3, 1, IDS.mlbTeam, IDS.mlbTeam);
   player.run(IDS.optioned, 'Op', 'Tioned', 23, 6, 0, 2, IDS.aaaTeam, IDS.mlbTeam);
   player.run(IDS.tradedAway, 'Gone', 'Away', 30, 3, 0, 3, IDS.otherMlbTeam, IDS.otherMlbTeam);
   player.run(IDS.retainedGuy, 'Paid', 'Off', 33, 3, 0, 4, IDS.otherMlbTeam, IDS.otherMlbTeam);
