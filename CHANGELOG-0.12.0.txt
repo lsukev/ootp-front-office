@@ -1,0 +1,7 @@
+OOTP Front Office 0.12.0 — everything since 0.11.0
+
+New — Position ratings on the player card. His grade at each position he can play, current and ceiling, with the ones he has actually appeared at marked. Only the positions OOTP has revealed appear: the game prints a dash where it has not rated a man yet, and what the dash hides stays hidden — a ceiling in left field you have not earned is not the app's to hand you.
+
+New — The trade desk judges the glove as well as the bat. Every player in a deal now arrives with what he can play and how well, and with what he has actually done out there: games, errors, fielding percentage and zone rating, this season and last. So do the men he would displace, so a move can be weighed against whoever is already standing there. Ask whether a second baseman could be worked in at shortstop and you get his grade at both, the range and arm behind them, and how many games he has played there — instead of, as before, an honest admission that it had no fielding data in front of it.
+
+Fixed — A file-watcher error no longer takes the app down. If the operating system interrupts the watch on the export folder mid-write, that is now logged and the app carries on. Noticing a new export late is a far smaller problem than closing mid-session.
