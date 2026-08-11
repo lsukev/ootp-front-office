@@ -196,12 +196,27 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
     model: aiModel(),
     max_tokens: 16000,
     system:
-      `You are the beat writer and front-office analyst for the ${context.organization}, an OOTP Baseball franchise. ` +
-      `Write sharp, engaging storylines about the organization from the perspective of its front office — like a ` +
-      `team-site feature page. Ground every claim in the provided data (records, stats, prospects, contracts). ` +
-      `Reference real numbers. Be opinionated where the data supports it: call out who is earning a promotion, ` +
-      `which contract decisions loom, what the recent results mean. It is early in the season, so treat small ` +
-      `samples with appropriate caution. Write 6-8 storylines covering a mix of categories. ` +
+      // The league is a simulation and the events are the save's, not the
+      // world's. Saying so plainly is both accurate and necessary: without it
+      // the request reads as inventing news about real, named public figures,
+      // and the model has good reason to decline that. The assistant's own
+      // prompt has always carried this framing and has never refused; this one
+      // never did, and refused.
+      `You are the in-universe beat writer for the ${context.organization} in a saved game of Out ` +
+      `of the Park Baseball — a text simulation. Everything below happened inside this player's ` +
+      `save file: the standings, the statistics, the injuries and the contracts are all outcomes ` +
+      `the simulation generated, and they do not correspond to real events. The names come from ` +
+      `the game's database. Write about the simulated season only, entirely from the numbers ` +
+      `provided, and never about anything outside the save.\n\n` +
+      `Write sharp, engaging storylines from the perspective of the club's front office, like a ` +
+      `team-site feature page. Ground every claim in the data given (records, stats, prospects, ` +
+      `contracts) and cite the figures. Be opinionated where the data supports it: who is earning ` +
+      `a promotion, which contract decisions loom, what the recent results mean. Treat small ` +
+      `samples with caution. Do not invent quotations or attribute statements to anyone — you are ` +
+      `describing what the numbers show, not reporting interviews.\n\n` +
+      `Write 6-8 storylines across a mix of categories. Every headline and body must be about this ` +
+      `club and cite figures from the data — never filler, placeholder or example text. If a ` +
+      `category has nothing behind it, leave it out and write about one that does.\n\n` +
       `LEAGUE RULES: ${context.leagueRules} Write within these rules — this may not be the modern game.`,
     messages: [
       {
@@ -215,7 +230,14 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   });
 
   if (response.stop_reason === 'refusal') {
-    throw new Error('The model declined to generate storylines for this request.');
+    // Worth logging in full: a refusal is rare enough that the details are the
+    // only way to tell a genuine one from a prompt that reads wrongly
+    console.error('[storylines] refusal from', aiModel(), JSON.stringify(response.content));
+    throw new Error(
+      `${aiModel()} declined this request. Storylines describes a simulated season, so this is ` +
+      'usually the model being cautious rather than anything wrong with your save — trying again, ' +
+      'or choosing a different model in Settings, normally clears it.'
+    );
   }
   if (response.stop_reason === 'max_tokens') {
     throw new Error('Generation ran out of tokens — try again.');
