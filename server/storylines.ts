@@ -180,10 +180,18 @@ const FILLER = /^\s*(placeholder|lorem ipsum|tbd|todo|n\/a|example|headline|body
 
 export { STORYLINE_SCHEMA };
 
+/** Why an entry was thrown away, or null when it was kept. */
+export function storylineFault(s: Storyline): string | null {
+  if (!s || typeof s.headline !== 'string' || typeof s.body !== 'string') return 'malformed';
+  if (FILLER.test(s.headline)) return 'filler headline';
+  if (FILLER.test(s.body)) return 'filler body';
+  if (s.headline.trim().length < 10) return `headline too short (${s.headline.trim().length})`;
+  if (s.body.trim().length < 60) return `body too short (${s.body.trim().length})`;
+  return null;
+}
+
 export function usableStoryline(s: Storyline): boolean {
-  if (!s || typeof s.headline !== 'string' || typeof s.body !== 'string') return false;
-  if (FILLER.test(s.headline) || FILLER.test(s.body)) return false;
-  return s.headline.trim().length >= 10 && s.body.trim().length >= 60;
+  return storylineFault(s) === null;
 }
 
 async function generateStorylines(orgId: number): Promise<StorylineCache> {
@@ -244,14 +252,50 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   }
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock || textBlock.type !== 'text') throw new Error('Empty response from model');
-  const parsed = JSON.parse(textBlock.text) as { storylines: Storyline[] };
-  const storylines = (parsed.storylines ?? []).filter(usableStoryline);
-
-  // Nothing worth reading is not worth keeping: caching it would return the
-  // same empty page to anyone who pressed the button again
-  if (storylines.length === 0) {
+  let parsed: { storylines?: Storyline[] };
+  try {
+    parsed = JSON.parse(textBlock.text) as { storylines?: Storyline[] };
+  } catch {
+    console.error('[storylines] response was not JSON:', textBlock.text.slice(0, 2000));
     throw new Error(
-      'The model returned no usable storylines. Try again, or pick a larger model in Settings.'
+      `${aiModel()} returned something that was not JSON. The raw reply is in the app's log.`
+    );
+  }
+
+  const returned = Array.isArray(parsed.storylines) ? parsed.storylines : [];
+  const storylines = returned.filter(usableStoryline);
+
+  /*
+   * Nothing worth reading is not worth keeping: caching it would hand the same
+   * empty page back to anyone who pressed the button again.
+   *
+   * The message says what actually happened rather than guessing at a cause.
+   * Three faults here in a row were diagnosed by reasoning from a one-line
+   * error, and each guess was wrong; the response itself is the only thing
+   * that settles it, so a rejected batch reports how many came back, why each
+   * was dropped, and what the first one said.
+   */
+  if (storylines.length === 0) {
+    const faults = returned.map((s) => storylineFault(s));
+    console.error(
+      '[storylines]', aiModel(), 'returned', returned.length, 'entries, none usable:',
+      JSON.stringify({ faults, sample: returned.slice(0, 2) }, null, 1)
+    );
+    if (returned.length === 0) {
+      throw new Error(
+        `${aiModel()} returned a well-formed reply with no storylines in it. ` +
+        'Try again, or choose a different model in Settings.'
+      );
+    }
+    const first = returned[0];
+    const excerpt = [first?.headline, first?.body]
+      .filter((t) => typeof t === 'string')
+      .join(' / ')
+      .slice(0, 160);
+    throw new Error(
+      `${aiModel()} returned ${returned.length} storyline${returned.length === 1 ? '' : 's'}, ` +
+      `none usable (${[...new Set(faults)].filter(Boolean).join(', ')}). It wrote: "${excerpt}". ` +
+      'Trying again, or choosing a different model in Settings, usually clears it.'
     );
   }
 

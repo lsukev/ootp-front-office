@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STORYLINE_SCHEMA, usableStoryline } from '../server/storylines.js';
+import { STORYLINE_SCHEMA, storylineFault, usableStoryline } from '../server/storylines.js';
 
 /**
  * A user's Storylines page read "placeholder" over and over, and pressing the
@@ -77,5 +77,42 @@ describe('the storyline schema', () => {
     const json = JSON.stringify(STORYLINE_SCHEMA);
     expect(json).toContain('description');
     expect(json.toLowerCase()).toContain('placeholder');
+  });
+});
+
+/**
+ * The reason an entry was dropped, which the error message now quotes back.
+ * Three consecutive faults here were diagnosed by reasoning from a one-line
+ * message and each guess was wrong, so the failure states what it saw.
+ */
+describe('why an entry was rejected', () => {
+  const real = {
+    category: 'The Club',
+    headline: 'Boston has won nine of twelve behind a rotation nobody expected',
+    body:
+      'The Red Sox are 9-3 over the last twelve with a 2.88 rotation ERA, and the men doing it ' +
+      'were meant to be the weakness of this roster. The division lead is three games.',
+  };
+
+  it('says nothing about a good one', () => {
+    expect(storylineFault(real)).toBeNull();
+  });
+
+  it('names filler for what it is, and which field', () => {
+    expect(storylineFault({ ...real, headline: 'placeholder' })).toBe('filler headline');
+    expect(storylineFault({ ...real, body: 'placeholder' })).toBe('filler body');
+  });
+
+  it('reports a short body with its length, so the threshold can be judged', () => {
+    expect(storylineFault({ ...real, body: 'They are good.' })).toBe('body too short (14)');
+  });
+
+  it('reports a short headline with its length', () => {
+    expect(storylineFault({ ...real, headline: 'Sox win' })).toBe('headline too short (7)');
+  });
+
+  it('calls a malformed entry malformed rather than throwing', () => {
+    expect(storylineFault({ category: 'The Club' } as never)).toBe('malformed');
+    expect(storylineFault(null as never)).toBe('malformed');
   });
 });
