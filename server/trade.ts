@@ -3,6 +3,7 @@ import { db, tableExists } from './db.js';
 import { contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
 import { padDate } from './rosterops.js';
 import { contactProfiles } from './battedball.js';
+import { POSITION_CODES, glovesLine } from './gloves.js';
 import { computeBatting, computePitching, leagueBaseline } from './stats.js';
 
 export const tradeRoutes = Router();
@@ -464,7 +465,52 @@ function tradePlayer(id: number, statYear: number | null) {
     yearsAfterThis: c?.yearsAfterThis ?? 0,
     seasonLine: line,
     contact: isPitcher ? null : (contactProfiles([id]).get(id) ?? null),
+    /*
+     * Where he can play, and how well. Without this the desk was judging men
+     * on their bats alone — and said so when asked whether a second baseman
+     * could be moved to short, which is exactly the question a trade raises.
+     */
+    fielding: glovesLine(id),
+    fieldingStats: fieldingRecord(id, statYear),
   };
+}
+
+/**
+ * What he has actually done in the field, position by position.
+ *
+ * The ratings say what he is; this says what happened. A man rated 60 at short
+ * who has made fourteen errors in forty games is a different proposition from
+ * one who has not, and only one of those two facts is in the ratings.
+ *
+ * The current season is stored under split 0 and completed ones under split 1,
+ * which is worth knowing: filtering on split 1 alone returns every year except
+ * the one being asked about. Last season is carried too, because a handful of
+ * games at a position he no longer plays is the strongest evidence there is
+ * that he can — which is the question a trade actually raises.
+ */
+function fieldingRecord(id: number, statYear: number | null): string | null {
+  if (statYear === null || !tableExists('players_career_fielding_stats')) return null;
+  const rows = db
+    .prepare(
+      `SELECT year, position, SUM(g) AS g, SUM(po) AS po, SUM(a) AS a, SUM(e) AS e,
+              SUM(dp) AS dp, AVG(zr) AS zr
+       FROM players_career_fielding_stats
+       -- The season in progress is split 0; the ones behind it are split 1
+       WHERE player_id = ? AND year >= ? AND split_id IN (0, 1)
+       GROUP BY year, position HAVING g > 0 ORDER BY year DESC, g DESC`
+    )
+    .all(id, statYear - 1) as Array<Record<string, number>>;
+  if (rows.length === 0) return null;
+  return rows
+    .slice(0, 5)
+    .map((r) => {
+      const chances = (r.po ?? 0) + (r.a ?? 0) + (r.e ?? 0);
+      const pct = chances > 0 ? ((r.po + r.a) / chances).toFixed(3).replace(/^0/, '') : '—';
+      const zr = r.zr ? `, ${r.zr > 0 ? '+' : ''}${r.zr.toFixed(2)} ZR` : '';
+      const when = r.year === statYear ? 'this year' : `${r.year}`;
+      return `${POSITION_CODES[(r.position ?? 1) - 1] ?? '?'} ${when}: ${r.g}g, ${r.e}E, ${pct} fpct${zr}`;
+    })
+    .join('; ');
 }
 
 /**

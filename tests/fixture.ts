@@ -146,8 +146,15 @@ export function buildFixture(): string {
       pitching_ratings_misc_velocity INTEGER
     );
     CREATE TABLE players_fielding (
-      player_id INTEGER,
-      ${Array.from({ length: 9 }, (_, i) => `fielding_rating_pos${i + 1} INTEGER`).join(', ')}
+      player_id INTEGER, position INTEGER,
+      ${Array.from({ length: 9 }, (_, i) => `fielding_rating_pos${i + 1} INTEGER`).join(', ')},
+      ${Array.from({ length: 9 }, (_, i) => `fielding_rating_pos${i + 1}_pot INTEGER`).join(', ')},
+      ${Array.from({ length: 10 }, (_, i) => `fielding_experience${i} INTEGER`).join(', ')},
+      fielding_ratings_infield_range INTEGER, fielding_ratings_infield_arm INTEGER,
+      fielding_ratings_turn_doubleplay INTEGER, fielding_ratings_infield_error INTEGER,
+      fielding_ratings_outfield_range INTEGER, fielding_ratings_outfield_arm INTEGER,
+      fielding_ratings_outfield_error INTEGER, fielding_ratings_catcher_arm INTEGER,
+      fielding_ratings_catcher_ability INTEGER, fielding_ratings_catcher_framing INTEGER
     );
     CREATE TABLE players_career_batting_stats (
       player_id INTEGER, year INTEGER, team_id INTEGER, league_id INTEGER, level_id INTEGER,
@@ -310,9 +317,24 @@ export function buildFixture(): string {
   const batting = db.prepare(
     `INSERT INTO players_batting VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  const fielding = db.prepare(
-    `INSERT INTO players_fielding VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+  /*
+   * Named rather than positional, because this table now carries the potentials
+   * and the experience counters beside the current grades and a positional
+   * insert of forty columns is a transcription error waiting to happen.
+   */
+  const insertFielding = (row: Record<string, number>): void => {
+    const keys = Object.keys(row);
+    db.prepare(
+      `INSERT INTO players_fielding (${keys.join(', ')}) VALUES (${keys.map((k) => `@${k}`).join(', ')})`
+    ).run(row);
+  };
+  const fielding = {
+    run: (id: number, ...current: number[]) => {
+      const row: Record<string, number> = { player_id: id, position: 4 };
+      current.forEach((v, i) => { row[`fielding_rating_pos${i + 1}`] = v; });
+      insertFielding(row);
+    },
+  };
   const allBatters = [IDS.starter, IDS.optioned, IDS.unrostered, IDS.minorDeal, IDS.boundary,
                       IDS.injured,
                       ...fielders.map(([id]) => id)];

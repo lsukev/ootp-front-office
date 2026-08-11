@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
-import { formatRatingPair } from './ratingScale';
+import { formatRating, formatRatingPair } from './ratingScale';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -235,6 +235,33 @@ function Dossier({ d }: { d: PlayerDossier }) {
           </section>
         )}
         <section>
+          {/* The grades a coach reads before moving anybody, which the card
+              never carried — only the components underneath them */}
+          {(d.positionRatings?.length ?? 0) > 0 && (
+            <>
+              <h3>Positions</h3>
+              <table className="mini">
+                <tbody>
+                  {(d.positionRatings ?? []).map((p) => (
+                    <tr key={p.position} className={p.isPrimary ? 'row-us' : ''}>
+                      <td>
+                        {p.code}
+                        {p.isPrimary && <span className="muted"> · listed</span>}
+                      </td>
+                      <td className="num">
+                        {p.current > 0
+                          ? formatRatingPair(p.current, p.potential, ' → ')
+                          : <span className="muted">unrated{p.potential > 0 ? ` · ceiling ${formatRating(p.potential)}` : ''}</span>}
+                      </td>
+                      <td className="num muted">
+                        {p.experience > 0 ? 'has played here' : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
           {!d.isPitcher && d.fieldingRatings && (
             <>
               <h3>Fielding</h3>

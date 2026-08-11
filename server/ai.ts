@@ -194,6 +194,13 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined): string {
       `- Use the season line, and read it against the level it was produced at. OPS+ and ERA+ are ` +
       `scaled so 100 is average for that league, so they compare across levels; the raw rates do ` +
       `not. Say when a sample is too small to mean anything.\n` +
+    `- Judge the glove as well as the bat. "fielding" gives his rating at each position he can ` +
+    `play, on the 20-80 scale, with his ceiling where he has one — "60 at 2B, 35 at SS ` +
+    `(ceiling 55)" means he is a good second baseman who is not a shortstop yet and may never ` +
+    `be. "fieldingStats" is what he has actually done out there, this season and last: games, ` +
+    `errors, fielding percentage and zone rating. Say what a move down the defensive spectrum ` +
+    `costs, and never claim a man can play a position his ratings do not support. Where a ` +
+    `position is unrated, say so rather than assuming he cannot play it.\n` +
       `- Name who the incoming player would displace. "whoTheyWouldDisplace" lists the men already ` +
       `holding that job on the major-league roster, with their own lines. If he is not better than ` +
       `the man in the job, say so — an upgrade that does not upgrade anything is not one. If he is ` +

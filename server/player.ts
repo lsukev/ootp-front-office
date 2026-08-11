@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { gloves } from './gloves.js';
 import { contactLeague, contactProfiles, situationalSplits } from './battedball.js';
 import { contractsByPlayer, mlbPercentiler, seasonYear, valuesByPlayer } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
@@ -411,6 +412,13 @@ playerRoutes.get('/player/:id', (req, res) => {
       : null,
     velocity: veloLabel(pitching?.pitching_ratings_misc_velocity ?? null),
     pitches,
+    /*
+     * Where he can play, and how well, on the same 20-80 scale as the
+     * overalls. The card carried the component ratings — range, arm, hands —
+     * but never the per-position grades those add up to, which are what a
+     * coach actually reads before moving somebody.
+     */
+    positionRatings: gloves(id)?.positions ?? [],
     fieldingRatings: fielding
       ? {
           infieldRange: fielding.fielding_ratings_infield_range,

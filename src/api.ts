@@ -214,6 +214,15 @@ export interface PlayerDossier {
   velocity: string | null;
   pitches: Array<{ name: string; rating: number; talent: number }>;
   fieldingRatings: Record<string, number> | null;
+  /** His grade at each position he can play, on the 20-80 scale. */
+  positionRatings?: Array<{
+    position: number;
+    code: string;
+    current: number;
+    potential: number;
+    experience: number;
+    isPrimary: boolean;
+  }>;
   contract: {
     salaryNow: number;
     totalYears: number;
