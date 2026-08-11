@@ -10,13 +10,17 @@ import { gloves, glovesLine } from '../server/gloves.js';
  * of it. It was right not to guess. The ratings were in the save the whole
  * time; nothing was reading them.
  *
- * The case that shapes the code is the pitcher's slot. Across a real league
- * 8,589 position players carry exactly 80 potential as a pitcher — a flat
- * default sitting where a rating should be — so reporting it would have the
- * app telling you your shortstop is a future ace. Every other position is
- * reported however faint, including ones he has never played, because a
- * ceiling somewhere he has never stood is the whole basis for asking whether
- * he could be moved there.
+ * The rule that shapes the code is OOTP's own. The game prints a number at a
+ * position it has revealed and a dash everywhere else, and a current rating
+ * above zero is exactly that flag. Trent Grisham's card in the game shows 60
+ * in center and a dash at all eight others, while his row here holds a 75
+ * ceiling in left, a 65 in right and a 70 as a pitcher — and right field is
+ * the case that settles it, because he has two hundred experience there and
+ * the game still prints a dash. Having played somewhere does not reveal it.
+ *
+ * So the app shows what the game shows. Printing a withheld ceiling would hand
+ * over a scouting report that has not been earned, in an app whose purpose is
+ * to read the save rather than to play it for you.
  */
 
 const STOTT = 90_001;   // a second baseman with a shortstop's ceiling
@@ -61,15 +65,25 @@ describe('a second baseman asked about shortstop', () => {
     expect(line).toContain('35 at SS (ceiling 55)');
   });
 
-  it('reports a position he has never played, since that is the question', () => {
-    // 3B: no current grade, a 60 ceiling — exactly what makes a move thinkable
-    expect(glovesLine(STOTT)).toContain('unrated at 3B (ceiling 60)');
+  it('says nothing about a position the game has not revealed', () => {
+    // 3B carries a 60 ceiling and 200 experience, and OOTP still prints a dash
+    const g = gloves(STOTT)!;
+    expect(g.positions.some((p) => p.code === '3B')).toBe(false);
+    expect(glovesLine(STOTT)).not.toContain('3B');
   });
 
   it('never calls a position player a pitcher', () => {
+    // The 80 he carries there is a default, and unrevealed besides
     const g = gloves(STOTT)!;
     expect(g.positions.some((p) => p.code === 'P')).toBe(false);
     expect(glovesLine(STOTT)).not.toContain('at P');
+  });
+
+  it('leaks no withheld ceiling into the line at all', () => {
+    // The ceilings behind the dashes: 60 at third, 80 as a pitcher
+    const line = glovesLine(STOTT)!;
+    expect(line).not.toContain('80');
+    expect(line).not.toContain('unrated');
   });
 
   it('leads with the position he is listed at', () => {

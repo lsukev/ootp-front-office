@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
-import { formatRating, formatRatingPair } from './ratingScale';
+import { formatRatingPair } from './ratingScale';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -236,7 +236,9 @@ function Dossier({ d }: { d: PlayerDossier }) {
         )}
         <section>
           {/* The grades a coach reads before moving anybody, which the card
-              never carried — only the components underneath them */}
+              never carried — only the components underneath them. Only the
+              positions OOTP has revealed appear: it prints a dash at the rest,
+              and what the dash hides is not ours to print. */}
           {(d.positionRatings?.length ?? 0) > 0 && (
             <>
               <h3>Positions</h3>
@@ -248,18 +250,15 @@ function Dossier({ d }: { d: PlayerDossier }) {
                         {p.code}
                         {p.isPrimary && <span className="muted"> · listed</span>}
                       </td>
-                      <td className="num">
-                        {p.current > 0
-                          ? formatRatingPair(p.current, p.potential, ' → ')
-                          : <span className="muted">unrated{p.potential > 0 ? ` · ceiling ${formatRating(p.potential)}` : ''}</span>}
-                      </td>
-                      <td className="num muted">
-                        {p.experience > 0 ? 'has played here' : ''}
-                      </td>
+                      <td className="num">{formatRatingPair(p.current, p.potential, ' → ')}</td>
+                      <td className="num muted">{p.experience > 0 ? 'has played here' : ''}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <span className="muted">
+                Only positions OOTP has rated him at. Others stay blank until he plays there.
+              </span>
             </>
           )}
           {!d.isPitcher && d.fieldingRatings && (

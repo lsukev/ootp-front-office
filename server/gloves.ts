@@ -11,19 +11,21 @@ import { db, tableExists } from './db.js';
  * it had no fielding ratings in front of it and would not guess. It was right
  * not to guess, and wrong to have been asked without them.
  *
- * Every field position is reported, including ones he has never played. That
- * is deliberate: a ceiling somewhere he has never stood is the whole basis for
- * asking whether he could be moved there, and hiding it would answer the
- * question by omission.
+ * Only what OOTP has already shown you. A current rating above zero is the
+ * game's own flag for a position it has revealed: it prints the number there
+ * and a dash everywhere else, and the app must not print what the dash is
+ * hiding.
  *
- * The one exclusion is the pitcher's slot for a position player, which is not
- * a projection at all. Across this league 8,589 non-pitchers carry exactly 80
- * potential as a pitcher — a flat default sitting where a rating should be,
- * against a proper spread at the eight field positions. Reporting it would
- * have the app telling you your shortstop is a future ace.
+ * Checked against the game rather than assumed. Trent Grisham's card in OOTP
+ * shows 60 in center field and a dash at all eight others; his row here holds
+ * a 75 ceiling in left, a 65 in right and a 70 as a pitcher, none of it
+ * revealed. Right field is the one that settles the rule — two hundred
+ * experience there and OOTP still prints a dash — so having played a position
+ * does not expose it either. The current rating is the only signal that does.
  *
- * A current rating of zero means no established grade there, not incapacity,
- * so it is shown as unrated beside its ceiling rather than as a zero.
+ * The cost of the alternative is worth stating: showing a ceiling the game has
+ * withheld would hand you a scouting report you have not earned, in an app
+ * whose whole purpose is to read your save rather than to play it for you.
  */
 
 export const POSITION_CODES = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'] as const;
@@ -103,16 +105,13 @@ export function gloves(playerId: number): Gloves | null {
   if (!row) return null;
 
   const listedPosition = Number(row.position ?? 0);
-  const isPitcher = listedPosition === 1;
   const positions: PositionRating[] = [];
   for (let position = 1; position <= 9; position++) {
     const current = num(row, `fielding_rating_pos${position}`);
     const potential = num(row, `fielding_rating_pos${position}_pot`);
     const experience = num(row, `fielding_experience${position - 1}`);
-    // The flat 80 a position player carries at pitcher is a default, not a read
-    if (position === 1 && !isPitcher) continue;
-    // Nothing at all recorded: no grade, no ceiling, never played it
-    if (current <= 0 && potential <= 0 && experience <= 0 && position !== listedPosition) continue;
+    // The dash in OOTP. Everything behind it stays behind it
+    if (current <= 0) continue;
     positions.push({
       position,
       code: POSITION_CODES[position - 1],

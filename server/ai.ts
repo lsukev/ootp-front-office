@@ -199,8 +199,10 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined): string {
     `(ceiling 55)" means he is a good second baseman who is not a shortstop yet and may never ` +
     `be. "fieldingStats" is what he has actually done out there, this season and last: games, ` +
     `errors, fielding percentage and zone rating. Say what a move down the defensive spectrum ` +
-    `costs, and never claim a man can play a position his ratings do not support. Where a ` +
-    `position is unrated, say so rather than assuming he cannot play it.\n` +
+    `costs, and never claim a man can play a position his ratings do not support. Only the ` +
+    `positions the game has actually rated him at appear — a position missing from the list is ` +
+    `one nobody has graded yet, not one he is known to be incapable of, so treat it as unknown ` +
+    `and say so if it matters.\n` +
       `- Name who the incoming player would displace. "whoTheyWouldDisplace" lists the men already ` +
       `holding that job on the major-league roster, with their own lines. If he is not better than ` +
       `the man in the job, say so — an upgrade that does not upgrade anything is not one. If he is ` +
