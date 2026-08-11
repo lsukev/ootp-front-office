@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'vitest';
+import { usableStoryline } from '../server/storylines.js';
+
+/**
+ * A user's Storylines page read "placeholder" over and over, and pressing the
+ * regenerate button returned the same thing — the model had emitted filler,
+ * the schema was satisfied because a string is a string, and the empty result
+ * had been written to the cache.
+ */
+
+const real = {
+  category: 'The Club',
+  headline: 'Boston has won nine of twelve behind a rotation nobody expected',
+  body:
+    'The Red Sox are 9-3 over the last twelve with a 2.88 rotation ERA, and the men doing it were ' +
+    'meant to be the weakness of this roster. Whether it holds is another question, but the ' +
+    'division lead is real and it is three games.',
+};
+
+describe('storylines that should be kept', () => {
+  it('accepts one that names the club and cites figures', () => {
+    expect(usableStoryline(real)).toBe(true);
+  });
+});
+
+describe('storylines that should be thrown away', () => {
+  it('rejects the exact filler a user was shown', () => {
+    expect(usableStoryline({ category: 'The Club', headline: 'placeholder', body: 'placeholder' })).toBe(false);
+  });
+
+  it('rejects other filler words', () => {
+    for (const word of ['TBD', 'todo', 'Lorem ipsum dolor sit amet', 'N/A', 'Example headline']) {
+      expect(usableStoryline({ category: 'The Club', headline: word, body: word })).toBe(false);
+    }
+  });
+
+  it('rejects a headline with a real body, and the reverse', () => {
+    expect(usableStoryline({ ...real, headline: 'placeholder' })).toBe(false);
+    expect(usableStoryline({ ...real, body: 'placeholder' })).toBe(false);
+  });
+
+  it('rejects a body too short to say anything', () => {
+    expect(usableStoryline({ ...real, body: 'They are good.' })).toBe(false);
+  });
+
+  it('rejects a malformed entry rather than throwing on it', () => {
+    expect(usableStoryline({ category: 'The Club' } as never)).toBe(false);
+    expect(usableStoryline(null as never)).toBe(false);
+  });
+});

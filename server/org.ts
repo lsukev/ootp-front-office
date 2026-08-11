@@ -57,6 +57,9 @@ interface OrgPlayer {
   stu: number | null; mov: number | null; ctl: number | null;
   stuP: number | null; movP: number | null; ctlP: number | null;
   spd: number | null;
+  /** OOTP's own Overall and Potential, when the export carries them. */
+  oa: number | null;
+  potOa: number | null;
 }
 
 function orgPlayers(orgId: number): OrgPlayer[] {
@@ -73,16 +76,37 @@ function orgPlayers(orgId: number): OrgPlayer[] {
               pi.pitching_ratings_overall_stuff AS stu, pi.pitching_ratings_overall_movement AS mov,
               pi.pitching_ratings_overall_control AS ctl,
               pi.pitching_ratings_talent_stuff AS stuP, pi.pitching_ratings_talent_movement AS movP,
-              pi.pitching_ratings_talent_control AS ctlP
+              pi.pitching_ratings_talent_control AS ctlP,
+              v.oa_rating AS oa, v.pot_rating AS potOa
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
+       LEFT JOIN players_value v ON v.player_id = p.player_id
        WHERE p.organization_id = ? AND p.team_id > 0 AND p.retired = 0`
     )
     .all(orgId) as OrgPlayer[];
 }
 
+/**
+ * Current ability and ceiling, as OOTP itself grades them.
+ *
+ * These pages used to average a player's component ratings — stuff, movement
+ * and control for a pitcher; contact, gap, power, eye and avoid-K for a hitter
+ * — and print the result in the same "current → potential" style the player
+ * card uses for OOTP's own Overall. The two disagreed constantly, because an
+ * unweighted mean of five scouted tools is not the same thing as a weighted,
+ * position-aware Overall, and a user cross-checking the farm page against the
+ * game found numbers that varied wildly with no way to tell why.
+ *
+ * OOTP's own grades are now used everywhere they are available, so the depth
+ * chart, the farm pages, the roster and the player card all quote one number.
+ * The old average survives only as a fallback for an export without
+ * players_value, where something is better than an empty column.
+ */
 function composites(p: OrgPlayer): { cur: number | null; pot: number | null } {
+  if (p.oa !== null && p.oa !== undefined) {
+    return { cur: p.oa, pot: p.potOa ?? p.oa };
+  }
   if (p.position === 1) {
     return { cur: avg([p.stu, p.mov, p.ctl]), pot: avg([p.stuP, p.movP, p.ctlP]) };
   }

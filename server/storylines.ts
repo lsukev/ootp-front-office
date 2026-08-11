@@ -126,6 +126,7 @@ const STORYLINE_SCHEMA = {
   properties: {
     storylines: {
       type: 'array' as const,
+      minItems: 5,
       items: {
         type: 'object' as const,
         properties: {
@@ -133,8 +134,19 @@ const STORYLINE_SCHEMA = {
             type: 'string' as const,
             enum: ['The Club', 'Player Spotlight', 'Down on the Farm', 'Front Office', 'Looking Ahead'],
           },
-          headline: { type: 'string' as const },
-          body: { type: 'string' as const },
+          headline: {
+            type: 'string' as const,
+            description: 'A specific headline naming real players, numbers or dates from the data.',
+            minLength: 12,
+          },
+          body: {
+            type: 'string' as const,
+            description:
+              'Two to four sentences citing figures from the data provided. Never write filler ' +
+              'or placeholder text — if there is nothing to say about a category, omit it and ' +
+              'write about another.',
+            minLength: 80,
+          },
         },
         required: ['category', 'headline', 'body'],
         additionalProperties: false,
@@ -144,6 +156,22 @@ const STORYLINE_SCHEMA = {
   required: ['storylines'],
   additionalProperties: false,
 };
+
+/**
+ * Filler the model sometimes emits when it has nothing to say.
+ *
+ * A user reported a page reading "placeholder" over and over. The schema was
+ * satisfied — a string is a string — so nothing downstream objected, and the
+ * empty result was written to the cache, which meant regenerating returned it
+ * again. Content this thin is now rejected before it can be stored.
+ */
+const FILLER = /^\s*(placeholder|lorem ipsum|tbd|todo|n\/a|example|headline|body)\b/i;
+
+export function usableStoryline(s: Storyline): boolean {
+  if (!s || typeof s.headline !== 'string' || typeof s.body !== 'string') return false;
+  if (FILLER.test(s.headline) || FILLER.test(s.body)) return false;
+  return s.headline.trim().length >= 10 && s.body.trim().length >= 60;
+}
 
 async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const context = assembleContext(orgId);
@@ -182,12 +210,21 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const textBlock = response.content.find((b) => b.type === 'text');
   if (!textBlock || textBlock.type !== 'text') throw new Error('Empty response from model');
   const parsed = JSON.parse(textBlock.text) as { storylines: Storyline[] };
+  const storylines = (parsed.storylines ?? []).filter(usableStoryline);
+
+  // Nothing worth reading is not worth keeping: caching it would return the
+  // same empty page to anyone who pressed the button again
+  if (storylines.length === 0) {
+    throw new Error(
+      'The model returned no usable storylines. Try again, or pick a larger model in Settings.'
+    );
+  }
 
   const cache: StorylineCache = {
     generatedAt: new Date().toISOString(),
     gameDate: context.gameDate,
     orgLabel: context.organization,
-    storylines: parsed.storylines,
+    storylines,
   };
   fs.writeFileSync(cachePath(orgId), JSON.stringify(cache, null, 2));
   return cache;
