@@ -29,6 +29,13 @@ export interface Settings {
    */
   roundRatingsToFive: boolean;
   /**
+   * Write the storylines and the briefing by themselves after each import.
+   *
+   * Off unless asked for. Both cost money on someone else's API key, and a
+   * setting that quietly spends it would be a poor default however convenient.
+   */
+  autoGenerateAfterImport: boolean;
+  /**
    * What you expect the owner to hand you next season, per club, in dollars.
    *
    * OOTP does not publish a future budget — it is not set until the offseason —
@@ -44,6 +51,7 @@ const DEFAULTS: Settings = {
   useTeamColors: true,
   nextSeasonBudget: {},
   roundRatingsToFive: false,
+  autoGenerateAfterImport: false,
   defaultOrgId: null,
   theme: 'system',
   model: 'claude-opus-5',
@@ -204,8 +212,20 @@ settingsRoutes.post('/settings', (req, res) => {
   const body = req.body as Partial<Settings>;
   const previous = loadSettings();
   const next: Settings = { ...previous };
-  if (typeof body.autoImport === 'boolean') next.autoImport = body.autoImport;
-  if (typeof body.useTeamColors === 'boolean') next.useTeamColors = body.useTeamColors;
+  /*
+   * Every boolean setting, taken from the defaults rather than listed here.
+   *
+   * They used to be copied across one line at a time, and the two toggles
+   * added after that was written were simply left out — the request answered
+   * 200, the switch stayed on until the page was reloaded, and the setting was
+   * never written at all. Reading the names from DEFAULTS means a new toggle
+   * is saved the moment it is declared.
+   */
+  for (const field of Object.keys(DEFAULTS) as Array<keyof Settings>) {
+    if (typeof DEFAULTS[field] === 'boolean' && typeof body[field] === 'boolean') {
+      (next[field] as boolean) = body[field] as boolean;
+    }
+  }
   if (body.defaultOrgId === null || typeof body.defaultOrgId === 'number') {
     next.defaultOrgId = body.defaultOrgId;
   }

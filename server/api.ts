@@ -6,11 +6,12 @@ import { detectSaves, resolveChosenFolder, searchLocations } from './paths.js';
 import { DATA_DIR, loadConfig, saveConfig } from './config.js';
 import { importCsvDir, type ImportResult } from './importer.js';
 import { clearPendingExport, pendingExport, startWatcher } from './watcher.js';
+import { getApiKey, loadSettings } from './settings.js';
 import { orgRoutes } from './org.js';
 import { contractRoutes } from './contracts.js';
 import { freeAgentRoutes } from './freeagents.js';
 import { lineupRoutes } from './lineup.js';
-import { storylineRoutes } from './storylines.js';
+import { storylineRoutes, startStorylineJob } from './storylines.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
@@ -21,7 +22,7 @@ import { tradeRoutes } from './trade.js';
 import { contactProfiles } from './battedball.js';
 import { standingOf, type StandingFields } from './health.js';
 import { gameplanRoutes } from './gameplan.js';
-import { aiRoutes } from './ai.js';
+import { aiRoutes, startBriefingJob } from './ai.js';
 import { logoRoutes } from './logos.js';
 import { settingsRoutes } from './settings.js';
 import { modelRoutes } from './models.js';
@@ -75,6 +76,42 @@ export const importState: {
   lastError: string | null;
 } = { importing: false, lastImport: loadImportMeta(), lastError: null };
 
+/**
+ * Kicks off the storylines and the briefing after an import, when the club has
+ * asked for that.
+ *
+ * Both cost money on the user's own key, so this happens only when the setting
+ * is on and a key exists — and it starts jobs rather than waiting on them, so
+ * an import is never held up by an API call. A club that has not been chosen
+ * yet is skipped: there would be no way to know whose season to write about.
+ */
+function autoGenerate(): void {
+  try {
+    const settings = loadSettings();
+    if (!settings.autoGenerateAfterImport || !getApiKey()) return;
+    const orgId = settings.defaultOrgId ?? humanOrgId();
+    if (!orgId) return;
+    console.log('[import] starting storylines and briefing for org', orgId);
+    startStorylineJob(orgId);
+    startBriefingJob(orgId);
+  } catch (err) {
+    // A failure here must never take the import down with it
+    console.error('[import] could not start the generations:', err);
+  }
+}
+
+/** The club the save says is being managed, when no default has been chosen. */
+function humanOrgId(): number | null {
+  try {
+    const row = db.prepare(`SELECT team_id FROM teams WHERE human_team = 1 LIMIT 1`).get() as
+      | { team_id: number }
+      | undefined;
+    return row?.team_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function runImport(csvDir: string): void {
   if (importState.importing) return;
   importState.importing = true;
@@ -94,6 +131,7 @@ export function runImport(csvDir: string): void {
     console.log(
       `[import] ${importState.lastImport.tables} tables, ${importState.lastImport.rows} rows imported`
     );
+    autoGenerate();
   } catch (err) {
     importState.lastError = (err as Error).message;
     console.error('[import] failed:', err);

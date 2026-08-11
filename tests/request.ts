@@ -27,3 +27,13 @@ export default async function request(path: string): Promise<any> {
   if (!res.ok) throw new Error(`${path} -> ${res.status} ${await res.text()}`);
   return res.json();
 }
+
+export async function post(path: string, body: unknown): Promise<any> {
+  const res = await fetch(`${await server()}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${path} -> ${res.status} ${await res.text()}`);
+  return res.json();
+}

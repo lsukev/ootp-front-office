@@ -8,6 +8,7 @@ import { aiModel, getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
+import { jobStatus, startJob } from './jobs.js';
 
 export const storylineRoutes = Router();
 
@@ -310,28 +311,35 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
 }
 
 storylineRoutes.get('/storylines/:orgId', (req, res) => {
+  const orgId = Number(req.params.orgId);
+  const job = jobStatus('storylines', orgId);
   try {
-    const cached = JSON.parse(fs.readFileSync(cachePath(Number(req.params.orgId)), 'utf8'));
-    res.json(cached);
+    const cached = JSON.parse(fs.readFileSync(cachePath(orgId), 'utf8'));
+    res.json({ ...cached, job });
   } catch {
-    res.json(null);
+    // Null where the body used to be, so a page written before this still
+    // reads the absence correctly, with the job alongside it
+    res.json({ storylines: null, job });
   }
 });
 
-storylineRoutes.post('/storylines/:orgId', async (req, res) => {
+/**
+ * Starts a generation and returns at once. The page asks how it is going by
+ * polling the GET above, so it can be left and come back to.
+ */
+storylineRoutes.post('/storylines/:orgId', (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
-  try {
-    const cache = await generateStorylines(Number(req.params.orgId));
-    res.json(cache);
-  } catch (err) {
-    const e = err as Error & { status?: number };
-    if (e.status === 401 || /api key|authentication/i.test(e.message)) {
-      return res.status(401).json({
-        error:
-          'No Anthropic API key set. Open Settings and add your key — you can get one at console.claude.com.',
-      });
-    }
-    console.error('[storylines] generation failed:', e);
-    res.status(500).json({ error: e.message });
+  const orgId = Number(req.params.orgId);
+  if (!getApiKey()) {
+    return res.status(401).json({
+      error: 'No API key set. Open Settings and add your key — you can get one at console.claude.com.',
+    });
   }
+  const { started, status } = startJob('storylines', orgId, () => generateStorylines(orgId));
+  res.json({ started, job: status });
 });
+
+/** Used by the importer when the club has asked for this to happen by itself. */
+export function startStorylineJob(orgId: number): void {
+  startJob('storylines', orgId, () => generateStorylines(orgId));
+}

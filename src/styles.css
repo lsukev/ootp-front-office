@@ -601,6 +601,42 @@ thead th[onclick], thead th { user-select: none; }
   line-height: 1.6;
   margin-bottom: 14px;
 }
+/* Who is speaking, since the answer is now a man rather than "the AI" */
+.trade-speaker {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.trade-answer + .trade-question,
+.trade-answer + .trade-answer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+/* The GM's own words sit flush; yours are set in from the margin */
+.trade-question {
+  font-family: var(--font-body);
+  color: var(--muted);
+  padding-left: 14px;
+  border-left: 3px solid var(--accent);
+}
+.trade-reply {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.trade-reply input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-body);
+}
+
 .fit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 .fit-card {
   background: var(--panel);

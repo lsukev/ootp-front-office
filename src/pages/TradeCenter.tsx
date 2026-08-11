@@ -49,6 +49,16 @@ interface TalkItem {
   };
 }
 
+interface Voice {
+  name: string;
+  role: string;
+}
+
+interface TradeTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 const money = (n: number) => (Math.abs(n) >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n / 1000)}k`);
 
 export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
@@ -56,12 +66,23 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
   const [sideA, setSideA] = useState<SearchResult[]>([]);
   const [sideB, setSideB] = useState<SearchResult[]>([]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [aiVerdict, setAiVerdict] = useState<string | null>(null);
+  // The conversation about the deal on screen, held here rather than on the
+  // server: it belongs to these two lists of players, and they change with
+  // every click
+  const [thread, setThread] = useState<TradeTurn[]>([]);
+  const [voice, setVoice] = useState<Voice | null>(null);
+  const [draft, setDraft] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [talk, setTalk] = useState<TalkItem[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const builderRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Who answers, so the button can carry his name before he has said anything
+    setVoice(null);
+    apiGet<Voice>(`/api/trade/voice/${orgId}`).then(setVoice).catch(() => setVoice(null));
+  }, [orgId]);
 
   useEffect(() => {
     setFits(null);
@@ -87,7 +108,8 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
   /** Loads a real offer into the builder, both sides as they were proposed. */
   const reviewProposal = (p: Proposal) => {
     setAnalysis(null);
-    setAiVerdict(null);
+    setThread([]);
+    setDraft('');
     const toRow = (x: ProposalSide['players'][number], team: string | null) => ({
       player_id: x.player_id,
       name: x.name,
@@ -113,7 +135,8 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
    */
   const review = (item: TalkItem) => {
     setAnalysis(null);
-    setAiVerdict(null);
+    setThread([]);
+    setDraft('');
     setSideB([{
       player_id: item.player.player_id,
       name: item.player.name,
@@ -134,7 +157,7 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
 
   const analyze = async () => {
     setError(null);
-    setAiVerdict(null);
+    setThread([]);
     try {
       setAnalysis(
         await apiPost<Analysis>('/api/trade/analyze', {
@@ -147,21 +170,52 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
     }
   };
 
+  /** The two sides as ids, which every request about this deal needs. */
+  const deal = () => ({
+    sideA: sideA.map((p) => p.player_id),
+    sideB: sideB.map((p) => p.player_id),
+    // The club matters now: the verdict weighs the incoming men against
+    // whoever already holds their jobs here
+    orgId,
+    orgLabel,
+  });
+
   const askAI = async () => {
     setAiBusy(true);
     setError(null);
     try {
-      const r = await apiPost<{ verdict: string }>('/api/trade/ai-eval', {
-        sideA: sideA.map((p) => p.player_id),
-        sideB: sideB.map((p) => p.player_id),
-        // The club matters now: the verdict weighs the incoming men against
-        // whoever already holds their jobs here
-        orgId,
-        orgLabel,
-      });
-      setAiVerdict(r.verdict);
+      const r = await apiPost<{ verdict: string; voice: Voice }>('/api/trade/ai-eval', deal());
+      setVoice(r.voice);
+      setThread([{ role: 'assistant', content: r.verdict }]);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const reply = async () => {
+    const message = draft.trim();
+    if (!message || aiBusy) return;
+    const asked: TradeTurn[] = [...thread, { role: 'user', content: message }];
+    setThread(asked);
+    setDraft('');
+    setAiBusy(true);
+    setError(null);
+    try {
+      // The thread sent is the one without the new line in it — that goes as
+      // the question, and sending it twice would have him answer it twice
+      const r = await apiPost<{ reply: string; voice: Voice }>('/api/trade/ai-reply', {
+        ...deal(),
+        thread,
+        message,
+      });
+      setThread([...asked, { role: 'assistant', content: r.reply }]);
+    } catch (e) {
+      setError((e as Error).message);
+      // Put the question back rather than lose what was typed
+      setThread(thread);
+      setDraft(message);
     } finally {
       setAiBusy(false);
     }
@@ -254,8 +308,10 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
           <button className="btn-feature" onClick={analyze} disabled={!sideA.length || !sideB.length}>
             ⇄ Compare
           </button>
-          <button onClick={askAI} disabled={aiBusy || !sideA.length || !sideB.length}>
-            {aiBusy ? 'Thinking…' : '🤖 Ask the AI'}
+          <button onClick={() => void askAI()} disabled={aiBusy || !sideA.length || !sideB.length}>
+            {aiBusy && thread.length === 0
+              ? 'Thinking…'
+              : `🤖 Ask ${voice ? voice.name : 'the front office'}`}
           </button>
         </div>
         <TradeSide title={`${orgLabel} receive`} players={sideB} setPlayers={setSideB} />
@@ -277,19 +333,40 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
           />
         </div>
       )}
-      {aiVerdict && (
+      {thread.length > 0 && (
         <div className="ai-verdict">
-          {aiVerdict
-            .split('\n')
-            .filter((l) => l.trim())
-            .map((line, i) => {
-              // The model writes markdown. Only the bold and heading markers
-              // ever show up here, and "## Verdict: Accept" was being printed
-              // with its hashes on the page.
-              const heading = /^#{1,6}\s+/.test(line);
-              const text = line.replace(/^#{1,6}\s+/, '').replace(/\*\*/g, '');
-              return heading ? <h4 key={i}>{text}</h4> : <p key={i}>{text}</p>;
-            })}
+          {thread.map((turn, i) =>
+            turn.role === 'user' ? (
+              <p key={i} className="trade-question">
+                {turn.content}
+              </p>
+            ) : (
+              <div key={i} className="trade-answer">
+                {voice && (
+                  <span className="trade-speaker">
+                    {voice.name} · {voice.role}
+                  </span>
+                )}
+                {renderVerdict(turn.content)}
+              </div>
+            )
+          )}
+          {aiBusy && <p className="muted">Thinking…</p>}
+          {/* A verdict you cannot argue with is the less useful half of one */}
+          <div className="trade-reply">
+            <input
+              value={draft}
+              placeholder={`Ask ${voice ? voice.name.split(' ')[0] : 'a follow-up'}…`}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void reply();
+              }}
+              disabled={aiBusy}
+            />
+            <button onClick={() => void reply()} disabled={aiBusy || !draft.trim()}>
+              Send
+            </button>
+          </div>
         </div>
       )}
 
@@ -404,4 +481,19 @@ function SummaryCard({ label, value, tone }: { label: string; value: string; ton
       <span className={`card-value ${tone ?? ''}`}>{value}</span>
     </div>
   );
+}
+
+/**
+ * The model writes markdown. Only the bold and heading markers ever show up
+ * here, and "## Verdict: Accept" was being printed with its hashes on the page.
+ */
+function renderVerdict(text: string) {
+  return text
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((line, i) => {
+      const heading = /^#{1,6}\s+/.test(line);
+      const body = line.replace(/^#{1,6}\s+/, '').replace(/\*\*/g, '');
+      return heading ? <h4 key={i}>{body}</h4> : <p key={i}>{body}</p>;
+    });
 }

@@ -32,10 +32,15 @@ const OCCUPATION = {
   trainer: 12,
   scout: 6,
   owner: 13,
+  /** The front office proper. Every club in an export carries both. */
+  gm: 1,
+  assistantGm: 3,
 } as const;
 
 export type PersonaId =
-  | 'analyst' | 'manager' | 'pitching' | 'hitting' | 'trainer' | 'scout' | 'owner';
+  | 'analyst' | 'manager' | 'pitching' | 'hitting' | 'trainer' | 'scout' | 'owner'
+  /** Not a chat persona — the voice the trade analyser answers in. */
+  | 'gm';
 
 interface PersonaSpec {
   id: PersonaId;
@@ -358,6 +363,49 @@ export function personasFor(orgId: number): Persona[] {
 
 export function personaById(orgId: number, id: string): Persona | null {
   return personasFor(orgId).find((p) => p.id === id) ?? null;
+}
+
+/** The chair the human occupies, by name, when the save says who they are. */
+function humanName(orgId: number): string | null {
+  if (!tableExists('human_managers')) return null;
+  const row = db
+    .prepare(
+      `SELECT first_name, last_name FROM human_managers
+       WHERE team_id = ? OR organization_id = ? LIMIT 1`
+    )
+    .get(orgId, orgId) as { first_name?: string; last_name?: string } | undefined;
+  if (!row) return null;
+  return `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim() || null;
+}
+
+/**
+ * Who speaks for the front office on a trade.
+ *
+ * The general manager, unless that is the chair you are sitting in — a save
+ * where you took the job yourself would otherwise have the app arguing with
+ * you in your own name. In that case it is the assistant general manager,
+ * which is who you would actually be asking.
+ */
+export function tradeVoice(orgId: number): Persona {
+  const human = humanName(orgId);
+  const gm = loadCoach(orgId, OCCUPATION.gm);
+  const nameOf = (c: Coach): string => `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+
+  const humanHoldsIt =
+    gm !== null && human !== null && nameOf(gm).toLowerCase() === human.toLowerCase();
+  const chosen = humanHoldsIt ? loadCoach(orgId, OCCUPATION.assistantGm) : gm;
+  const role = humanHoldsIt || !gm ? 'assistant general manager' : 'general manager';
+
+  if (!chosen) {
+    // No record for either chair: speak as the office rather than invent a man
+    return { id: 'gm', name: 'the front office', role: 'front office', facts: [] };
+  }
+  return {
+    id: 'gm',
+    name: nameOf(chosen) || `the ${role}`,
+    role,
+    facts: [...bioLines(chosen), ...playingLines(chosen), ...fromSliders(chosen, PHILOSOPHY, 3), ...craftLines('analyst', chosen)],
+  };
 }
 
 /** The club's record, so a man under pressure sounds like one. */

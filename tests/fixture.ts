@@ -100,6 +100,10 @@ export function buildFixture(): string {
       is_on_waivers INTEGER DEFAULT 0
     );
     CREATE TABLE team_roster (team_id INTEGER, player_id INTEGER, list_id INTEGER);
+    CREATE TABLE human_managers (
+      human_manager_id INTEGER, first_name TEXT, last_name TEXT, team_id INTEGER,
+      organization_id INTEGER
+    );
     CREATE TABLE coaches (
       coach_id INTEGER, first_name TEXT, last_name TEXT, age INTEGER, city_of_birth_id INTEGER,
       nation_id INTEGER, occupation INTEGER, team_id INTEGER, experience INTEGER,
@@ -288,6 +292,20 @@ export function buildFixture(): string {
     `INSERT INTO coaches VALUES (900, 'Skip', 'Ratchet', 58, 0, 0, 2, ?, 12, ?, 1500000, 2,
                                  130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 8, -2, 0)`
   ).run(IDS.mlbTeam, IDS.starter);
+
+  // The front office, so the voice the trade desk answers in can be checked.
+  // The general manager is somebody else here; the assistant is the fallback
+  // for a save where the human took the job himself.
+  db.prepare(
+    `INSERT INTO coaches VALUES (901, 'Web', 'Ivey', 55, 0, 0, 1, ?, 20, 0, 900000, 3,
+                                 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 7, -1, 6)`
+  ).run(IDS.mlbTeam);
+  db.prepare(
+    `INSERT INTO coaches VALUES (902, 'Del', 'Faraday', 44, 0, 0, 3, ?, 6, 0, 400000, 2,
+                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 3)`
+  ).run(IDS.mlbTeam);
+  db.prepare(`INSERT INTO human_managers VALUES (1, 'Sam', 'Player', ?, ?)`)
+    .run(IDS.mlbTeam, IDS.mlbTeam);
 
   const batting = db.prepare(
     `INSERT INTO players_batting VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`

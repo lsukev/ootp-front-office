@@ -178,10 +178,13 @@ export interface Storyline {
 }
 
 export interface StorylineCache {
-  generatedAt: string;
-  gameDate: string | null;
-  orgLabel: string;
-  storylines: Storyline[];
+  generatedAt?: string;
+  gameDate?: string | null;
+  orgLabel?: string;
+  /** Null before any set has been written for this club. */
+  storylines: Storyline[] | null;
+  /** How a background generation is getting on, when one is or was running. */
+  job?: { state: 'idle' | 'running' | 'done' | 'error'; startedAt: string | null; finishedAt: string | null; error: string | null };
 }
 
 export interface PlayerDossier {

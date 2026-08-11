@@ -20,6 +20,7 @@ export interface AppSettings {
   theme: 'system' | 'dark' | 'light';
   model: string;
   roundRatingsToFive: boolean;
+  autoGenerateAfterImport: boolean;
 }
 interface SettingsResponse {
   settings: AppSettings;
@@ -347,6 +348,25 @@ export function Settings({
               onChange={(e) => void update({ useTeamColors: e.target.checked })}
             />
             <span>{settings.useTeamColors ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <strong>Write storylines and the briefing after each import</strong>
+            <div className="muted">
+              Both are generated in the background as soon as new data is read, so they are already
+              waiting when you open the app. Off by default: each one costs money on your own API
+              key, and nothing should spend it without being asked. Does nothing until a key is set.
+            </div>
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={settings.autoGenerateAfterImport}
+              onChange={(e) => void update({ autoGenerateAfterImport: e.target.checked })}
+            />
+            <span>{settings.autoGenerateAfterImport ? 'On' : 'Off'}</span>
           </label>
         </div>
 

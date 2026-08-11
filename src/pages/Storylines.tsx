@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useJob } from '../useJob';
 import { generateStorylines, getStorylines, type StorylineCache } from '../api';
 import { PlayerNames } from '../PlayerNames';
 
@@ -11,34 +11,12 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
-  const [data, setData] = useState<StorylineCache | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setData(null);
-    setLoaded(false);
-    setError(null);
-    getStorylines(orgId)
-      .then((d) => {
-        setData(d);
-        setLoaded(true);
-      })
-      .catch((e) => setError(e.message));
-  }, [orgId]);
-
-  const generate = async () => {
-    setGenerating(true);
-    setError(null);
-    try {
-      setData(await generateStorylines(orgId));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setGenerating(false);
-    }
-  };
+  // Written on the server, so this watches rather than waits: start a set and
+  // go elsewhere in the app while it is made
+  const { data, error, running: generating, start: generate } = useJob<StorylineCache>(
+    `/api/storylines/${orgId}`
+  );
+  const loaded = data !== null;
 
   return (
     <div className="storylines">
@@ -46,25 +24,26 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
         <div>
           <h2 className="masthead-title">{orgLabel} Storylines</h2>
           <span className="muted">
-            {data
+            {data?.storylines && data.generatedAt
               ? `As of ${data.gameDate} in-game · written ${new Date(data.generatedAt).toLocaleString()}`
               : 'AI-written beat coverage of your organization, grounded in your save data'}
           </span>
         </div>
-        <button className="btn-feature" onClick={generate} disabled={generating}>
-          {generating ? 'Writing…' : data ? '↻ Fresh Storylines' : '✍ Write Storylines'}
+        <button className="btn-feature" onClick={() => void generate()} disabled={generating}>
+          {generating ? 'Writing…' : data?.storylines ? '↻ Fresh Storylines' : '✍ Write Storylines'}
         </button>
       </div>
 
       {error && <div className="banner error">{error}</div>}
       {generating && (
         <p className="muted generating">
-          The beat writer is combing through standings, box scores, prospect reports, and the payroll ledger… this
-          takes half a minute or so.
+          The beat writer is combing through standings, box scores, prospect reports and the payroll
+          ledger. This runs on the server, so you can go elsewhere in the app — the stories will be
+          here when you come back.
         </p>
       )}
 
-      {loaded && !data && !generating && !error && (
+      {loaded && !data?.storylines && !generating && !error && (
         <div className="hint">
           <h3>No storylines yet</h3>
           <p>
@@ -75,7 +54,7 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
         </div>
       )}
 
-      {data && (
+      {data?.storylines && (
         <div className="story-grid">
           {data.storylines.map((s, i) => (
             <article key={i} className="story-card">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { apiGet, apiPost } from '../api';
+import { apiGet } from '../api';
+import { useJob, type JobStatus } from '../useJob';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
@@ -25,32 +26,21 @@ interface DashboardData {
   };
 }
 
-interface Briefing { generatedAt: string; gameDate: string | null; markdown: string }
+interface Briefing { generatedAt?: string; gameDate?: string | null; markdown: string | null; job?: JobStatus }
 
 export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (page: string) => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [briefing, setBriefing] = useState<Briefing | null>(null);
-  const [briefingBusy, setBriefingBusy] = useState(false);
-  const [briefingError, setBriefingError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The briefing runs on the server, so this watches it rather than waits for
+  // it — start one and go somewhere else
+  const {
+    data: briefing, error: briefingError, running: briefingBusy, start: generateBriefing,
+  } = useJob<Briefing>(`/api/briefing/${orgId}`);
 
   useEffect(() => {
     setData(null);
     apiGet<DashboardData>(`/api/dashboard/${orgId}`).then(setData).catch((e) => setError(e.message));
-    apiGet<Briefing | null>(`/api/briefing/${orgId}`).then(setBriefing).catch(() => {});
   }, [orgId]);
-
-  const generateBriefing = async () => {
-    setBriefingBusy(true);
-    setBriefingError(null);
-    try {
-      setBriefing(await apiPost<Briefing>(`/api/briefing/${orgId}`));
-    } catch (e) {
-      setBriefingError((e as Error).message);
-    } finally {
-      setBriefingBusy(false);
-    }
-  };
 
   if (error) return <div className="banner error">{error}</div>;
   if (!data) return <p className="muted">Loading the morning report…</p>;
@@ -187,15 +177,28 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
         <section className="dash-panel dash-briefing">
           <div className="briefing-head">
             <h3>GM Briefing</h3>
-            <button onClick={generateBriefing} disabled={briefingBusy}>
-              {briefingBusy ? 'Writing…' : briefing ? '↻ New briefing' : '✍ Generate'}
+            <button onClick={() => void generateBriefing()} disabled={briefingBusy}>
+              {briefingBusy ? 'Writing…' : briefing?.markdown ? '↻ New briefing' : '✍ Generate'}
             </button>
           </div>
           {briefingError && <div className="banner error">{briefingError}</div>}
-          {briefing ? (
+          {/* It keeps writing whether or not you stay on this page, so the
+              previous briefing stays readable while the new one is made */}
+          {briefingBusy && (
+            <p className="muted">
+              Writing in the background — leave this page if you like, it will be here when you
+              come back.
+            </p>
+          )}
+          {briefing?.markdown ? (
             <>
-              <div className="briefing-body"><PlayerNames orgId={orgId}>{renderMarkdown(briefing.markdown)}</PlayerNames></div>
-              <span className="muted">As of {briefing.gameDate} · {new Date(briefing.generatedAt).toLocaleString()}</span>
+              <div className="briefing-body">
+                <PlayerNames orgId={orgId}>{renderMarkdown(briefing.markdown)}</PlayerNames>
+              </div>
+              <span className="muted">
+                As of {briefing.gameDate}
+                {briefing.generatedAt && ` · ${new Date(briefing.generatedAt).toLocaleString()}`}
+              </span>
             </>
           ) : (
             !briefingBusy && (
