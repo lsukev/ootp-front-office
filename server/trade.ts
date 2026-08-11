@@ -157,6 +157,81 @@ const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A
  * sides of a deal, so this is interest in a player rather than an offer with a
  * price on it. The analyser below is where the price gets worked out.
  */
+/**
+ * Actual offers sitting in the OOTP inbox.
+ *
+ * These were missed for a long time because of how they are stored. A proposal
+ * looks almost exactly like the "would it make sense to target X?" notes from
+ * your own staff — same message_type, same sender_type, same recipient — and
+ * the earlier reader keyed on `team_id_0` and `team_id_1`, which a proposal
+ * leaves empty. So every real offer was filtered out and only the suggestions
+ * came through.
+ *
+ * What identifies a proposal is `sender_id` naming a club and `trade_id`
+ * naming a deal. Which players go which way is not stored at all: the message
+ * lists them together, and the sides are recovered by asking who each man
+ * currently plays for. That reconstruction is checked against OOTP's own
+ * wording — a Braves offer of Dylan Lee and Ivan Gomez for Henry Lalane comes
+ * back exactly that way.
+ *
+ * Deliberately structural rather than textual. Reading the subject line would
+ * work in English and quietly fail in every other language OOTP ships.
+ */
+tradeRoutes.get('/trade-proposals/:orgId', (req, res) => {
+  const orgId = Number(req.params.orgId);
+  if (!tableExists('messages') || !tableExists('players')) return res.json({ proposals: [] });
+
+  const msgs = db
+    .prepare(
+      `SELECT m.message_id, m.subject, m.date, m.sender_id, m.trade_id,
+              m.player_id_0, m.player_id_1, m.player_id_2, m.player_id_3, m.player_id_4,
+              m.player_id_5, m.player_id_6, m.player_id_7, m.player_id_8, m.player_id_9,
+              ${teamLabel} AS sender_label
+       FROM messages m
+       LEFT JOIN teams t ON t.team_id = m.sender_id
+       WHERE m.recipient_id = 1 AND m.deleted = 0
+         AND m.sender_id > 0 AND m.trade_id != 0 AND m.player_id_0 != 0`
+    )
+    .all() as Array<Record<string, number | string | null>>;
+
+  const orgOf = db.prepare(`SELECT organization_id AS org FROM players WHERE player_id = ?`);
+
+  const proposals = msgs
+    .map((m) => {
+      const sender = Number(m.sender_id);
+      const ids = Array.from({ length: 10 }, (_, i) => Number(m[`player_id_${i}`] ?? 0)).filter(Boolean);
+      const theirs: number[] = [];
+      const ours: number[] = [];
+      for (const id of ids) {
+        const org = (orgOf.get(id) as { org: number } | undefined)?.org;
+        if (org === sender) theirs.push(id);
+        else if (org === orgId) ours.push(id);
+      }
+      // A message naming players on only one side is not an offer to weigh
+      if (theirs.length === 0 || ours.length === 0) return null;
+      return {
+        message_id: Number(m.message_id),
+        trade_id: Number(m.trade_id),
+        subject: String(m.subject ?? ''),
+        date: padDate(m.date),
+        from: { team_id: sender, label: String(m.sender_label ?? 'Unknown') },
+        theySend: summarizeSide(theirs),
+        weSend: summarizeSide(ours),
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+    .map((p) => ({
+      ...p,
+      // The same figures the analyser reports, so an offer read here and one
+      // pasted into the builder can never disagree
+      valueDiff: p.weSend.totalValue - p.theySend.totalValue,
+      salaryDiff: p.weSend.totalSalary - p.theySend.totalSalary,
+    }))
+    .sort((a, b) => String(b.date ?? '').localeCompare(String(a.date ?? '')));
+
+  res.json({ proposals });
+});
+
 tradeRoutes.get('/trade-talk/:orgId', (req, res) => {
   const orgId = Number(req.params.orgId);
   if (!tableExists('messages') || !tableExists('players')) return res.json({ items: [] });

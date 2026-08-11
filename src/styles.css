@@ -1713,3 +1713,9 @@ button.cta {
 .imsg-mentions button.active { background: var(--panel-raised); }
 .imsg-mention-name { font-size: 13px; }
 .imsg-mention-role { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.proposal-card { border-left-color: var(--good); }
+.proposal-side { margin: 2px 0; font-size: 13px; }
+.proposal-label {
+  display: inline-block; min-width: 62px; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted);
+}
