@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
-import { toGeminiContents, toOpenAiMessages } from '../server/providers.js';
+import { stripProviderExtras, toGeminiContents, toOpenAiMessages } from '../server/providers.js';
 
 /**
  * Turning one conversation into another service's shape.
@@ -112,5 +112,62 @@ describe('an empty or partial turn', () => {
   it('survives content given as a bare string', () => {
     const out = toOpenAiMessages('sys', [{ role: 'assistant', content: 'hello' }]) as any[];
     expect(out[1]).toMatchObject({ role: 'assistant', content: 'hello' });
+  });
+});
+
+/**
+ * Gemini 3 issues an opaque signature alongside every function call and will
+ * not accept the call back without it — the second turn of any tool use fails
+ * with a 400, which is how this was found, against the live API. The signature
+ * has nowhere to live in Anthropic's block, so it rides under a namespaced key
+ * that has to survive being written to disk and be taken off again before the
+ * same transcript is shown to a provider that would reject it.
+ */
+describe('a Gemini thought signature', () => {
+  const signed = (): Anthropic.MessageParam[] => [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool_use',
+          id: 'call_1',
+          name: 'search_players',
+          input: { q: 'Judge' },
+          _geminiThoughtSignature: 'opaque-signature',
+        } as any,
+      ],
+    },
+  ];
+
+  it('goes back to Google on the part, beside the call', () => {
+    const part = toGeminiContents(signed()).flatMap((c) => c.parts)[0];
+    expect(part.functionCall?.name).toBe('search_players');
+    expect(part.thoughtSignature).toBe('opaque-signature');
+  });
+
+  it('is left off when there is none, rather than sent empty', () => {
+    const bare: Anthropic.MessageParam[] = [
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'c', name: 'n', input: {} }] },
+    ];
+    expect(toGeminiContents(bare)[0].parts[0]).not.toHaveProperty('thoughtSignature');
+  });
+
+  it('survives the round trip through JSON, which is how it is stored', () => {
+    const reloaded = JSON.parse(JSON.stringify(signed())) as Anthropic.MessageParam[];
+    expect(toGeminiContents(reloaded)[0].parts[0].thoughtSignature).toBe('opaque-signature');
+  });
+
+  it('is taken off before the transcript goes to Anthropic', () => {
+    const messages = signed();
+    stripProviderExtras(messages);
+    expect(JSON.stringify(messages)).not.toContain('opaque-signature');
+    // and the block itself is otherwise intact
+    expect((messages[0].content as any)[0]).toEqual({
+      type: 'tool_use', id: 'call_1', name: 'search_players', input: { q: 'Judge' },
+    });
+  });
+
+  it('never reaches OpenAI, which builds its calls fresh', () => {
+    expect(JSON.stringify(toOpenAiMessages('sys', signed()))).not.toContain('opaque-signature');
   });
 });

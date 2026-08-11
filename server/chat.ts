@@ -5,7 +5,7 @@ import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
-import { toolLoopFor, type ProviderId } from './providers.js';
+import { stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
@@ -569,6 +569,14 @@ async function runToolLoop(opts: {
       maxTurns: 12,
     });
   }
+
+  /*
+   * Anthropic from here. A transcript may have been written under another
+   * provider, which can leave fields on a block that Anthropic rejects
+   * outright — and switching provider is one dropdown away. Stripped here
+   * rather than above, because the provider that put them there needs them.
+   */
+  stripProviderExtras(messages);
   let answer = '';
   for (let turn = 0; turn < 12; turn++) {
     markCachePoint(messages);

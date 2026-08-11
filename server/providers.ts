@@ -239,7 +239,7 @@ export const providerFor = (id: ProviderId): Provider => IMPLEMENTATIONS[id];
 export const DEFAULT_MODEL: Record<ProviderId, string> = {
   anthropic: 'claude-sonnet-5',
   openai: 'gpt-5',
-  gemini: 'gemini-3-pro-preview',
+  gemini: 'gemini-2.5-pro',
 };
 
 // ── The tool loop, for providers that are not Anthropic ─────────────────
@@ -438,6 +438,37 @@ interface GeminiPart {
   text?: string;
   functionCall?: { name: string; args: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
+  thoughtSignature?: string;
+}
+
+/**
+ * Where a Gemini thought signature is kept between turns.
+ *
+ * Gemini 3 will not accept a function call handed back to it without the
+ * opaque signature it issued alongside — the second turn of every tool call
+ * fails with a 400 otherwise, which is exactly how this was found. The
+ * signature has nowhere to live in Anthropic's block, so it rides along under
+ * a namespaced key and is stripped again before the transcript is sent
+ * anywhere that would reject an unknown field.
+ */
+const SIGNATURE_KEY = '_geminiThoughtSignature';
+
+type SignedToolUse = Anthropic.ToolUseBlockParam & { [SIGNATURE_KEY]?: string };
+
+/**
+ * Removes anything added for one provider's benefit.
+ *
+ * Called before the transcript goes to Anthropic, which rejects unknown fields
+ * on a content block outright — and a conversation started on Gemini and
+ * continued on Anthropic is one switch of a dropdown away.
+ */
+export function stripProviderExtras(messages: Anthropic.MessageParam[]): void {
+  for (const m of messages) {
+    if (typeof m.content === 'string') continue;
+    for (const b of m.content) {
+      if (b.type === 'tool_use') delete (b as SignedToolUse)[SIGNATURE_KEY];
+    }
+  }
 }
 
 export function toGeminiContents(messages: Anthropic.MessageParam[]): Array<{ role: string; parts: GeminiPart[] }> {
@@ -451,7 +482,11 @@ export function toGeminiContents(messages: Anthropic.MessageParam[]): Array<{ ro
       if (b.type === 'text' && b.text) parts.push({ text: b.text });
       else if (b.type === 'tool_use') {
         nameById.set(b.id, b.name);
-        parts.push({ functionCall: { name: b.name, args: (b.input ?? {}) as Record<string, unknown> } });
+        const signature = (b as SignedToolUse)[SIGNATURE_KEY];
+        parts.push({
+          functionCall: { name: b.name, args: (b.input ?? {}) as Record<string, unknown> },
+          ...(signature ? { thoughtSignature: signature } : {}),
+        });
       } else if (b.type === 'tool_result') {
         const content = typeof b.content === 'string' ? b.content : JSON.stringify(b.content);
         parts.push({
@@ -492,7 +527,7 @@ async function geminiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
       },
     });
 
-    const uses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+    const uses: Array<{ id: string; name: string; input: Record<string, unknown>; signature?: string }> = [];
     let refused = false;
     let calls = 0;
     for await (const chunk of stream) {
@@ -501,10 +536,22 @@ async function geminiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
         answer += text;
         o.onText(text);
       }
-      for (const fc of chunk.functionCalls ?? []) {
-        if (!fc.name) continue;
-        // Google does not issue call ids, and the transcript needs one
-        uses.push({ id: `gemini-${turn}-${calls++}`, name: fc.name, input: (fc.args ?? {}) as Record<string, unknown> });
+      /*
+       * Read from the raw parts rather than the chunk's functionCalls helper.
+       * The signature is a property of the part, not of the call inside it, so
+       * the convenience accessor cannot see it — and without it the next turn
+       * is rejected.
+       */
+      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+        const fc = part.functionCall;
+        if (!fc?.name) continue;
+        uses.push({
+          // Google does not issue call ids, and the transcript needs one
+          id: fc.id ?? `gemini-${turn}-${calls++}`,
+          name: fc.name,
+          input: (fc.args ?? {}) as Record<string, unknown>,
+          signature: part.thoughtSignature,
+        });
       }
       const finish = chunk.candidates?.[0]?.finishReason;
       if (finish && finish !== 'STOP' && finish !== 'MAX_TOKENS') refused = true;
@@ -516,7 +563,13 @@ async function geminiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
       role: 'assistant',
       content: [
         ...(answer ? [{ type: 'text' as const, text: answer }] : []),
-        ...uses.map((u) => ({ type: 'tool_use' as const, id: u.id, name: u.name, input: u.input })),
+        ...uses.map((u): SignedToolUse => ({
+          type: 'tool_use' as const,
+          id: u.id,
+          name: u.name,
+          input: u.input,
+          ...(u.signature ? { [SIGNATURE_KEY]: u.signature } : {}),
+        })),
       ],
     });
     o.messages.push({ role: 'user', content: await runAll(o, uses) });

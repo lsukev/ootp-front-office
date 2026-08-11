@@ -38,7 +38,7 @@ export const FALLBACK_MODELS: Record<ProviderId, ModelChoice[]> = {
     { id: 'gpt-5-mini', name: 'gpt-5-mini', contextTokens: null, adaptiveThinking: null },
   ],
   gemini: [
-    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', contextTokens: null, adaptiveThinking: null },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextTokens: null, adaptiveThinking: null },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextTokens: null, adaptiveThinking: null },
   ],
 };
