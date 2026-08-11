@@ -5,6 +5,7 @@ import { DATA_DIR, loadConfig } from './config.js';
 import {
   DEFAULT_MODEL, PROVIDERS, isProviderId, providerFor, type ProviderId,
 } from './providers.js';
+import { forgetUnusable } from './unusable.js';
 import { startWatcher, stopWatcher } from './watcher.js';
 
 /**
@@ -354,6 +355,9 @@ settingsRoutes.post('/settings/api-key', async (req, res) => {
     return res.status(400).json({ ok: false, error: `Could not verify the key: ${e.message}` });
   }
   saveApiKey(candidate, provider);
+  // A new key may well be able to run what the old one refused, which is one
+  // of the reasons somebody changes key in the first place
+  forgetUnusable(provider);
   res.json({ ok: true, apiKey: apiKeyStatus(), keys: allKeyStatus() });
 });
 

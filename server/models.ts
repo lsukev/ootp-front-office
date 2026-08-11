@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { activeProvider, getApiKey } from './settings.js';
 import { DEFAULT_MODEL, isProviderId, providerFor, type ProviderId } from './providers.js';
+import { unusableModels } from './unusable.js';
 
 /**
  * The model catalogue behind the Settings picker.
@@ -17,6 +18,12 @@ import { DEFAULT_MODEL, isProviderId, providerFor, type ProviderId } from './pro
 export interface ModelChoice {
   id: string;
   name: string;
+  /**
+   * Listed by the service but refused on this key. Google offers several of
+   * these, and nothing in its catalogue says which — so it is only known once
+   * one has been tried.
+   */
+  unusable?: boolean;
   /** Context window in tokens. */
   contextTokens: number | null;
   /** Whether `thinking: { type: 'adaptive' }` is accepted. Null when unknown. */
@@ -146,5 +153,12 @@ modelRoutes.get('/models', async (req, res) => {
   const asked = req.query.provider;
   const provider = isProviderId(asked) ? asked : activeProvider();
   const { models, live } = await listModels(provider);
-  res.json({ models, live, provider });
+  // Flagged rather than hidden: a model you chose should not quietly vanish
+  // from the list, and seeing why it is struck through is the point
+  const refused = new Set(unusableModels(provider, getApiKey(provider)));
+  res.json({
+    models: models.map((m) => (refused.has(m.id) ? { ...m, unusable: true } : m)),
+    live,
+    provider,
+  });
 });

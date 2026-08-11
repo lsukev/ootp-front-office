@@ -62,6 +62,8 @@ interface ModelChoice {
   name: string;
   contextTokens: number | null;
   adaptiveThinking: boolean | null;
+  /** Listed by the service but refused on this key when it was last tried. */
+  unusable?: boolean;
 }
 interface ModelsResponse {
   models: ModelChoice[];
@@ -313,6 +315,12 @@ export function Settings({
                 Showing a short built-in list — add a key to read the current one from the API.
               </div>
             )}
+            {models?.models.some((m) => m.id === activeModel && m.unusable) && (
+              <div className="muted">
+                This one was refused the last time it was tried, so generations run on another
+                model and say so. Replacing the key clears this.
+              </div>
+            )}
           </div>
           <select
             value={activeModel}
@@ -326,8 +334,12 @@ export function Settings({
             {models && !models.models.some((m) => m.id === activeModel) && (
               <option value={activeModel}>{activeModel}</option>
             )}
+            {/* Marked rather than removed: a model you chose should not
+                quietly disappear, and knowing why is the point */}
             {(models?.models ?? []).map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+              <option key={m.id} value={m.id}>
+                {m.name}{m.unusable ? ' — not available on your key' : ''}
+              </option>
             ))}
           </select>
         </div>

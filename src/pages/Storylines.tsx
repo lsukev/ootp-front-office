@@ -1,3 +1,4 @@
+import { FallbackNotice } from '../FallbackNotice';
 import { useJob } from '../useJob';
 import { generateStorylines, getStorylines, type StorylineCache } from '../api';
 import { PlayerNames } from '../PlayerNames';
@@ -35,7 +36,7 @@ export function Storylines({ orgId, orgLabel }: { orgId: number; orgLabel: strin
       </div>
 
       {error && <div className="banner error">{error}</div>}
-      {data?.notice && <div className="banner notice">{data.notice}</div>}
+      {data?.notice && <FallbackNotice notice={data.notice} />}
       {generating && (
         <p className="muted generating">
           The beat writer is combing through standings, box scores, prospect reports and the payroll

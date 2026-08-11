@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPut } from './api';
 import { PlayerNames, nameIndex, type Entry } from './PlayerNames';
+import { FallbackNotice, type FallbackNoticeData } from './FallbackNotice';
 
 /**
  * Ask-the-save chat. The server streams the answer over SSE and announces each
@@ -222,7 +223,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A model that had to be swapped. Not an error — the answer still arrives
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<FallbackNoticeData | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>(FALLBACK_STAFF);
@@ -380,7 +381,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
               update((m) => ({ ...m, tools: [...(m.tools ?? []), data.name] }));
             } else if (event === 'notice') {
               // Not a failure — the answer is coming, on a different model
-              setNotice(data.message);
+              setNotice(data as unknown as FallbackNoticeData);
             } else if (event === 'error') {
               setError(data.message);
             }
@@ -632,7 +633,11 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
           );
         })}
 
-        {notice && <div className="imsg-notice">{notice}</div>}
+        {notice && (
+          <div className="imsg-notice">
+            <FallbackNotice notice={notice} onSwitched={() => setNotice(null)} />
+          </div>
+        )}
         {error && <div className="imsg-error">{error}</div>}
       </div>
 

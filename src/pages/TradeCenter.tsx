@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost } from '../api';
+import { FallbackNotice, type FallbackNoticeData } from '../FallbackNotice';
 import { PlayerLink } from '../playerModal';
 
 interface FitPlayer { player_id: number; name: string; value: number }
@@ -55,7 +56,7 @@ interface Voice {
 }
 
 /** Sent when the chosen model could not be used and another answered. */
-type Notice = string | null;
+type Notice = FallbackNoticeData | null;
 
 interface TradeTurn {
   role: 'user' | 'assistant';
@@ -339,7 +340,7 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
           />
         </div>
       )}
-      {notice && <div className="banner notice">{notice}</div>}
+      {notice && <FallbackNotice notice={notice} />}
       {thread.length > 0 && (
         <div className="ai-verdict">
           {thread.map((turn, i) =>

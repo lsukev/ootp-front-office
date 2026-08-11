@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
+import { isUnusable, markUnusable } from './unusable.js';
 
 /**
  * Three ways to reach a model, behind one shape.
@@ -45,7 +46,21 @@ export interface CompleteOpts {
   /** A JSON schema, when the answer has to parse. */
   schema?: JsonSchema;
   /** Told when the chosen model could not be used and another answered. */
-  onFallback?: (notice: string) => void;
+  onFallback?: (notice: FallbackNotice) => void;
+}
+
+/**
+ * What the page needs to explain a swap and undo it in one click.
+ *
+ * The message alone was a chore handed to the reader — "pick a model that
+ * works in Settings" is a job, not an answer. With the two model ids the page
+ * can offer the switch itself.
+ */
+export interface FallbackNotice {
+  message: string;
+  from: string;
+  to: string;
+  provider: ProviderId;
 }
 
 export interface ModelChoice {
@@ -198,32 +213,51 @@ export function strictSchema(schema: JsonSchema): JsonSchema {
  */
 export const GEMINI_FALLBACK = 'gemini-3-flash-preview';
 
-/** A model that cannot be called at all, as against a request that went wrong. */
+/**
+ * A model that cannot be called at all, as against a request that went wrong.
+ *
+ * The line matters both ways. Retrying a rate limit or an empty balance on a
+ * different model spends money and fixes nothing; failing to spot a dead model
+ * hands somebody a 404 instead of their storylines.
+ *
+ * Matched on the status code and on what Google actually says, rather than on
+ * the digits 404 appearing somewhere in the text — an unrelated failure, or a
+ * tool result quoted back inside an error, should not trigger a model swap.
+ */
 export function modelUnavailable(err: unknown): boolean {
-  const e = err as { status?: number; message?: string };
+  const e = err as { status?: number; code?: number; message?: string };
   const message = e?.message ?? '';
-  return (
-    e?.status === 404 ||
-    /no longer available|not_?found|is not supported|does not exist|404/i.test(message)
-  );
+  if (e?.status === 404 || e?.code === 404) return true;
+  // Google returns its status in the body rather than on the error object
+  if (/"code"\s*:\s*404|"status"\s*:\s*"NOT_FOUND"/.test(message)) return true;
+  return /no longer available|is not supported|does not exist|model not found/i.test(message);
 }
 
-function fallbackNotice(from: string, to: string): string {
-  return (
-    `${from} could not be used on your key — Google lists it but rejects it, which happens with ` +
-    `the older Gemini models on newer keys. This ran on ${to} instead. Pick a model that works ` +
-    `in Settings to stop seeing this.`
-  );
+function fallbackNotice(from: string, to: string): FallbackNotice {
+  return {
+    from,
+    to,
+    provider: 'gemini',
+    message:
+      `${from} could not be used on your key — Google lists it but rejects it, which happens ` +
+      `with the older Gemini models on newer keys. This ran on ${to} instead.`,
+  };
 }
 
 const gemini: Provider = {
   async complete(opts) {
+    // Already known to be refused on this key: go straight to one that answers
+    // rather than buy the same 404 again
+    if (known(opts.model, opts.key)) {
+      opts.onFallback?.(fallbackNotice(opts.model, GEMINI_FALLBACK));
+      return geminiComplete(opts, GEMINI_FALLBACK);
+    }
     try {
       return await geminiComplete(opts, opts.model);
     } catch (err) {
       if (!modelUnavailable(err) || opts.model === GEMINI_FALLBACK) throw err;
+      remember(opts.model, opts.key, err);
       opts.onFallback?.(fallbackNotice(opts.model, GEMINI_FALLBACK));
-      console.warn(`[gemini] ${opts.model} unavailable, retrying on ${GEMINI_FALLBACK}`);
       return geminiComplete(opts, GEMINI_FALLBACK);
     }
   },
@@ -317,7 +351,7 @@ export interface ToolLoopOpts {
   runTool: (name: string, input: Record<string, unknown>) => Promise<string>;
   maxTurns: number;
   /** Told when the chosen model could not be used and another answered. */
-  onFallback?: (notice: string) => void;
+  onFallback?: (notice: FallbackNotice) => void;
 }
 
 export interface ToolLoopResult {
@@ -552,14 +586,26 @@ export function toGeminiContents(messages: Anthropic.MessageParam[]): Array<{ ro
 }
 
 async function geminiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
+  if (known(o.model, o.key)) {
+    o.onFallback?.(fallbackNotice(o.model, GEMINI_FALLBACK));
+    return geminiLoop(o, GEMINI_FALLBACK);
+  }
   try {
     return await geminiLoop(o, o.model);
   } catch (err) {
     if (!modelUnavailable(err) || o.model === GEMINI_FALLBACK) throw err;
+    remember(o.model, o.key, err);
     o.onFallback?.(fallbackNotice(o.model, GEMINI_FALLBACK));
-    console.warn(`[gemini] ${o.model} unavailable, retrying on ${GEMINI_FALLBACK}`);
     return geminiLoop(o, GEMINI_FALLBACK);
   }
+}
+
+const known = (model: string, key: string): boolean => isUnusable('gemini', model, key);
+
+function remember(model: string, key: string, err: unknown): void {
+  const reason = (err as { message?: string })?.message ?? 'refused by the API';
+  console.warn(`[gemini] ${model} unavailable, using ${GEMINI_FALLBACK} from now on`);
+  markUnusable('gemini', model, key, reason.slice(0, 300));
 }
 
 async function geminiLoop(o: ToolLoopOpts, model: string): Promise<ToolLoopResult> {
@@ -645,4 +691,73 @@ export function toolLoopFor(provider: ProviderId): ((o: ToolLoopOpts) => Promise
   if (provider === 'openai') return openAiToolLoop;
   if (provider === 'gemini') return geminiToolLoop;
   return null;
+}
+
+// ── Errors, in words ────────────────────────────────────────────────────
+
+/**
+ * What went wrong, said in a sentence.
+ *
+ * Anthropic and OpenAI's SDKs raise something readable. Google's does not: a
+ * failure arrives as its response body, JSON inside JSON, and it was going
+ * straight to the page — `{"error":{"message":"{\n \"error\": {\n \"code\"…`
+ * is not something to show anybody who wanted their storylines.
+ *
+ * The distinctions are the useful part. Two different problems both arrive as
+ * a 429 — too many requests in the last minute, which fixes itself, and an
+ * account with no money in it, which does not — and telling someone to wait
+ * when they need to add credit wastes their afternoon.
+ */
+export function describeError(provider: ProviderId, err: unknown): string {
+  const e = err as { status?: number; message?: string };
+  const raw = e?.message ?? String(err);
+  const message = unwrap(raw);
+  const status = e?.status ?? statusIn(raw);
+  const where = PROVIDERS.find((p) => p.id === provider);
+  const console_ = where?.console ?? 'your provider dashboard';
+
+  if (status === 401 || status === 403 || /api[_ ]?key not valid|invalid[_ ]api[_ ]key|unauthorized/i.test(message)) {
+    return `${where?.label ?? 'The service'} rejected your API key. Check it in Settings — it may have been revoked or copied incompletely.`;
+  }
+  if (/insufficient|no credits|exceeded your current quota|billing|payment/i.test(message)) {
+    return `Your ${where?.label ?? 'API'} account is out of credit. Add some at ${console_} and try again — nothing here is lost.`;
+  }
+  if (status === 429) {
+    return 'Too many requests in a short time. Wait a moment and try again — this clears by itself.';
+  }
+  if (status === 404) {
+    return `That model is not available on your key. Choose another in Settings.`;
+  }
+  if (status && status >= 500) {
+    return `${where?.label ?? 'The service'} had a problem at their end. Nothing is wrong with your save — try again shortly.`;
+  }
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|network|timeout/i.test(message)) {
+    return 'Could not reach the service. Check your connection and try again.';
+  }
+  return message || 'The request failed.';
+}
+
+/** Digs the human sentence out of a body that may be JSON nested in JSON. */
+function unwrap(raw: string): string {
+  let text = raw;
+  for (let depth = 0; depth < 3; depth++) {
+    const start = text.indexOf('{');
+    if (start === -1) break;
+    try {
+      const parsed: unknown = JSON.parse(text.slice(start));
+      const inner = (parsed as { error?: { message?: string }; message?: string })?.error?.message
+        ?? (parsed as { message?: string })?.message;
+      if (typeof inner !== 'string' || inner === text) break;
+      text = inner;
+    } catch {
+      break;
+    }
+  }
+  return text.trim();
+}
+
+/** The status code, which Google puts in the body rather than on the error. */
+function statusIn(raw: string): number | undefined {
+  const match = /"code"\s*:\s*(\d{3})/.exec(raw) ?? /^(\d{3})\s/.exec(raw);
+  return match ? Number(match[1]) : undefined;
 }

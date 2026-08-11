@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { useJob, type JobStatus } from '../useJob';
+import { FallbackNotice, type FallbackNoticeData } from '../FallbackNotice';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
@@ -31,7 +32,7 @@ interface Briefing {
   gameDate?: string | null;
   markdown: string | null;
   /** Set when the chosen model could not be used and another answered. */
-  notice?: string | null;
+  notice?: FallbackNoticeData | null;
   job?: JobStatus;
 }
 
@@ -189,7 +190,7 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
             </button>
           </div>
           {briefingError && <div className="banner error">{briefingError}</div>}
-          {briefing?.notice && <div className="banner notice">{briefing.notice}</div>}
+          {briefing?.notice && <FallbackNotice notice={briefing.notice} />}
           {/* It keeps writing whether or not you stay on this page, so the
               previous briefing stays readable while the new one is made */}
           {briefingBusy && (

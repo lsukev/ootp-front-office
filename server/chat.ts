@@ -5,7 +5,7 @@ import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
-import { stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
+import { describeError, stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { currentGameDate, seasonYear } from './valuation.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
@@ -566,7 +566,7 @@ async function runToolLoop(opts: {
       onText: (delta) => send('text', { delta }),
       onTool: (name) => send('tool', { name }),
       runTool: (name, input) => runTool(name, input),
-      onFallback: (notice) => send('notice', { message: notice }),
+      onFallback: (notice) => send('notice', notice),
       maxTurns: 12,
     });
   }
@@ -784,8 +784,7 @@ chatRoutes.post('/chat', async (req, res) => {
     send('done', {});
   } catch (err) {
     const e = err as Error & { status?: number };
-    const message =
-      e.status === 401 || /api key|authentication/i.test(e.message) ? NO_KEY_MESSAGE : e.message;
+    const message = getApiKey() ? describeError(activeProvider(), e) : NO_KEY_MESSAGE;
     send('error', { message });
   } finally {
     res.end();

@@ -6,7 +6,7 @@ import { jobStatus, startJob } from './jobs.js';
 import { HURT_SQL } from './health.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
-import { PROVIDERS, providerFor } from './providers.js';
+import { PROVIDERS, describeError, providerFor, type FallbackNotice } from './providers.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
@@ -21,15 +21,18 @@ const noKeyMessage = (): string => {
   return `No ${p?.label ?? 'API'} key set. Open Settings and add your key — you can get one at ${p?.console ?? 'the provider console'}.`;
 };
 
+/**
+ * A missing key is ours to explain. Everything else has already been put into
+ * words by callOpusThread, so it is passed along as it stands.
+ */
 function aiErrorStatus(e: Error & { status?: number }): { status: number; message: string } {
-  if (e.status === 401 || /api key|authentication/i.test(e.message)) {
-    return { status: 401, message: noKeyMessage() };
-  }
-  return { status: 500, message: e.message };
+  if (!getApiKey()) return { status: 401, message: noKeyMessage() };
+  return { status: e.status === 401 ? 401 : 500, message: e.message };
 }
 
 async function callOpus(
-  system: string, user: string, maxTokens = 16000, onFallback?: (n: string) => void
+  system: string, user: string, maxTokens = 16000,
+  onFallback?: (n: FallbackNotice) => void
 ): Promise<string> {
   return callOpusThread(system, [{ role: 'user', content: user }], maxTokens, onFallback);
 }
@@ -39,19 +42,23 @@ async function callOpusThread(
   system: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   maxTokens = 16000,
-  onFallback?: (notice: string) => void
+  onFallback?: (notice: FallbackNotice) => void
 ): Promise<string> {
   const provider = activeProvider();
   const key = getApiKey(provider);
   if (!key) throw Object.assign(new Error(noKeyMessage()), { status: 401 });
-  return providerFor(provider).complete({
-    key,
-    model: aiModel(provider),
-    system,
-    messages,
-    maxTokens,
-    onFallback,
-  });
+  /*
+   * Translated at the call rather than at each route. The briefing runs as a
+   * background job whose failure is read back long afterwards, so a raw
+   * response body would be what the page eventually showed.
+   */
+  return providerFor(provider)
+    .complete({ key, model: aiModel(provider), system, messages, maxTokens, onFallback })
+    .catch((err: unknown) => {
+      throw Object.assign(new Error(describeError(provider, err)), {
+        status: (err as { status?: number }).status,
+      });
+    });
 }
 
 // ── GM Briefing ─────────────────────────────────────────────────────────
@@ -114,7 +121,7 @@ async function generateBriefing(orgId: number): Promise<void> {
   const context = briefingContext(orgId);
   // A model that had to be swapped is worth saying so on the page rather than
   // only in a log nobody opens
-  let notice: string | null = null;
+  let notice: FallbackNotice | null = null;
   const markdown = await callOpus(
     `You are the assistant GM of the ${context.organization} in a saved game of Out of the Park ` +
     `Baseball, writing the weekly briefing for the GM. Everything below is from that save — the ` +
@@ -237,7 +244,7 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
   const body = req.body as TradeBody;
   try {
     const { voice, context } = tradeSetup(body);
-    let notice: string | null = null;
+    let notice: FallbackNotice | null = null;
     const verdict = await callOpus(
       tradeSystem(voice, body.orgLabel) + VERDICT_FORMAT,
       JSON.stringify(context, null, 1),
@@ -266,7 +273,7 @@ aiRoutes.post('/trade/ai-reply', async (req, res) => {
   if (!body.message?.trim()) return res.status(400).json({ error: 'Nothing to send' });
   try {
     const { voice, context } = tradeSetup(body);
-    let notice: string | null = null;
+    let notice: FallbackNotice | null = null;
     const history = (body.thread ?? [])
       .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
       // Enough to keep the argument coherent without resending an hour of it

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
-import { providerFor } from './providers.js';
+import { describeError, providerFor, type FallbackNotice } from './providers.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
@@ -24,7 +24,7 @@ interface StorylineCache {
   orgLabel: string;
   storylines: Storyline[];
   /** Set when the chosen model could not be used and another answered. */
-  notice?: string | null;
+  notice?: FallbackNotice | null;
 }
 
 const cachePath = (orgId: number) => path.join(DATA_DIR, `storylines-${orgId}.json`);
@@ -203,7 +203,12 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
   const key = getApiKey(provider);
   if (!key) throw Object.assign(new Error('missing-api-key'), { status: 401 });
 
-  let notice: string | null = null;
+  let notice: FallbackNotice | null = null;
+  /*
+   * Translated here rather than at the route: the failure is recorded on the
+   * background job and read back long after this call, so a raw response body
+   * would be what the page eventually showed.
+   */
   const text = await providerFor(provider).complete({
     key,
     model: aiModel(provider),
@@ -241,6 +246,8 @@ async function generateStorylines(orgId: number): Promise<StorylineCache> {
           `data:\n\n${JSON.stringify(context, null, 1)}\n\nWrite the storylines.`,
       },
     ],
+  }).catch((err: unknown) => {
+    throw new Error(describeError(provider, err));
   });
 
   let parsed: { storylines?: Storyline[] };
