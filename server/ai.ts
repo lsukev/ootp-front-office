@@ -8,7 +8,7 @@ import { DATA_DIR } from './config.js';
 import { aiModel, getApiKey } from './settings.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
-import { summarizeSide } from './trade.js';
+import { tradeContext } from './trade.js';
 import { currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valuation.js';
 
 export const aiRoutes = Router();
@@ -129,16 +129,29 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
     return res.status(400).json({ error: 'Both sides need at least one player' });
   }
   try {
-    const a = summarizeSide(sideA);
-    const b = summarizeSide(sideB);
+    const orgId = Number((req.body as { orgId?: number }).orgId) || 0;
+    const context = tradeContext(orgId, sideA, sideB);
     const verdict = await callOpus(
-      `You are a sharp MLB front-office trade analyst evaluating a proposed OOTP Baseball trade for ` +
-      `${orgLabel ?? 'our club'}. "We give" is what our org sends away; "we receive" is what comes back. ` +
-      `Value/Talent are percentiles among MLB-rostered players (current ability / scouted ceiling). Weigh ` +
-      `ability, age, contract years and salary, and fit. Answer in short markdown: a one-line **Verdict** ` +
-      `(Accept / Reject / Needs a sweetener), then 3-5 sentences of reasoning, then, if relevant, a suggested ` +
-      `adjustment. Keep it under 200 words.`,
-      `WE GIVE:\n${JSON.stringify(a, null, 1)}\n\nWE RECEIVE:\n${JSON.stringify(b, null, 1)}`,
+      `You are the front-office analyst for ${orgLabel ?? 'this club'}, judging a proposed trade in ` +
+      `a saved game of Out of the Park Baseball. Everything below comes from that save.\n\n` +
+      `"weGive" leaves the organisation; "weReceive" joins it.\n\n` +
+      `Judge the deal as a roster decision, not an exchange of ratings. In particular:\n` +
+      `- Say what each man actually is — his position, his role if he pitches, and the level he is ` +
+      `playing at. A 48-overall reliever and a 48-overall shortstop are not the same asset.\n` +
+      `- Use the season line, and read it against the level it was produced at. OPS+ and ERA+ are ` +
+      `scaled so 100 is average for that league, so they compare across levels; the raw rates do ` +
+      `not. Say when a sample is too small to mean anything.\n` +
+      `- Name who the incoming player would displace. "whoTheyWouldDisplace" lists the men already ` +
+      `holding that job on the major-league roster, with their own lines. If he is not better than ` +
+      `the man in the job, say so — an upgrade that does not upgrade anything is not one. If he is ` +
+      `not major-league ready, say where he actually slots and when he might matter.\n` +
+      `- Weigh it against what the club is short of. "clubNeeds" gives the weakest positions and ` +
+      `the spare ones: value bought where you are already deep is worth less than the number says.\n` +
+      `- Then the ordinary things: age, contract years, salary, and what the money commits you to.\n\n` +
+      `Answer in short markdown: a one-line **Verdict** (Accept / Reject / Needs a sweetener), then ` +
+      `4-6 sentences of reasoning that name players and cite figures, then a suggested adjustment ` +
+      `if one would fix it. Under 220 words. Never invent a number that is not below.`,
+      JSON.stringify(context, null, 1),
       4000
     );
     res.json({ verdict });

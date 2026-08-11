@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
 import { padDate } from './rosterops.js';
+import { contactProfiles } from './battedball.js';
+import { computeBatting, computePitching, leagueBaseline } from './stats.js';
 
 export const tradeRoutes = Router();
 
@@ -383,3 +385,152 @@ tradeRoutes.post('/trade/analyze', (req, res) => {
     salaryDiff: a.totalSalary - b.totalSalary,
   });
 });
+
+// ── Context for judging a trade ─────────────────────────────────────────
+
+const ROLE_NAMES: Record<number, string> = { 11: 'Starter', 12: 'Reliever', 13: 'Closer' };
+
+/**
+ * A player as a trade needs him described: what he is, how he is playing, and
+ * where he would actually stand on this club.
+ */
+function tradePlayer(id: number, statYear: number | null) {
+  const p = db
+    .prepare(
+      `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position, p.role,
+              p.bats, p.throws, ${teamLabel} AS team, t.level, p.organization_id
+       FROM players p LEFT JOIN teams t ON t.team_id = p.team_id WHERE p.player_id = ?`
+    )
+    .get(id) as Record<string, number | string | null> | undefined;
+  if (!p) return null;
+
+  const values = valuesByPlayer();
+  const contracts = contractsByPlayer();
+  const v = values.get(id);
+  const c = contracts.get(id);
+  const level = p.level as number | null;
+  const isPitcher = p.position === 1;
+
+  /*
+   * The season line, at whatever level he played it — a Double-A ERA is not a
+   * major-league one and the reader must be able to tell them apart.
+   *
+   * The baseline has to come from the league he actually played in. Measuring
+   * an A-ball arm against the major-league average is how ERA+ came back null
+   * for every minor leaguer, which is worse than useless in a comparison the
+   * whole point of which is to place him.
+   */
+  let line: Record<string, number | null> | null = null;
+  const league = (db
+    .prepare(`SELECT league_id FROM teams WHERE team_id = (SELECT team_id FROM players WHERE player_id = ?)`)
+    .get(id) as { league_id: number } | undefined)?.league_id;
+  if (statYear !== null && level !== null && league) {
+    const baseline = leagueBaseline(league, statYear, level);
+    const table = isPitcher ? 'players_career_pitching_stats' : 'players_career_batting_stats';
+    const cols = isPitcher
+      ? `SUM(outs) AS outs, SUM(er) AS er, SUM(ra) AS ra, SUM(ha) AS ha, SUM(bb) AS bb,
+         SUM(k) AS k, SUM(hra) AS hra, SUM(bf) AS bf, SUM(g) AS g, SUM(gs) AS gs,
+         SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld, SUM(war) AS war`
+      : `SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3, SUM(hr) AS hr,
+         SUM(bb) AS bb, SUM(ibb) AS ibb, SUM(hp) AS hp, SUM(sf) AS sf, SUM(k) AS k,
+         SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi, SUM(war) AS war`;
+    const row = db
+      .prepare(
+        `SELECT player_id, ${cols} FROM ${table}
+         WHERE player_id = ? AND year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
+      )
+      .get(id, statYear) as Record<string, number> | undefined;
+    if (row) {
+      line = isPitcher
+        ? computePitching(row, baseline, 0)
+        : computeBatting(row, baseline, 0);
+    }
+  }
+
+  return {
+    player_id: id,
+    name: p.name,
+    age: p.age,
+    position: POSITION_NAMES[p.position as number] ?? '?',
+    role: isPitcher ? (ROLE_NAMES[p.role as number] ?? 'Pitcher') : null,
+    bats: ({ 1: 'R', 2: 'L', 3: 'S' } as Record<number, string>)[p.bats as number] ?? '?',
+    throws: ({ 1: 'R', 2: 'L' } as Record<number, string>)[p.throws as number] ?? '?',
+    currentClub: p.team,
+    level: LEVEL_NAMES[level ?? 0] ?? 'unknown',
+    isMajorLeaguer: level === 1,
+    oaRating: v?.oaRating ?? null,
+    potRating: v?.potRating ?? null,
+    salaryNow: c?.salaryNow ?? 0,
+    yearsAfterThis: c?.yearsAfterThis ?? 0,
+    seasonLine: line,
+    contact: isPitcher ? null : (contactProfiles([id]).get(id) ?? null),
+  };
+}
+
+/**
+ * Everything needed to judge a trade rather than merely price it.
+ *
+ * Value percentiles alone produce a verdict about numbers: this man grades
+ * higher than that one, accept. A club does not run on percentiles — it runs on
+ * a roster with a fixed number of places, each already occupied by somebody.
+ * So the incoming players arrive with their season line at the level they
+ * played it, and beside them the men they would actually have to displace,
+ * with theirs, plus what the club is short of and what it has spare.
+ */
+export function tradeContext(orgId: number, giveIds: number[], getIds: number[]) {
+  const statYear = tableExists('players_career_batting_stats')
+    ? ((db.prepare(`SELECT MAX(year) AS y FROM players_career_batting_stats`).get() as { y: number }).y ?? null)
+    : null;
+
+  const give = giveIds.map((id) => tradePlayer(id, statYear)).filter(Boolean);
+  const get = getIds.map((id) => tradePlayer(id, statYear)).filter(Boolean);
+
+  // Who already holds the jobs the incoming men would want. Only the
+  // major-league roster: a prospect is not competing with anybody yet.
+  /*
+   * Grouped by the job, which for a pitcher is his role rather than "P".
+   * Listing Max Fried as a man a relief arm would displace is not a comparison
+   * anybody would make: a reliever competes with relievers.
+   */
+  const jobOf = (p: { position: string; role: string | null }): string => p.role ?? p.position;
+  const incomingPositions = new Set(
+    get.filter((p) => p && p.isMajorLeaguer).map((p) => jobOf(p!))
+  );
+  const leaving = new Set(giveIds);
+  const incumbents: Record<string, unknown[]> = {};
+  if (incomingPositions.size > 0 && tableExists('team_roster')) {
+    const roster = db
+      .prepare(
+        `SELECT p.player_id FROM players p
+         WHERE p.organization_id = ? AND p.retired = 0
+           AND p.player_id IN (SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1)`
+      )
+      .all(orgId, orgId) as Array<{ player_id: number }>;
+    for (const { player_id } of roster) {
+      if (leaving.has(player_id)) continue;
+      const man = tradePlayer(player_id, statYear);
+      if (!man || !man.isMajorLeaguer) continue;
+      if (!incomingPositions.has(jobOf(man))) continue;
+      (incumbents[jobOf(man)] ??= []).push(man);
+    }
+    // Best first, so the man actually holding the job leads the list
+    for (const pos of Object.keys(incumbents)) {
+      (incumbents[pos] as Array<{ oaRating: number | null }>).sort(
+        (a, b) => (b.oaRating ?? 0) - (a.oaRating ?? 0)
+      );
+      incumbents[pos] = (incumbents[pos] as unknown[]).slice(0, 4);
+    }
+  }
+
+  const values = valuesByPlayer();
+  const mine = orgProfile(orgId, values);
+
+  return {
+    weGive: give,
+    weReceive: get,
+    whoTheyWouldDisplace: incumbents,
+    clubNeeds: mine
+      ? { weakestPositions: mine.weakest, surplusPositions: mine.surplus }
+      : null,
+  };
+}

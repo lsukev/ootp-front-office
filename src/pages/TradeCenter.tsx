@@ -154,6 +154,9 @@ export function TradeCenter({ orgId, orgLabel }: { orgId: number; orgLabel: stri
       const r = await apiPost<{ verdict: string }>('/api/trade/ai-eval', {
         sideA: sideA.map((p) => p.player_id),
         sideB: sideB.map((p) => p.player_id),
+        // The club matters now: the verdict weighs the incoming men against
+        // whoever already holds their jobs here
+        orgId,
         orgLabel,
       });
       setAiVerdict(r.verdict);
