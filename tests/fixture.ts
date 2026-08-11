@@ -87,7 +87,20 @@ export function buildFixture(): string {
     CREATE TABLE sub_leagues (league_id INTEGER, sub_league_id INTEGER, name TEXT, designated_hitter INTEGER);
     CREATE TABLE teams (
       team_id INTEGER, name TEXT, nickname TEXT, abbr TEXT, level INTEGER, league_id INTEGER,
-      sub_league_id INTEGER, division_id INTEGER, parent_team_id INTEGER, allstar_team INTEGER
+      sub_league_id INTEGER, division_id INTEGER, parent_team_id INTEGER, allstar_team INTEGER,
+      -- Which club the save is being played as. Several endpoints fall back to
+      -- it when no team is named, and it was missing here entirely
+      human_team INTEGER DEFAULT 0, human_id INTEGER DEFAULT 0
+    );
+    -- The club's past, which the Franchise page reads and the staff can now be
+    -- asked about
+    CREATE TABLE team_history_record (
+      team_id INTEGER, year INTEGER, g INTEGER, w INTEGER, l INTEGER, pct REAL,
+      pos INTEGER, gb REAL
+    );
+    CREATE TABLE team_history (
+      team_id INTEGER, year INTEGER, name TEXT, made_playoffs INTEGER, won_playoffs INTEGER,
+      best_hitter_id INTEGER, best_pitcher_id INTEGER
     );
     CREATE TABLE players (
       player_id INTEGER, first_name TEXT, last_name TEXT, age INTEGER, position INTEGER, role INTEGER,
@@ -195,10 +208,24 @@ export function buildFixture(): string {
   ).run(IDS.league, SEASON);
   db.prepare(`INSERT INTO sub_leagues VALUES (?, 0, 'Only', 1)`).run(IDS.league);
 
-  const team = db.prepare(`INSERT INTO teams VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, 0)`);
-  team.run(IDS.mlbTeam, 'Test', 'Nine', 'TST', 1, IDS.league, 0);
-  team.run(IDS.aaaTeam, 'Farm', 'Hands', 'FRM', 2, IDS.league, IDS.mlbTeam);
-  team.run(IDS.otherMlbTeam, 'Other', 'Club', 'OTH', 1, IDS.league, 0);
+  const team = db.prepare(
+    `INSERT INTO teams (team_id, name, nickname, abbr, level, league_id, sub_league_id,
+                        division_id, parent_team_id, allstar_team, human_team)
+     VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, 0, ?)`
+  );
+  team.run(IDS.mlbTeam, 'Test', 'Nine', 'TST', 1, IDS.league, 0, 1);
+  team.run(IDS.aaaTeam, 'Farm', 'Hands', 'FRM', 2, IDS.league, IDS.mlbTeam, 0);
+  team.run(IDS.otherMlbTeam, 'Other', 'Club', 'OTH', 1, IDS.league, 0, 0);
+
+  // Three seasons behind them, one of which they won
+  const past = db.prepare(`INSERT INTO team_history_record VALUES (?, ?, 162, ?, ?, ?, ?, ?)`);
+  const pastName = db.prepare(`INSERT INTO team_history VALUES (?, ?, 'Test', ?, ?, NULL, NULL)`);
+  for (const [year, w, l, madePlayoffs, wonTitle] of [
+    [2023, 95, 67, 1, 1], [2024, 81, 81, 0, 0], [2025, 88, 74, 1, 0],
+  ] as number[][]) {
+    past.run(IDS.mlbTeam, year, w, l, w / (w + l), madePlayoffs ? 1 : 3, madePlayoffs ? 0 : 8);
+    pastName.run(IDS.mlbTeam, year, madePlayoffs, wonTitle);
+  }
 
   const player = db.prepare(
     `INSERT INTO players (player_id, first_name, last_name, age, position, role, bats, throws,

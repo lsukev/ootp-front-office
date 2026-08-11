@@ -160,6 +160,23 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_franchise_history',
+    description:
+      'The club season by season, back to its first: record, finish, whether it reached the ' +
+      'playoffs and whether it won, its best hitter and pitcher that year, plus totals across ' +
+      'the whole run. Use this for any question about the past — pennants, the best and worst ' +
+      'years, how long since, what the club has been over a stretch. Nothing here is about the ' +
+      'season being played now.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        team_id: { type: 'number', description: 'Defaults to your own club.' },
+        since: { type: 'number', description: 'Only seasons from this year on. Use it for "the last N years".' },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'get_standings',
     description: 'League standings by division: record, games back, run differential, and streak.',
     input_schema: { type: 'object', properties: {}, required: [] },
@@ -274,6 +291,23 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return cap(await callOwnApi(`player/${Number(input.player_id)}`));
     case 'get_roster':
       return cap(await callOwnApi(`roster/${Number(input.team_id)}`));
+    case 'get_franchise_history': {
+      const team = Number(input.team_id) || defaultOrgId();
+      const history = (await callOwnApi(`franchise/${team}`)) as {
+        seasons?: Array<{ year: number }>;
+        summary?: unknown;
+      };
+      const since = Number(input.since);
+      const seasons = history.seasons ?? [];
+      /*
+       * A hundred and forty-four seasons is more than a question about the
+       * last decade needs and more than the answer has room for. The summary
+       * always travels, since it is what most of these questions are actually
+       * about, and the seasons are trimmed to the ones asked for.
+       */
+      const wanted = Number.isFinite(since) ? seasons.filter((s) => s.year >= since) : seasons;
+      return cap({ summary: history.summary, seasons: wanted.slice(0, 60) });
+    }
     case 'get_standings':
       return cap(await callOwnApi(`standings/${defaultOrgId()}`));
     case 'get_pitching_staff':
