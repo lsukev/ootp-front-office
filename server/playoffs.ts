@@ -30,6 +30,16 @@ export interface PlayoffPicture {
   wildcardGb: number | null;
   /** Position in the wild-card queue, counting only clubs not leading a division. */
   wildcardRank: number | null;
+  /**
+   * Games clear of the nearest club that would take the place — second in the
+   * division for a leader, the first man out for a wild card. Null when not in
+   * a place at all.
+   *
+   * Without it every leader looked equally safe: a twelve-game lead and a
+   * half-game lead both read as "leading the division", and anything asking
+   * how likely they were to stay there got the same answer for both.
+   */
+  cushion: number | null;
   /** OOTP's own number, when it has published one. */
   magicNumber: number | null;
   /** Said in a line, so the page does not have to assemble the wording. */
@@ -94,6 +104,14 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
   // OOTP's own first place, so its tiebreakers are respected rather than redone
   const leadsDivision = mine.pos === 1;
 
+  /** How far clear of the best club not leading this division. */
+  const divisionCushion = (): number | null => {
+    const rivals = rows.filter((r) => r.division_id === mine.division_id && r.team_id !== teamId);
+    if (rivals.length === 0) return null;
+    const nearest = rivals.reduce((a, b) => (gamesBack(a, b) <= 0 ? a : b));
+    return gamesBack(mine, nearest);
+  };
+
   if (spots <= 0) {
     return {
       spots: 0,
@@ -101,6 +119,7 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
       divisionGb,
       wildcardGb: null,
       wildcardRank: null,
+      cushion: leadsDivision ? divisionCushion() : null,
       magicNumber,
       summary: leadsDivision
         ? 'Leading the division.'
@@ -119,6 +138,7 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
       divisionGb,
       wildcardGb: null,
       wildcardRank: null,
+      cushion: divisionCushion(),
       magicNumber,
       summary: magicNumber
         ? `Leading the division — magic number ${magicNumber}.`
@@ -158,7 +178,16 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
     summary = `${fmt(wildcardGb)} back of the last wild card${ordinal ? `, ${ordinal} in the race` : ''}.`;
   }
 
-  return { spots, route: inAPlace ? 'wildcard' : 'out', divisionGb, wildcardGb, wildcardRank: rank >= 0 ? rank + 1 : null, magicNumber, summary };
+  return {
+    spots,
+    route: inAPlace ? 'wildcard' : 'out',
+    divisionGb,
+    wildcardGb,
+    wildcardRank: rank >= 0 ? rank + 1 : null,
+    cushion: inAPlace && wildcardGb !== null ? -wildcardGb : null,
+    magicNumber,
+    summary,
+  };
 }
 
 /** Half games read better as .5 than as 0.5, and whole ones without a decimal. */

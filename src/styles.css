@@ -644,6 +644,49 @@ thead th[onclick], thead th { user-select: none; }
   font-family: var(--font-body);
 }
 
+/*
+ * Buy, hold or sell. Colour carries the verdict, but never alone — the word
+ * itself is the first thing in the block, so it reads the same to somebody who
+ * cannot tell the green from the red.
+ */
+.posture {
+  border: 1px solid var(--border);
+  border-left-width: 5px;
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+.posture-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.posture-verdict {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.posture-odds { font-size: 1.1rem; font-weight: 700; }
+.posture-why {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.posture-buy      { border-left-color: var(--good); }
+.posture-buy      .posture-verdict, .posture-buy .posture-odds { color: var(--good); }
+.posture-lean-buy { border-left-color: var(--good); }
+.posture-lean-buy .posture-verdict { color: var(--good); }
+.posture-hold     { border-left-color: var(--muted); }
+.posture-sell     { border-left-color: var(--bad); }
+.posture-sell     .posture-verdict, .posture-sell .posture-odds { color: var(--bad); }
+.posture-lean-sell { border-left-color: var(--bad); }
+.posture-lean-sell .posture-verdict { color: var(--bad); }
+
 /* Where the club stands for a place, under the division table */
 .playoff-line {
   margin: 10px 0 0;

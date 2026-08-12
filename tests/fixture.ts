@@ -82,7 +82,21 @@ export function buildFixture(): string {
       season_year INTEGER, "current_date" TEXT, rules_fa_minimum_years INTEGER,
       rules_salary_arbitration_minimum_years INTEGER, rules_minimum_salary INTEGER,
       financial_coefficient REAL, rules_amateur_draft INTEGER, show_draft_pool INTEGER,
-      draft_date TEXT, rules_amateur_draft_rounds INTEGER
+      draft_date TEXT, rules_amateur_draft_rounds INTEGER,
+      -- Quoted deliberately: SQLite's own CURRENT_DATE keyword shadows a
+      -- column of that name, so an unquoted read returns the real-world date
+      trade_deadline_date TEXT
+    );
+    -- Runs for and against, which the buy/hold/sell read takes talent from.
+    -- On the pitching side the runs-allowed column is r, not ra
+    CREATE TABLE team_batting_stats (
+      team_id INTEGER, year INTEGER, split_id INTEGER, level_id INTEGER, g INTEGER, r INTEGER
+    );
+    CREATE TABLE team_pitching_stats (
+      team_id INTEGER, year INTEGER, split_id INTEGER, level_id INTEGER, g INTEGER, r INTEGER
+    );
+    CREATE TABLE games (
+      game_id INTEGER, home_team INTEGER, away_team INTEGER, date TEXT, played INTEGER
     );
     CREATE TABLE sub_leagues (league_id INTEGER, sub_league_id INTEGER, name TEXT, designated_hitter INTEGER);
     CREATE TABLE teams (
@@ -213,7 +227,7 @@ export function buildFixture(): string {
   `);
 
   db.prepare(
-    `INSERT INTO leagues VALUES (?, 'Test League', 'TL', 0, 1, ?, '2030-06-01', 6, 3, 700000, 1, 1, 1, '2030-07-10', 20)`
+    `INSERT INTO leagues VALUES (?, 'Test League', 'TL', 0, 1, ?, '2030-06-01', 6, 3, 700000, 1, 1, 1, '2030-07-10', 20, '2030-07-31')`
   ).run(IDS.league, SEASON);
   db.prepare(`INSERT INTO sub_leagues VALUES (?, 0, 'Only', 1)`).run(IDS.league);
 
