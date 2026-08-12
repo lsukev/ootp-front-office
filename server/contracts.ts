@@ -8,7 +8,7 @@ import {
 export const contractRoutes = Router();
 
 /** Days of major-league service that make one service year. */
-const SERVICE_DAYS_PER_YEAR = 172;
+export const SERVICE_DAYS_PER_YEAR = 172;
 
 /**
  * How much service a player still on the major-league roster can bank between
@@ -20,7 +20,7 @@ const SERVICE_DAYS_PER_YEAR = 172;
  * off-season that reaches 172 and nothing is left to earn; before Opening Day
  * it is 0 and a full year remains.
  */
-function serviceRemainingThisSeason(): number {
+export function serviceRemainingThisSeason(): number {
   if (!tableExists('players_roster_status') || !tableExists('teams')) return 1;
   const row = db
     .prepare(
@@ -113,6 +113,61 @@ function recommend(args: {
     return { action: 'Watch decline', reasons: ['expensive veteran with talent slipping below production'] };
   }
   return null;
+}
+
+/**
+ * What happens to a man when his deal runs out.
+ *
+ * "Expiring" and "leaving" are not the same thing, and the payroll page was
+ * treating them as one: a player with arbitration years left was counted as
+ * money coming off the books, when the club still holds him and his salary is
+ * about to go up rather than away. A reader reported it, and he is right —
+ * the two belong in different columns.
+ *
+ * Lives here because this is where the service-time reasoning already was.
+ * Working out arbitration eligibility twice, in two files, is how the two
+ * pages would come to disagree about the same player.
+ */
+export type ControlStatus =
+  | 'signed'          // still under contract next season
+  | 'extended'        // an extension already picks him up
+  | 'leaving'         // reaches free agency — the money genuinely comes off
+  | 'arbitration'     // still controlled, and about to cost more
+  | 'pre-arbitration' // still controlled, renewed near the minimum
+  | 'reserve clause'; // no free agency in this league; he simply stays
+
+export interface Control {
+  status: ControlStatus;
+  /** Which arbitration trip this would be, when that is where he lands. */
+  arbYear: number | null;
+}
+
+export function controlAfterThisSeason(opts: {
+  yearsAfterThis: number;
+  hasExtension: boolean;
+  serviceDays: number | null;
+  serviceYears: number | null;
+  serviceLeft: number;
+  rules: { faMinYears: number; arbMinYears: number; hasFreeAgency: boolean; hasArbitration: boolean };
+}): Control {
+  const { yearsAfterThis, hasExtension, serviceDays, serviceYears, serviceLeft, rules } = opts;
+  if (hasExtension) return { status: 'extended', arbYear: null };
+  if (yearsAfterThis > 0) return { status: 'signed', arbYear: null };
+
+  /*
+   * Service days are exact where mlb_service_years is truncated to whole
+   * years, and only the part of the season still to be played can be added:
+   * the banked days already count what he has earned so far.
+   */
+  const service = serviceDays != null ? serviceDays / SERVICE_DAYS_PER_YEAR : serviceYears ?? 0;
+  const projected = service + serviceLeft;
+
+  if (!rules.hasFreeAgency) return { status: 'reserve clause', arbYear: null };
+  if (projected >= rules.faMinYears) return { status: 'leaving', arbYear: null };
+  if (rules.hasArbitration && projected >= rules.arbMinYears) {
+    return { status: 'arbitration', arbYear: Math.floor(projected - rules.arbMinYears) + 1 };
+  }
+  return { status: 'pre-arbitration', arbYear: null };
 }
 
 export function computeContracts(orgId: number) {

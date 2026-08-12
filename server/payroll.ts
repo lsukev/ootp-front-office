@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { loadSettings } from './settings.js';
-import { seasonYear } from './valuation.js';
+import { leagueRules, seasonYear } from './valuation.js';
+import { controlAfterThisSeason, serviceRemainingThisSeason } from './contracts.js';
 
 export const payrollRoutes = Router();
 
@@ -102,7 +103,7 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
       `SELECT c.*, p.first_name, p.last_name, p.age, p.position, p.retired,
               p.team_id AS current_team_id, p.organization_id AS current_org,
               c.retained AS retained,
-              rs.mlb_service_years AS service_years
+              rs.mlb_service_years AS service_years, rs.mlb_service_days AS service_days
        FROM players_contract c
        JOIN players p ON p.player_id = c.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = c.player_id
@@ -112,7 +113,7 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
     .all(orgId, orgId) as Array<ContractRow & {
     first_name: string; last_name: string; age: number; position: number;
     no_trade: number; last_year_team_option: number; last_year_player_option: number;
-    last_year_vesting_option: number; service_years: number | null;
+    last_year_vesting_option: number; service_years: number | null; service_days: number | null;
     current_team_id: number; current_org: number | null; retained: number | null;
   }>;
 
@@ -126,6 +127,8 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
   }
 
   const years = Array.from({ length: HORIZON }, (_, i) => thisSeason + i);
+  const rules = leagueRules(org.league_id);
+  const serviceLeft = serviceRemainingThisSeason();
 
   const players = rows
     .map((c) => {
@@ -158,6 +161,19 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
         yearsAfterThis,
         endYear,
         expiring: yearsAfterThis === 0,
+        /*
+         * What actually happens to him, rather than merely that his deal ends.
+         * Arbitration years left is not money coming off the books — the club
+         * still holds him and the salary is about to rise, not vanish.
+         */
+        control: controlAfterThisSeason({
+          yearsAfterThis,
+          hasExtension: !!extension,
+          serviceDays: c.service_days,
+          serviceYears: c.service_years,
+          serviceLeft,
+          rules,
+        }),
         options,
         serviceYears: c.service_years,
       };
@@ -180,7 +196,28 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
   // says which of the two produced the headroom below.
   const entered = loadSettings().nextSeasonBudget?.[String(orgId)];
   const nextBudget = typeof entered === 'number' && entered > 0 ? entered : null;
-  const expiringAfterThisYear = players.filter((p) => p.expiring && !p.deadMoney);
+  const endingAfterThisYear = players.filter((p) => p.expiring && !p.deadMoney);
+  // Genuinely leaving, against still held but about to cost more
+  const leaving = endingAfterThisYear.filter((p) => p.control.status === 'leaving');
+  const stillControlled = endingAfterThisYear.filter(
+    (p) => p.control.status === 'arbitration' || p.control.status === 'pre-arbitration' || p.control.status === 'reserve clause'
+  );
+  const brief = (list: typeof players) => ({
+    count: list.length,
+    money: list.reduce((sum, p) => sum + (p.salaryNow ?? 0), 0),
+    players: list
+      .slice()
+      .sort((a, b) => b.salaryNow - a.salaryNow)
+      .slice(0, 12)
+      .map((p) => ({
+        player_id: p.player_id,
+        name: p.name,
+        age: p.age,
+        salary: p.salaryNow,
+        status: p.control.status,
+        arbYear: p.control.arbYear,
+      })),
+  });
 
   res.json({
     seasonYear: thisSeason,
@@ -223,15 +260,13 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
           : null,
       budgetUsed: c.year > thisSeason && nextBudget !== null ? 'expected' : 'flat',
     })),
-    // What comes off the books after this season
-    comingOff: {
-      count: expiringAfterThisYear.length,
-      money: expiringAfterThisYear.reduce((sum, p) => sum + (p.salaryNow ?? 0), 0),
-      players: expiringAfterThisYear
-        .sort((a, b) => b.salaryNow - a.salaryNow)
-        .slice(0, 12)
-        .map((p) => ({ player_id: p.player_id, name: p.name, age: p.age, salary: p.salaryNow })),
-    },
+    /*
+     * Two lists, not one. Money only comes off the books when the man leaves;
+     * an arbitration case is still yours and is about to get more expensive,
+     * which is the opposite of relief.
+     */
+    comingOff: brief(leaving),
+    stillControlled: brief(stillControlled),
     players,
   });
 });

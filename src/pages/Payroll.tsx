@@ -30,11 +30,24 @@ interface PayrollData {
   commitments: Commitment[];
   /** What you told the app to expect next season, or null to assume flat. */
   nextSeasonBudget: number | null;
-  comingOff: {
-    count: number; money: number;
-    players: Array<{ player_id: number; name: string; age: number; salary: number }>;
-  };
+  /** Only the men who actually leave — money that genuinely comes off. */
+  comingOff: OffTheBooks;
+  /**
+   * Deals that end without the player going anywhere: arbitration cases and
+   * pre-arbitration renewals. Their salaries are about to rise, not vanish,
+   * which is the opposite of relief.
+   */
+  stillControlled?: OffTheBooks;
   players: PayrollPlayer[];
+}
+
+interface OffTheBooks {
+  count: number;
+  money: number;
+  players: Array<{
+    player_id: number; name: string; age: number; salary: number;
+    status?: string; arbYear?: number | null;
+  }>;
 }
 
 const money = (v: number | null | undefined): string => {
@@ -176,11 +189,14 @@ export function Payroll({ orgId }: { orgId: number }) {
       <div className="two-col">
         <section>
           <h2>
-            Coming off after {data.seasonYear}{' '}
+            Leaving after {data.seasonYear}{' '}
             <span className="muted subtle-count">
               — {data.comingOff.count} players, {money(data.comingOff.money)}
             </span>
           </h2>
+          <p className="muted hint-line">
+            Reaching free agency. This is the money that genuinely comes off the books.
+          </p>
           <table className="mini">
             <tbody>
               {data.comingOff.players.map((p) => (
@@ -191,11 +207,44 @@ export function Payroll({ orgId }: { orgId: number }) {
                 </tr>
               ))}
               {data.comingOff.players.length === 0 && (
-                <tr><td className="muted">Nothing expiring.</td></tr>
+                <tr><td className="muted">Nobody reaching free agency.</td></tr>
               )}
             </tbody>
           </table>
         </section>
+
+        {/* The distinction a reader asked for: a deal ending is not the same as
+            a player leaving, and only one of the two frees any money */}
+        {data.stillControlled && data.stillControlled.count > 0 && (
+          <section>
+            <h2>
+              Deals ending, players staying{' '}
+              <span className="muted subtle-count">
+                — {data.stillControlled.count} players, {money(data.stillControlled.money)}
+              </span>
+            </h2>
+            <p className="muted hint-line">
+              Arbitration and pre-arbitration. You keep them, and these salaries are more likely to
+              rise than to disappear — so do not count this against next year's payroll.
+            </p>
+            <table className="mini">
+              <tbody>
+                {data.stillControlled.players.map((p) => (
+                  <tr key={p.player_id}>
+                    <td className="name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
+                    <td className="num">{p.age}</td>
+                    <td className="muted">
+                      {p.status === 'arbitration'
+                        ? `arb ${p.arbYear ?? ''}`.trim()
+                        : p.status === 'reserve clause' ? 'reserve' : 'pre-arb'}
+                    </td>
+                    <td className="num">{money(p.salary)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
 
         {data.deadMoney.players.length > 0 && (
           <section>
