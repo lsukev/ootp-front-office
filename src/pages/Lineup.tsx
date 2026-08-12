@@ -34,6 +34,9 @@ export function Lineup({ teamId }: { teamId: number }) {
   const [vs, setVs] = useState<'r' | 'l'>('r');
   const [style, setStyle] = useState<'saber' | 'trad'>('saber');
   const [dh, setDh] = useState<'auto' | 'on' | 'off'>('auto');
+  // Talent is OOTP's projection and stays the default; production is what has
+  // actually happened. They answer different questions, so both are on offer
+  const [sort, setSort] = useState<'talent' | 'production'>('talent');
   const [data, setData] = useState<LineupResponse | null>(null);
   const [next, setNext] = useState<NextGame | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +54,8 @@ export function Lineup({ teamId }: { teamId: number }) {
   useEffect(() => {
     setData(null);
     setError(null);
-    getLineup(teamId, vs, style, dh).then(setData).catch((e) => setError(e.message));
-  }, [teamId, vs, style, dh]);
+    getLineup(teamId, vs, style, dh, sort).then(setData).catch((e) => setError(e.message));
+  }, [teamId, vs, style, dh, sort]);
 
   // Switching clubs can mean switching leagues, so the override goes back to
   // following the rule rather than silently carrying to another team's card
@@ -103,6 +106,19 @@ export function Lineup({ teamId }: { teamId: number }) {
             vs LHP
           </button>
         </div>
+        {/* What the order is built from. Not gated on the roster loading —
+            it is a preference, and it should be there to set while it does */}
+        <div className="tabs">
+          <button className={sort === 'talent' ? 'active' : ''} onClick={() => setSort('talent')}>
+            By talent
+          </button>
+          <button
+            className={sort === 'production' ? 'active' : ''}
+            onClick={() => setSort('production')}
+          >
+            By production
+          </button>
+        </div>
         {/* The rule is read from the save; this only changes the card on screen */}
         {data && (
           <div className="tabs">
@@ -129,8 +145,18 @@ export function Lineup({ teamId }: { teamId: number }) {
             {style === 'saber'
               ? 'Ordering per The Book (Tango et al.): your three best hitters bat 1, 2, and 4 — not 3-4-5.'
               : 'Classic ordering: speed leads off, bat control 2nd, best hitter 3rd, power cleanup.'}{' '}
-            Platoon-aware: ranked by each player's offensive value {vs === 'r' ? 'vs right-handed' : 'vs left-handed'}{' '}
-            pitching.{' '}
+            {sort === 'talent' ? (
+              <>
+                Ranked on OOTP's offensive value {vs === 'r' ? 'vs right-handed' : 'vs left-handed'} pitching —
+                a projection from current ratings, not this season's results.{' '}
+              </>
+            ) : (
+              <>
+                Ranked on this season's wRC+, regressed toward league average on plate appearances so a
+                hot twenty at-bats does not lead off. Not platoon-split: the production sort reads the
+                whole season, so the vs-LHP/RHP choice only moves the defensive assignment.{' '}
+              </>
+            )}
             {data.dhOverridden ? (
               <strong>
                 {data.usesDH

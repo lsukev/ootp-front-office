@@ -404,8 +404,9 @@ export const getLineup = (
   teamId: number,
   vs: 'r' | 'l',
   style: 'saber' | 'trad',
-  dh: 'auto' | 'on' | 'off' = 'auto'
-) => json<LineupResponse>(`/api/lineup/${teamId}?vs=${vs}&style=${style}&dh=${dh}`);
+  dh: 'auto' | 'on' | 'off' = 'auto',
+  sort: 'talent' | 'production' = 'talent'
+) => json<LineupResponse>(`/api/lineup/${teamId}?vs=${vs}&style=${style}&dh=${dh}&sort=${sort}`);
 export const getOrgs = () => json<Org[]>('/api/orgs');
 export const getDepthChart = (orgId: number) =>
   json<{ teams: DepthTeam[]; players: DepthPlayer[] }>(`/api/depth-chart/${orgId}`);

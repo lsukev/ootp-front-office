@@ -40,6 +40,12 @@ export interface Candidate {
   /** Playable but carrying something — the manager's call, not the app's. */
   dayToDay: boolean;
   off: number; // offensive value for the chosen platoon side
+  /**
+   * The number the order is actually built from — talent or production,
+   * whichever was asked for. Kept separate from `off` so the card can still
+   * show OOTP's valuation whichever way it was sorted.
+   */
+  rank: number;
   contact: number;
   power: number;
   eye: number;
@@ -67,7 +73,7 @@ const SABER_PRIORITY: Array<{ slot: number; why: string }> = [
 ];
 
 function saberOrder(batters: Candidate[]): Array<{ slot: number; player: Candidate; why: string }> {
-  const sorted = [...batters].sort((a, b) => b.off - a.off);
+  const sorted = [...batters].sort((a, b) => b.rank - a.rank);
   // Without a DH only eight men bat before the pitcher, so the fill priority is
   // truncated rather than assumed to be nine deep
   return SABER_PRIORITY.slice(0, sorted.length)
@@ -93,11 +99,11 @@ function traditionalOrder(batters: Candidate[]): Array<{ slot: number; player: C
   const result: Array<{ slot: number; player: Candidate; why: string }> = [];
   result.push({ slot: 1, player: take((c) => c.speed * 2 + c.eye + c.contact), why: 'table-setter — speed and on-base' });
   result.push({ slot: 2, player: take((c) => c.contact * 2 + c.eye), why: 'bat control — moves the runner' });
-  result.push({ slot: 3, player: take((c) => c.off), why: 'best all-around hitter' });
-  result.push({ slot: 4, player: take((c) => c.power * 2 + c.off), why: 'cleanup power' });
-  result.push({ slot: 5, player: take((c) => c.power + c.off), why: 'protection behind cleanup' });
+  result.push({ slot: 3, player: take((c) => c.rank), why: 'best all-around hitter' });
+  result.push({ slot: 4, player: take((c) => c.power * 2 + c.rank), why: 'cleanup power' });
+  result.push({ slot: 5, player: take((c) => c.power + c.rank), why: 'protection behind cleanup' });
   for (let slot = 6; slot <= batters.length; slot++) {
-    result.push({ slot, player: take((c) => c.off), why: 'descending offense' });
+    result.push({ slot, player: take((c) => c.rank), why: 'descending offense' });
   }
   return result;
 }
@@ -143,6 +149,7 @@ function startingPitcherCandidate(teamId: number): Candidate | null {
     bats: p.bats,
     dayToDay: false,
     off: 0,
+    rank: 0,
     contact: 0,
     power: 0,
     eye: 0,
@@ -264,6 +271,16 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
   // changing his save — useful for interleague, and for judging how much the
   // rule is actually worth to this roster.
   const dhParam = req.query.dh === 'on' ? 'on' : req.query.dh === 'off' ? 'off' : 'auto';
+  /*
+   * What to build the order from. Talent is OOTP's own valuation and stays the
+   * default: it is a projection, and over the rest of a season a projection
+   * beats a third of a season of results. Production is here because plenty of
+   * managers want the card to say what has actually happened — a man hitting
+   * .274 on-base batting cleanup on the strength of his ratings is correct and
+   * still hard to look at. Neither is the better answer; they answer different
+   * questions.
+   */
+  const sortBy = req.query.sort === 'production' ? 'production' : 'talent';
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
 
   const values = valuesByPlayer();
@@ -320,6 +337,7 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
         bats: p.bats,
         dayToDay: p.injury_dtd_injury === 1,
         off: (vs === 'r' ? v?.offenseVsR : v?.offenseVsL) ?? v?.offense ?? 0,
+        rank: 0, // filled in below, once the season lines are known
         contact: p.contact ?? 0,
         power: p.power ?? 0,
         eye: p.eye ?? 0,
@@ -351,6 +369,11 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       playedRating: pos === DH_POS ? undefined : (c.defense[pos] ?? 0),
     };
   });
+  /*
+   * Talent, not the chosen sort: this runs before the season lines are
+   * assembled, and it only decides who backfills a position a short roster has
+   * left unmanned — not where anybody bats.
+   */
   const remaining = candidates.filter((c) => !used.has(c.player_id)).sort((a, b) => b.off - a.off);
   // Without a DH only the eight fielders bat and the pitcher takes the ninth
   // slot himself. A position left unmanned by a short roster is backfilled
@@ -391,6 +414,34 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       )
       .all(statYear, teamRow.level) as Array<Record<string, number>>;
     for (const row of rows) statsById.set(row.player_id, computeBatting(row, base, teamId));
+  }
+
+  /*
+   * The number a production-sorted card is built from.
+   *
+   * wRC+ regressed toward league average on plate appearances, because the
+   * unregressed version hands the leadoff spot to whoever is hottest in twenty
+   * trips. A hundred and fifty is the weight of the prior: at 150 PA a man is
+   * read half on what he has done and half on the league, and by a full season
+   * he is read almost entirely on himself. Somebody with no plate appearances
+   * comes out at exactly average, which is the honest reading of no evidence.
+   */
+  const PRIOR_PA = 150;
+  const productionScore = (playerId: number): number => {
+    const s = statsById.get(playerId);
+    const rate = s?.wrcPlus ?? s?.opsPlus ?? null;
+    const pa = s?.pa ?? 0;
+    if (rate === null || pa <= 0) return 100;
+    return (rate * pa + 100 * PRIOR_PA) / (pa + PRIOR_PA);
+  };
+  /*
+   * Applied to the starters as well, and that is the whole of it: `starters`
+   * are spread copies taken before the season lines existed, so setting this
+   * on `candidates` alone left every one of them ranked zero and the sort
+   * quietly did nothing at all.
+   */
+  for (const c of [...candidates, ...starters]) {
+    c.rank = sortBy === 'production' ? productionScore(c.player_id) : c.off;
   }
 
   const ordered = style === 'saber' ? saberOrder(starters) : traditionalOrder(starters);
