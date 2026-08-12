@@ -12,7 +12,7 @@ import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
 import { tradeVoice, type Persona } from './staff.js';
-import { currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valuation.js';
+import { calendarBriefing, currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valuation.js';
 
 export const aiRoutes = Router();
 
@@ -104,6 +104,8 @@ function briefingContext(orgId: number) {
     injuries,
     finances: teamFinances(orgId),
     leagueRules: rulesBriefing(team.league_id as number, orgId),
+    // The briefing is about what needs deciding, and most of that is timing
+    keyDates: calendarBriefing(team.league_id as number),
   };
 }
 
@@ -174,7 +176,7 @@ aiRoutes.post('/briefing/:orgId', (req, res) => {
  * and every reply after it, so the follow-ups do not drift into a different
  * man with different standards halfway down the thread.
  */
-function tradeSystem(voice: Persona, orgLabel: string | undefined): string {
+function tradeSystem(voice: Persona, orgLabel: string | undefined, leagueId?: number): string {
   const who =
     voice.name === 'the front office'
       ? `You are the front office of ${orgLabel ?? 'this club'}`
@@ -188,6 +190,8 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined): string {
       ? `This is who you are; let it colour the read without being recited:\n` +
         voice.facts.map((f) => `- ${f}`).join('\n') + '\n\n'
       : '') +
+    // The desk is the one place the deadline is always the question
+    (leagueId !== undefined ? calendarBriefing(leagueId) + '\n\n' : '') +
     `"weGive" leaves the organisation; "weReceive" joins it.\n\n` +
       `Judge the deal as a roster decision, not an exchange of ratings. In particular:\n` +
       `- Say what each man actually is — his position, his role if he pitches, and the level he is ` +
@@ -279,13 +283,21 @@ interface TradeBody {
 }
 
 /** Both routes want the same validation and the same context assembly. */
-function tradeSetup(body: TradeBody): { orgId: number; voice: Persona; context: unknown } {
+function tradeSetup(body: TradeBody): { orgId: number; voice: Persona; context: unknown; leagueId?: number } {
   const { sideA, sideB } = body;
   if (!Array.isArray(sideA) || !Array.isArray(sideB) || sideA.length === 0 || sideB.length === 0) {
     throw Object.assign(new Error('Both sides need at least one player'), { status: 400 });
   }
   const orgId = Number(body.orgId) || 0;
-  return { orgId, voice: tradeVoice(orgId), context: tradeContext(orgId, sideA, sideB) };
+  const league = (db.prepare(`SELECT league_id FROM teams WHERE team_id = ?`).get(orgId) as
+    | { league_id: number }
+    | undefined)?.league_id;
+  return {
+    orgId,
+    voice: tradeVoice(orgId),
+    context: tradeContext(orgId, sideA, sideB),
+    leagueId: league,
+  };
 }
 
 /** Who will answer, so the page can put a name on the button before asking. */
@@ -298,10 +310,10 @@ aiRoutes.post('/trade/ai-eval', async (req, res) => {
   if (!tableExists('players')) return res.status(400).json({ error: 'No data imported yet' });
   const body = req.body as TradeBody;
   try {
-    const { voice, context } = tradeSetup(body);
+    const { voice, context, leagueId } = tradeSetup(body);
     let notice: FallbackNotice | null = null;
     const verdict = await askTheDesk(
-      tradeSystem(voice, body.orgLabel) + VERDICT_FORMAT,
+      tradeSystem(voice, body.orgLabel, leagueId) + VERDICT_FORMAT,
       [{ role: 'user', content: JSON.stringify(context, null, 1) }],
       (n) => { notice = n; }
     );
@@ -326,14 +338,14 @@ aiRoutes.post('/trade/ai-reply', async (req, res) => {
   const body = req.body as TradeBody;
   if (!body.message?.trim()) return res.status(400).json({ error: 'Nothing to send' });
   try {
-    const { voice, context } = tradeSetup(body);
+    const { voice, context, leagueId } = tradeSetup(body);
     let notice: FallbackNotice | null = null;
     const history = (body.thread ?? [])
       .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
       // Enough to keep the argument coherent without resending an hour of it
       .slice(-12);
     const reply = await askTheDesk(
-      tradeSystem(voice, body.orgLabel) +
+      tradeSystem(voice, body.orgLabel, leagueId) +
         '\n\nYou have already given your verdict on this deal and are now being asked about it. ' +
         'Answer the question actually put to you, in a few sentences — no headings, and do not ' +
         'restate the verdict unless it has changed. If it has changed, say so plainly.\n\n' +

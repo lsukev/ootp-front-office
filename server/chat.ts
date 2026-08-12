@@ -7,7 +7,7 @@ import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
-import { currentGameDate, seasonYear } from './valuation.js';
+import { calendarBriefing, currentGameDate, seasonYear } from './valuation.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
 
 export const chatRoutes = Router();
@@ -399,6 +399,15 @@ function systemPrompt(orgId: number, persona: Persona): string {
     'is with a colleague — but never invent a number to be interesting.',
     '',
     `They run the ${label} (team_id ${orgId}). It is the ${year} season${date ? `, currently ${date}` : ''}.`,
+    '',
+    /*
+     * Every voice gets the calendar. Asked whether to wait a fortnight before
+     * selling, the assistant answered that nothing pinned down the deadline
+     * and it would not guess — true of the tools it had, and needless, since
+     * the save carries the date. Small enough to hand over outright rather
+     * than leave behind a tool somebody has to think to call.
+     */
+    team ? calendarBriefing(team.league_id) : '',
     '',
     'Everything you say about this league must come from the tools. They read the actual save, so',
     'they are the only source of truth here — this is a simulated league, and your training data',

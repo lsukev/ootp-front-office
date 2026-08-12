@@ -114,6 +114,87 @@ export function usesDH(teamId: number): boolean {
  * will not exist for another sixty years, and in a pre-1973 replay it would
  * happily park a slugger at DH.
  */
+/**
+ * The dates that govern the season, and how far off each one is.
+ *
+ * Asked whether to wait a fortnight before selling, the assistant said it had
+ * nothing that pinned down the trade deadline and would not guess at a date —
+ * honest, and useless, since the save carries every one of these. A calendar
+ * is small enough to hand to every voice in the building rather than hide
+ * behind a tool one of them might think to call.
+ *
+ * Dates in the past are kept and marked as passed. Whether the deadline has
+ * gone is exactly as useful as when it falls.
+ */
+export interface CalendarEntry {
+  what: string;
+  date: string;
+  daysAway: number | null;
+  passed: boolean;
+}
+
+const DATE_COLUMNS: Array<[string, string]> = [
+  ['start_date', 'Opening day'],
+  ['allstar_date', 'All-Star game'],
+  ['draft_date', 'Amateur draft'],
+  ['trade_deadline_date', 'Trade deadline'],
+  ['roster_expand_date', 'Rosters expand'],
+  ['rule_5_draft_date', 'Rule 5 draft'],
+  ['international_fa_date', 'International free agency opens'],
+];
+
+/** OOTP writes '2026-8-3' as readily as '2026-08-03'. */
+function asDate(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(value.trim());
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+export function seasonCalendar(leagueId: number): CalendarEntry[] {
+  if (!tableExists('leagues')) return [];
+  const have = new Set(
+    (db.prepare(`PRAGMA table_info(leagues)`).all() as Array<{ name: string }>).map((c) => c.name)
+  );
+  const wanted = DATE_COLUMNS.filter(([col]) => have.has(col));
+  if (wanted.length === 0) return [];
+
+  const row = db
+    .prepare(`SELECT ${wanted.map(([c]) => `"${c}"`).join(', ')} FROM leagues WHERE league_id = ?`)
+    .get(leagueId) as Record<string, unknown> | undefined;
+  if (!row) return [];
+
+  const today = asDate(currentGameDate(leagueId));
+  const out: CalendarEntry[] = [];
+  for (const [col, what] of wanted) {
+    const raw = row[col];
+    const when = asDate(raw);
+    if (!when || typeof raw !== 'string') continue;
+    const daysAway = today
+      ? Math.round((when.getTime() - today.getTime()) / 86_400_000)
+      : null;
+    out.push({ what, date: raw, daysAway, passed: daysAway !== null && daysAway < 0 });
+  }
+  return out.sort((a, b) => (a.daysAway ?? 0) - (b.daysAway ?? 0));
+}
+
+/** The calendar as a line of prose, for a system prompt. */
+export function calendarBriefing(leagueId: number): string {
+  const entries = seasonCalendar(leagueId);
+  if (entries.length === 0) return '';
+  const today = currentGameDate(leagueId);
+  const said = entries.map((e) => {
+    if (e.daysAway === null) return `${e.what} ${e.date}`;
+    if (e.passed) return `${e.what} ${e.date} (${Math.abs(e.daysAway)} days ago)`;
+    if (e.daysAway === 0) return `${e.what} ${e.date} (today)`;
+    return `${e.what} ${e.date} (in ${e.daysAway} days)`;
+  });
+  return (
+    `KEY DATES — today is ${today ?? 'unknown'}. ${said.join('; ')}. ` +
+    'These come from the save, so use them rather than assuming the real-world calendar, ' +
+    'and never tell the reader you do not know when something falls.'
+  );
+}
+
 export function rulesBriefing(leagueId: number, teamId?: number): string {
   const r = leagueRules(leagueId);
   const parts: string[] = [];
