@@ -127,6 +127,20 @@ const SPECS: PersonaSpec[] = [
     ],
   },
   {
+    id: 'gm',
+    occupation: OCCUPATION.gm,
+    role: 'general manager',
+    fallbackName: 'the general manager',
+    brief: [
+      'You run the roster. Trades, contracts, who is called up and who is sent down, and the shape',
+      'of this club a year and three years out — those are your decisions and you live with them.',
+      'You are not the analyst: he weighs value and hands you the number, and you are the one who',
+      'has to weigh it against the manager wanting to win tonight, the owner watching the payroll',
+      'and a farm system you cannot spend twice. Say what you would actually do, and say what it',
+      'costs. Where you would want to see something before committing, go and look it up.',
+    ],
+  },
+  {
     id: 'owner',
     occupation: OCCUPATION.owner,
     role: 'owner',
@@ -344,6 +358,17 @@ export function personasFor(orgId: number): Persona[] {
   for (const spec of SPECS) {
     if (spec.occupation === null) {
       out.push({ id: spec.id, name: spec.fallbackName, role: spec.role, facts: [] });
+      continue;
+    }
+    /*
+     * The front office speaks with one voice wherever it is asked. The trade
+     * desk already worked out whose it is — the general manager, or his
+     * assistant in a save where you hold that chair yourself — and the chat
+     * must not answer as a different man than the verdict did.
+     */
+    if (spec.id === 'gm') {
+      const voice = tradeVoice(orgId);
+      if (voice.name !== 'the front office') out.push(voice);
       continue;
     }
     const c = loadCoach(orgId, spec.occupation);

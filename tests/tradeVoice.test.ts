@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tradeVoice } from '../server/staff.js';
+import { personasFor, tradeVoice } from '../server/staff.js';
 import { db } from '../server/db.js';
 import request from './request.js';
 import { IDS } from './fixture.js';
@@ -51,5 +51,59 @@ describe('the trade voice', () => {
     beHuman('Sam', 'Player');
     const r = await request(`/api/trade/voice/${IDS.mlbTeam}`);
     expect(r).toEqual({ name: 'Web Ivey', role: 'general manager' });
+  });
+});
+
+/**
+ * The same man on the staff list.
+ *
+ * The general manager was reachable only through a trade verdict, which is a
+ * narrow way to talk to the person whose job the rest of it is. He is a voice
+ * you can pick now — and he must be the same voice, because a club whose
+ * verdict comes from one man and whose chat comes from another has two front
+ * offices.
+ */
+describe('the general manager on the staff list', () => {
+  const listed = () => personasFor(IDS.mlbTeam);
+
+  it('is offered alongside the coaches', () => {
+    beHuman('Sam', 'Player');
+    const gm = listed().find((p) => p.id === 'gm');
+    expect(gm).toBeDefined();
+    expect(gm!.name).toBe('Web Ivey');
+  });
+
+  it('is the man the trade desk answers as', () => {
+    beHuman('Sam', 'Player');
+    const gm = listed().find((p) => p.id === 'gm')!;
+    const desk = tradeVoice(IDS.mlbTeam);
+    expect(gm.name).toBe(desk.name);
+    expect(gm.role).toBe(desk.role);
+  });
+
+  it('steps down to the assistant here too when you hold the chair', () => {
+    beHuman('Web', 'Ivey');
+    const gm = listed().find((p) => p.id === 'gm')!;
+    expect(gm.name).toBe('Del Faraday');
+    expect(gm.role).toBe('assistant general manager');
+    beHuman('Sam', 'Player');
+  });
+
+  it('knows his own record, so he answers as himself', () => {
+    beHuman('Sam', 'Player');
+    expect(listed().find((p) => p.id === 'gm')!.facts.length).toBeGreaterThan(0);
+  });
+
+  it('does not appear at all where the save names nobody', () => {
+    // Better absent than a chat tab addressed to "the front office"
+    expect(personasFor(999_999).some((p) => p.id === 'gm')).toBe(false);
+  });
+
+  it('leaves the rest of the staff where they were', () => {
+    beHuman('Sam', 'Player');
+    const ids = listed().map((p) => p.id);
+    // The seats this fixture actually fills; the others are absent here for
+    // want of a coach rather than for anything this change did
+    for (const id of ['analyst', 'manager']) expect(ids).toContain(id);
   });
 });

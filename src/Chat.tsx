@@ -101,6 +101,17 @@ const ROLE_LABEL: Record<string, string> = {
   owner: 'Owner',
 };
 
+/**
+ * The label under a name.
+ *
+ * The general manager is deliberately not in the map above: his title depends
+ * on the save, since a club where you hold that chair yourself is represented
+ * by the assistant instead. So anything the map does not name falls back to
+ * what the server called it, capitalised to sit beside the rest.
+ */
+const roleLabel = (p: { id: string; role: string }): string =>
+  ROLE_LABEL[p.id] ?? p.role.replace(/\b\w/g, (c) => c.toUpperCase());
+
 /** Peter is always available; the rest depend on who the club has hired. */
 const FALLBACK_STAFF: StaffMember[] = [{ id: 'analyst', name: 'Peter', role: 'front-office analyst' }];
 
@@ -474,7 +485,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
               title={`${p.name} — ${p.role}`}
             >
               <span className="imsg-staff-name">{p.name}</span>
-              <span className="imsg-staff-role">{ROLE_LABEL[p.id] ?? p.role}</span>
+              <span className="imsg-staff-role">{roleLabel(p)}</span>
             </button>
           ))}
         </div>
@@ -663,7 +674,7 @@ export function Chat({ orgId, orgLabel }: { orgId: number; orgLabel: string }) {
                   onMouseEnter={() => setMentionRow(i)}
                 >
                   <span className="imsg-mention-name">{p.name}</span>
-                  <span className="imsg-mention-role">{ROLE_LABEL[p.id] ?? p.role}</span>
+                  <span className="imsg-mention-role">{roleLabel(p)}</span>
                 </button>
               ))}
             </div>
