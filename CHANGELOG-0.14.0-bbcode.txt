@@ -1,0 +1,4 @@
+[b][size=4]OOTP Front Office 0.14.0 — everything since 0.13.0[/size][/b]
+[list]
+[*][b]New[/b] — The staff can be asked about the club's past. Franchise History has been on the League menu since 0.9.6, but the assistant could not see it and said so when asked — no past seasons, no pennants, nothing beyond the year being played. He reads it now: every season with its record and finish, whether the club reached the postseason and whether it won, its best hitter and pitcher that year, and the totals across the whole run. Ask about the Yankees and he opens with 27 titles, the last in 2009, 12,209-9,480 all time, the 1927 club at 110-44 and the 1882 one at 19-54. A starting year can be given when the question is about the last decade rather than the last century.
+[/list]
