@@ -96,7 +96,9 @@ export function buildFixture(): string {
       team_id INTEGER, year INTEGER, split_id INTEGER, level_id INTEGER, g INTEGER, r INTEGER
     );
     CREATE TABLE games (
-      game_id INTEGER, home_team INTEGER, away_team INTEGER, date TEXT, played INTEGER
+      game_id INTEGER, home_team INTEGER, away_team INTEGER, date TEXT, played INTEGER,
+      -- Storylines reads the recent results off these
+      runs0 INTEGER DEFAULT 0, runs1 INTEGER DEFAULT 0, innings INTEGER DEFAULT 9
     );
     CREATE TABLE sub_leagues (league_id INTEGER, sub_league_id INTEGER, name TEXT, designated_hitter INTEGER);
     CREATE TABLE teams (

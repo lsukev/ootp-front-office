@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
+import { LEVEL_NAMES, contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
 import { padDate } from './rosterops.js';
 import { contactProfiles } from './battedball.js';
 import { POSITION_CODES, glovesLine } from './gloves.js';
@@ -141,7 +141,6 @@ tradeRoutes.get('/search-players', (req, res) => {
   );
 });
 
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 
 /**
  * The trade talk sitting in your OOTP inbox.

@@ -7,7 +7,7 @@ import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, providerFor, type FallbackNotice } from './providers.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
-import { currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
+import { LEVEL_NAMES, currentGameDate, seasonYear, teamFinances, rulesBriefing } from './valuation.js';
 import { jobStatus, startJob } from './jobs.js';
 
 export const storylineRoutes = Router();
@@ -30,13 +30,13 @@ interface StorylineCache {
 const cachePath = (orgId: number) => path.join(DATA_DIR, `storylines-${orgId}.json`);
 
 /** Everything the AI needs to write about this org, in one compact object. */
-function assembleContext(orgId: number) {
+export function assembleContext(orgId: number) {
   const team = db
     .prepare(
-      `SELECT team_id, name, nickname, league_id, division_id, sub_league_id FROM teams WHERE team_id = ?`
+      `SELECT team_id, name, nickname, league_id, division_id, sub_league_id, level FROM teams WHERE team_id = ?`
     )
     .get(orgId) as
-    | { team_id: number; name: string; nickname: string; league_id: number; division_id: number; sub_league_id: number }
+    | { team_id: number; name: string; nickname: string; league_id: number; division_id: number; sub_league_id: number; level: number }
     | undefined;
   if (!team) throw new Error('Unknown org');
   const label = team.name === team.nickname ? team.name : `${team.name} ${team.nickname}`;
@@ -69,28 +69,39 @@ function assembleContext(orgId: number) {
     )
     .all(orgId, orgId, orgId) as Array<Record<string, unknown>>;
 
-  // MLB roster season leaders (batting + pitching)
+  /*
+   * Season leaders on the club, at the club's own level.
+   *
+   * The level filter is the whole point. A career line carries a row per level
+   * a man has played at this year, and summing them blends a call-up's work in
+   * Triple-A into his major-league numbers — Ryan Weathers reads as a 4.91 ERA
+   * that is neither his 5.89 up here nor his 3.34 down there. Worse, a
+   * storyline then set that against a team-mate who never left, which a reader
+   * reported: two lines side by side, one of them not what it claimed to be.
+   */
   const year = seasonYear(team.league_id);
+  const level = team.level ?? 1;
+  const levelName = LEVEL_NAMES[level] ?? `level ${level}`;
   const batLeaders = db
     .prepare(
       `SELECT p.first_name || ' ' || p.last_name AS name, p.age, p.position,
               SUM(s.pa) AS pa, SUM(s.ab) AS ab, SUM(s.h) AS h, SUM(s.hr) AS hr, SUM(s.rbi) AS rbi,
               SUM(s.sb) AS sb, SUM(s.bb) AS bb, SUM(s.k) AS k, ROUND(SUM(s.war), 1) AS war
        FROM players p JOIN players_career_batting_stats s ON s.player_id = p.player_id
-       WHERE p.team_id = ? AND s.year = ? AND s.split_id = 1 AND p.position != 1
+       WHERE p.team_id = ? AND s.year = ? AND s.split_id = 1 AND s.level_id = ? AND p.position != 1
        GROUP BY p.player_id HAVING SUM(s.pa) >= 20 ORDER BY SUM(s.war) DESC LIMIT 8`
     )
-    .all(orgId, year) as Array<Record<string, unknown>>;
+    .all(orgId, year, level) as Array<Record<string, unknown>>;
   const pitchLeaders = db
     .prepare(
       `SELECT p.first_name || ' ' || p.last_name AS name, p.age, p.role,
               SUM(s.outs) / 3.0 AS ip, SUM(s.er) AS er, SUM(s.k) AS k, SUM(s.bb) AS bb,
               SUM(s.w) AS w, SUM(s.l) AS l, SUM(s.s) AS sv, ROUND(SUM(s.war), 1) AS war
        FROM players p JOIN players_career_pitching_stats s ON s.player_id = p.player_id
-       WHERE p.team_id = ? AND s.year = ? AND s.split_id = 1
+       WHERE p.team_id = ? AND s.year = ? AND s.split_id = 1 AND s.level_id = ?
        GROUP BY p.player_id HAVING SUM(s.outs) >= 15 ORDER BY SUM(s.war) DESC LIMIT 8`
     )
-    .all(orgId, year) as Array<Record<string, unknown>>;
+    .all(orgId, year, level) as Array<Record<string, unknown>>;
 
   const prospects = computeProspects(orgId);
   const contracts = computeContracts(orgId);
@@ -107,11 +118,20 @@ function assembleContext(orgId: number) {
       innings: g.innings,
       weWereHome: !!g.is_home,
     })),
-    battingLeaders: batLeaders,
-    pitchingLeaders: pitchLeaders.map((p) => ({
-      ...p,
-      era: (p.ip as number) > 0 ? Number((((p.er as number) / (p.ip as number)) * 9).toFixed(2)) : null,
-    })),
+    /*
+     * Labelled, not merely filtered. The prospects below carry minor-league
+     * lines by their nature, so the model is shown which level each set of
+     * numbers belongs to rather than left to assume they are comparable.
+     */
+    statsLevel: levelName,
+    battingLeaders: { level: levelName, players: batLeaders },
+    pitchingLeaders: {
+      level: levelName,
+      players: pitchLeaders.map((p) => ({
+        ...p,
+        era: (p.ip as number) > 0 ? Number((((p.er as number) / (p.ip as number)) * 9).toFixed(2)) : null,
+      })),
+    },
     topProspects: { batters: prospects.batters.slice(0, 6), pitchers: prospects.pitchers.slice(0, 6) },
     contractSituations: (contracts.players as unknown as Array<{ flags: string[]; recommendation: unknown }>)
       .filter(

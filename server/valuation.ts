@@ -159,6 +159,17 @@ export function seasonYear(leagueId: number): number {
   return row?.season_year ?? new Date().getFullYear();
 }
 
+/**
+ * OOTP's level codes, in one place.
+ *
+ * Was declared privately in two files and about to be a third. A constant
+ * describing how the save encodes something is exactly the kind that drifts
+ * quietly once there are copies of it.
+ */
+export const LEVEL_NAMES: Record<number, string> = {
+  1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R',
+};
+
 export function currentGameDate(leagueId: number): string | null {
   const row = db.prepare(`SELECT "current_date" AS d FROM leagues WHERE league_id = ?`).get(leagueId) as
     | { d: string }

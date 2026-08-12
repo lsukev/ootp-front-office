@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { LEVEL_NAMES } from './valuation.js';
 import { playoffPicture } from './playoffs.js';
 import { deadlineRead } from './posture.js';
 import { healthOf, HURT_SQL } from './health.js';
@@ -11,7 +12,6 @@ export const dashboardRoutes = Router();
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 const HAND: Record<number, string> = { 1: 'R', 2: 'L', 3: 'S' };
 
 const teamLabel = `CASE WHEN t.name = t.nickname THEN t.name ELSE t.name || ' ' || t.nickname END`;
