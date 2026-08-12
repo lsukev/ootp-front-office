@@ -303,6 +303,13 @@ export function buildFixture(): string {
   // Only these are on the club's roster list; the unrostered man is not
   roster.run(IDS.mlbTeam, IDS.starter);
   roster.run(IDS.mlbTeam, IDS.extended);
+  /*
+   * The other club's men are rostered too. Being on a roster is what tells an
+   * assigned player from a signing nobody has placed yet, so a fixture where
+   * nobody is rostered makes every club look full of unassigned teenagers.
+   */
+  roster.run(IDS.otherMlbTeam, IDS.tradedAway);
+  roster.run(IDS.otherMlbTeam, IDS.retainedGuy);
   roster.run(IDS.aaaTeam, IDS.optioned);
   roster.run(IDS.aaaTeam, IDS.minorDeal);
 

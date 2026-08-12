@@ -35,6 +35,9 @@ orgRoutes.get('/orgs', (_req, res) => {
   );
 });
 
+/** The column signings nobody has assigned yet are gathered under. */
+const UNASSIGNED_TEAM = -1;
+
 function orgTeams(orgId: number) {
   return db
     .prepare(
@@ -52,6 +55,8 @@ interface OrgPlayer {
   age: number;
   position: number;
   role: number;
+  /** 0 when the save has him on no roster — signed, not yet assigned. */
+  rostered: number;
   con: number | null; gap: number | null; pow: number | null; eye: number | null; avk: number | null;
   conP: number | null; gapP: number | null; powP: number | null; eyeP: number | null; avkP: number | null;
   stu: number | null; mov: number | null; ctl: number | null;
@@ -85,7 +90,18 @@ function orgPlayers(orgId: number): OrgPlayer[] {
               pi.pitching_ratings_overall_control AS ctl,
               pi.pitching_ratings_talent_stuff AS stuP, pi.pitching_ratings_talent_movement AS movP,
               pi.pitching_ratings_talent_control AS ctlP,
-              ${VALUE_OA} AS oa, ${VALUE_POT} AS potOa
+              ${VALUE_OA} AS oa, ${VALUE_POT} AS potOa,
+              /*
+               * Whether he is on a roster anywhere.
+               *
+               * OOTP parks a signing nobody has assigned yet on the parent
+               * club's team_id with no roster entry at all, which is how a
+               * dozen sixteen-year-olds out of the international complex came
+               * to be listed among the major-league pitchers. Every one of the
+               * thirty clubs in this save carries a few. A man actually on the
+               * club appears in team_roster; these do not.
+               */
+              EXISTS (SELECT 1 FROM team_roster r WHERE r.player_id = p.player_id) AS rostered
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
@@ -132,11 +148,31 @@ orgRoutes.get('/depth-chart/:orgId', (req, res) => {
     label: `${t.name} ${t.nickname}`,
     levelName: LEVEL_NAMES[t.level] ?? `L${t.level}`,
   }));
-  const players = orgPlayers(orgId).map((p) => {
+  const roster = orgPlayers(orgId);
+  /*
+   * A signing nobody has assigned yet sits on the parent club's team_id with
+   * no roster entry, so the depth chart had a dozen sixteen-year-olds out of
+   * the international complex standing among the major-league pitchers. They
+   * belong to the organisation and not to that club, so they get a column of
+   * their own rather than being hidden — every one of the thirty clubs in this
+   * save has some, and quietly dropping them would lose real prospects.
+   */
+  const unassigned = roster.some((p) => !p.rostered);
+  if (unassigned) {
+    teams.push({
+      team_id: UNASSIGNED_TEAM,
+      name: 'Unassigned',
+      nickname: '',
+      level: 99,
+      label: 'Unassigned',
+      levelName: 'ORG',
+    });
+  }
+  const players = roster.map((p) => {
     const { cur, pot } = composites(p);
     return {
       player_id: p.player_id,
-      team_id: p.team_id,
+      team_id: p.rostered ? p.team_id : UNASSIGNED_TEAM,
       name: `${p.first_name} ${p.last_name}`,
       age: p.age,
       position: p.position,
