@@ -92,6 +92,15 @@ export function buildFixture(): string {
       -- it when no team is named, and it was missing here entirely
       human_team INTEGER DEFAULT 0, human_id INTEGER DEFAULT 0
     );
+    -- This season's standing. The wild-card race is worked out from it, since
+    -- the export carries only the division gb and OOTP's magic number
+    CREATE TABLE team_record (
+      team_id INTEGER, g INTEGER, w INTEGER, l INTEGER, t INTEGER, pos INTEGER,
+      pct REAL, gb REAL, streak INTEGER, magic_number INTEGER
+    );
+    CREATE TABLE league_playoffs (
+      league_id INTEGER, num_wild_cards INTEGER
+    );
     -- The club's past, which the Franchise page reads and the staff can now be
     -- asked about
     CREATE TABLE team_history_record (

@@ -7,9 +7,22 @@ import { TeamLogo } from '../TeamLogo';
 import { Th } from '../Th';
 import { PlayerNames } from '../PlayerNames';
 
+/** Where the club stands for a place, which the division table does not say. */
+interface Playoffs {
+  spots: number;
+  route: 'division' | 'wildcard' | 'out';
+  divisionGb: number;
+  wildcardGb: number | null;
+  wildcardRank: number | null;
+  magicNumber: number | null;
+  summary: string;
+}
+
 interface DashboardData {
   streaks?: Array<{ player_id: number; name: string; positionName: string; games: number; kind: string; since: string }>;
   standings: Array<{ team_id: number; team: string; w: number; l: number; gb: number; streak: number }>;
+  /** Absent on a save imported before this existed. */
+  playoffs?: Playoffs | null;
   recent: Array<{ date: string; opponent: string; isHome: boolean; score: string; won: boolean; innings: number }>;
   upcoming: Array<{
     date: string; isHome: boolean; opponent: string;
@@ -87,6 +100,15 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
               ))}
             </tbody>
           </table>
+          {/* Eleven of fifteen clubs in a division are not going to win it,
+              and the race they are in is the one this line describes */}
+          {data.playoffs && (
+            <p className={`playoff-line ${data.playoffs.route}`}>
+              {data.playoffs.route === 'division' && '◆ '}
+              {data.playoffs.route === 'wildcard' && '● '}
+              {data.playoffs.summary}
+            </p>
+          )}
         </section>
 
         <section className="dash-panel">

@@ -644,6 +644,17 @@ thead th[onclick], thead th { user-select: none; }
   font-family: var(--font-body);
 }
 
+/* Where the club stands for a place, under the division table */
+.playoff-line {
+  margin: 10px 0 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+/* In by winning the division, or in on a wild card — both worth seeing at a
+   glance, and neither worth shouting about in a panel this small */
+.playoff-line.division,
+.playoff-line.wildcard { color: var(--good); }
+
 .fit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 .fit-card {
   background: var(--panel);
