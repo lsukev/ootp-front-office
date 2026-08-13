@@ -295,6 +295,51 @@ leagueRoutes.get('/players', (req, res) => {
     }
   }
 
+  /*
+   * Who changed clubs mid-season, and what he did at each stop.
+   *
+   * The season line already covers every club a man played for, which is the
+   * right total — but it hides the more interesting fact. A bat acquired in
+   * July has a record before the trade and a record since, and "how is he
+   * hitting" usually means the second one. Nothing was reading a partial
+   * season; the split simply was not on offer, so nobody could mention it.
+   */
+  const stintsById = new Map<number, Array<Record<string, number | string>>>();
+  if (ids.length > 0 && statYear !== null) {
+    const table = group === 'pitching' ? 'players_career_pitching_stats' : 'players_career_batting_stats';
+    const measure = group === 'pitching' ? 'SUM(outs) AS outs' : 'SUM(pa) AS pa, SUM(h) AS h, SUM(hr) AS hr';
+    const holes = ids.map(() => '?').join(',');
+    const rowsBy = db
+      .prepare(
+        `SELECT s.player_id, s.team_id, t.abbr, s.level_id, ${measure}
+         FROM "${table}" s LEFT JOIN teams t ON t.team_id = s.team_id
+         WHERE s.year = ? AND s.split_id = 1 AND s.player_id IN (${holes})
+         GROUP BY s.player_id, s.team_id, s.level_id
+         HAVING ${group === 'pitching' ? 'SUM(outs)' : 'SUM(pa)'} > 0`
+      )
+      .all(statYear, ...ids) as Array<Record<string, number | string>>;
+    const grouped = new Map<number, Array<Record<string, number | string>>>();
+    for (const r of rowsBy) {
+      const list = grouped.get(r.player_id as number) ?? [];
+      list.push(r);
+      grouped.set(r.player_id as number, list);
+    }
+    for (const [playerId, list] of grouped) {
+      // Only worth reporting when he actually moved
+      if (list.length < 2) continue;
+      stintsById.set(
+        playerId,
+        list.map((r) => ({
+          team: (r.abbr as string) ?? '?',
+          level: LEVEL_NAMES[r.level_id as number] ?? `L${r.level_id}`,
+          ...(group === 'pitching'
+            ? { ip: Math.round(((r.outs as number) / 3) * 10) / 10 }
+            : { pa: r.pa as number, h: r.h as number, hr: r.hr as number }),
+        }))
+      );
+    }
+  }
+
   res.json({
     total,
     offset,
@@ -310,6 +355,8 @@ leagueRoutes.get('/players', (req, res) => {
       abbr: r.abbr,
       levelName: r.level !== null ? LEVEL_NAMES[r.level as number] ?? 'R' : null,
       stats: statsById.get(r.player_id as number) ?? null,
+      // Present only when he played for more than one club this year
+      stints: stintsById.get(r.player_id as number) ?? undefined,
     })),
   });
 });

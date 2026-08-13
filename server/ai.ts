@@ -215,6 +215,9 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined, leagueId?: nu
       `- Weigh it against what the club is short of. "clubNeeds" gives the weakest positions and ` +
       `the spare ones: value bought where you are already deep is worth less than the number says.\n` +
       `- Then the ordinary things: age, contract years, salary, and what the money commits you to.\n` +
+    `- A season line covers every club a man played for that year. Where somebody changed hands ` +
+    `mid-season, say what he has done since the move as well as across the year — a hot six weeks ` +
+    `in a new park is a different fact from a full season, and the reader wants both.\n` +
     `- A contract ending is not a player leaving. Each man carries a "control" field: "leaving" ` +
     `reaches free agency, "arbitration" means he is kept and paid more, "pre-arbitration" kept ` +
     `cheaply, "reserve clause" cannot leave. Never call somebody a rental or a walk-year player ` +
