@@ -215,6 +215,11 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined, leagueId?: nu
       `- Weigh it against what the club is short of. "clubNeeds" gives the weakest positions and ` +
       `the spare ones: value bought where you are already deep is worth less than the number says.\n` +
       `- Then the ordinary things: age, contract years, salary, and what the money commits you to.\n` +
+    `- A contract ending is not a player leaving. Each man carries a "control" field: "leaving" ` +
+    `reaches free agency, "arbitration" means he is kept and paid more, "pre-arbitration" kept ` +
+    `cheaply, "reserve clause" cannot leave. Never call somebody a rental or a walk-year player ` +
+    `from years-remaining alone — arbitration years are years of control, and they are worth ` +
+    `paying for.\n` +
       `- "totals" holds the same value, talent and salary figures shown on the page beside your ` +
     `answer. Quote those if you quote totals at all, so the two never disagree — but a verdict ` +
     `that is only those totals restated is not worth writing.\n\n` +

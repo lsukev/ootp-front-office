@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { db, tableExists, tableColumns } from './db.js';
+import { LEVEL_NAMES } from './valuation.js';
 
 export const orgRoutes = Router();
 
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 
 const avg = (vals: Array<number | null | undefined>): number | null => {
   const nums = vals.filter((v): v is number => typeof v === 'number');

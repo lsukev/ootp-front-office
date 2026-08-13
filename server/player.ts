@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { gloves } from './gloves.js';
 import { contactLeague, contactProfiles, situationalSplits } from './battedball.js';
-import { contractsByPlayer, mlbPercentiler, seasonYear, valuesByPlayer } from './valuation.js';
+import { contractsByPlayer, leagueRules, mlbPercentiler, seasonYear, valuesByPlayer } from './valuation.js';
+import { controlAfterThisSeason, serviceRemainingThisSeason } from './contracts.js';
 import { DATE_KEY } from './dashboard.js';
 
 export const playerRoutes = Router();
@@ -79,6 +80,13 @@ const POSITION_NAMES: Record<number, string> = {
 };
 const ROLE_NAMES: Record<number, string> = { 11: 'SP', 12: 'RP', 13: 'CL' };
 const HAND: Record<number, string> = { 1: 'R', 2: 'L', 3: 'S' };
+/*
+ * Deliberately not the shared map. The player card shows a drafted amateur's
+ * college and high-school seasons, which OOTP files as levels 10 and 11, and
+ * nowhere else has any use for them. Kept local rather than widening the
+ * shared one, which would put school years into level pickers that should
+ * never offer them.
+ */
 const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R', 10: 'R', 11: 'R' };
 
 const cmToFtIn = (cm: number): string => {
@@ -431,7 +439,26 @@ playerRoutes.get('/player/:id', (req, res) => {
         }
       : null,
     contract: contract
-      ? { ...contract, salarySchedule }
+      ? {
+          ...contract,
+          salarySchedule,
+          /*
+           * Whether he is leaving or merely at the end of a deal. The card and
+           * the staff who read it were shown years-remaining alone, so an
+           * arbitration case looked like a man about to reach the market.
+           */
+          control:
+            p.team_league != null
+              ? controlAfterThisSeason({
+                  yearsAfterThis: contract.yearsAfterThis ?? 0,
+                  hasExtension: !!contract.extension,
+                  serviceDays: rosterStatus?.mlb_service_days ?? null,
+                  serviceYears: rosterStatus?.mlb_service_years ?? null,
+                  serviceLeft: serviceRemainingThisSeason(),
+                  rules: leagueRules(p.team_league as number),
+                })
+              : null,
+        }
       : null,
     battingYears,
     pitchingYears,

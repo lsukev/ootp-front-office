@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { rosterHoles, seasonYear } from './valuation.js';
+import { LEVEL_NAMES, rosterHoles, seasonYear } from './valuation.js';
 
 export const rosterOpsRoutes = Router();
 
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 const teamLabel = `CASE WHEN t.name = t.nickname THEN t.name ELSE t.name || ' ' || t.nickname END`;
 
 // ── Roster crunch (40-man / options / Rule 5 / DFA) ─────────────────────

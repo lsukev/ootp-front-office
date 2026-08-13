@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { LEVEL_NAMES, contractsByPlayer, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
+import { LEVEL_NAMES, contractsByPlayer, leagueRules, mlbPercentiler, valuesByPlayer, type PlayerValue } from './valuation.js';
+import { controlAfterThisSeason, serviceRemainingThisSeason } from './contracts.js';
 import { padDate } from './rosterops.js';
 import { contactProfiles } from './battedball.js';
 import { POSITION_CODES, glovesLine } from './gloves.js';
@@ -394,12 +395,39 @@ const ROLE_NAMES: Record<number, string> = { 11: 'Starter', 12: 'Reliever', 13: 
  * A player as a trade needs him described: what he is, how he is playing, and
  * where he would actually stand on this club.
  */
+/**
+ * Whether a man is leaving, or merely at the end of a contract.
+ *
+ * Wrapped rather than called directly so a missing league — a free agent, an
+ * unaffiliated club — degrades to saying nothing rather than to guessing at
+ * free agency, which is the very mistake this exists to stop.
+ */
+function controlOf(
+  id: number, leagueId: number | null, yearsAfterThis: number, hasExtension: boolean,
+  serviceDays: number | null, serviceYears: number | null
+) {
+  if (leagueId === null) return null;
+  const c = controlAfterThisSeason({
+    yearsAfterThis,
+    hasExtension,
+    serviceDays,
+    serviceYears,
+    serviceLeft: serviceRemainingThisSeason(),
+    rules: leagueRules(leagueId),
+  });
+  return { status: c.status, arbitrationYear: c.arbYear };
+}
+
 function tradePlayer(id: number, statYear: number | null) {
   const p = db
     .prepare(
       `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position, p.role,
-              p.bats, p.throws, ${teamLabel} AS team, t.level, p.organization_id
-       FROM players p LEFT JOIN teams t ON t.team_id = p.team_id WHERE p.player_id = ?`
+              p.bats, p.throws, ${teamLabel} AS team, t.level, t.league_id, p.organization_id,
+              rs.mlb_service_years AS service_years, rs.mlb_service_days AS service_days
+       FROM players p
+       LEFT JOIN teams t ON t.team_id = p.team_id
+       LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
+       WHERE p.player_id = ?`
     )
     .get(id) as Record<string, number | string | null> | undefined;
   if (!p) return null;
@@ -463,6 +491,16 @@ function tradePlayer(id: number, statYear: number | null) {
     salaryNow: c?.salaryNow ?? 0,
     yearsAfterThis: c?.yearsAfterThis ?? 0,
     seasonLine: line,
+    /*
+     * What happens to him when the deal ends, not merely that it ends.
+     *
+     * The desk was handed yearsAfterThis and nothing else, so a man with two
+     * arbitration years left read as one about to reach the market — and the
+     * verdict priced him as a rental. A reader spotted it in the prose: talk
+     * of a player being in his last year when arbitration was still to come.
+     */
+    control: controlOf(id, p.league_id as number | null, c?.yearsAfterThis ?? 0, !!c?.extension,
+                       p.service_days as number | null, p.service_years as number | null),
     contact: isPitcher ? null : (contactProfiles([id]).get(id) ?? null),
     /*
      * Where he can play, and how well. Without this the desk was judging men

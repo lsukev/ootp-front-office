@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { LEVEL_NAMES } from './valuation.js';
 import { computeBatting, computePitching, leagueBaseline } from './stats.js';
 
 export const leagueRoutes = Router();
@@ -7,7 +8,6 @@ export const leagueRoutes = Router();
 const POSITION_NAMES: Record<number, string> = {
   1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
 };
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 const HAND: Record<number, string> = { 1: 'R', 2: 'L', 3: 'S' };
 const teamLabel = `CASE WHEN t.name = t.nickname THEN t.name ELSE t.name || ' ' || t.nickname END`;
 
@@ -249,7 +249,7 @@ leagueRoutes.get('/players', (req, res) => {
     .all(...ptParams, limit, offset) as Array<Record<string, number | string | null>>;
 
   const ids = rows.map((r) => r.player_id as number);
-  const statsById = new Map<number, Record<string, number | null>>();
+  const statsById = new Map<number, Record<string, number | string | null>>();
 
   if (statYear !== null && ids.length > 0) {
     const placeholders = ids.map(() => '?').join(',');
@@ -275,11 +275,23 @@ leagueRoutes.get('/players', (req, res) => {
       const computed = group === 'pitching'
         ? computePitching(row, base, teamId)
         : computeBatting(row, base, teamId);
-      // A player can appear at several levels; keep the busiest stint
+      /*
+       * A player can appear at several levels; keep the busiest stint — and
+       * say which one it was. The line was already correctly unblended, but
+       * nothing marked it, so a Triple-A season on a man now on the major
+       * league roster read as major-league work. A reader reported exactly
+       * that: two lines set against each other, one of them not what it
+       * appeared to be.
+       */
       const existing = statsById.get(row.player_id);
       const weight = group === 'pitching' ? (computed.ip ?? 0) : (computed.pa ?? 0);
-      const prior = existing ? (group === 'pitching' ? existing.ip ?? 0 : existing.pa ?? 0) : -1;
-      if (weight > prior) statsById.set(row.player_id, computed);
+      const prior = existing ? Number((group === 'pitching' ? existing.ip : existing.pa) ?? 0) : -1;
+      if (weight > prior) {
+        statsById.set(row.player_id, {
+          ...computed,
+          statsLevel: LEVEL_NAMES[row.level_id] ?? `L${row.level_id}`,
+        });
+      }
     }
   }
 
