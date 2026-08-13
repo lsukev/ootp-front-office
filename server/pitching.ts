@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { countsAsPitcherSql } from './twoway.js';
-import { healthOf } from './health.js';
+import { healthOf, type Health } from './health.js';
 import { computePitching, leagueBaseline } from './stats.js';
 import { ON_ROSTER } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
@@ -49,7 +49,24 @@ function currentDateKey(leagueId: number): number | null {
  * score. Thresholds follow common bullpen practice: back-to-back days are fine,
  * three in a row or 45+ pitches in three days is a red flag.
  */
-function bullpenStatus(recent: Appearance[], todayKey: number): { label: string; tone: 'ok' | 'warn' | 'bad' } {
+function bullpenStatus(
+  recent: Appearance[],
+  todayKey: number,
+  injury: Health | null
+): { label: string; tone: 'ok' | 'warn' | 'bad' } {
+  /*
+   * Health outranks workload. A man on the injured list has not thrown in
+   * weeks, so every test below would find him beautifully rested and this
+   * column said so — a green "Rested 18d" beside a name tagged IL-60, which is
+   * the opposite of the answer. Day-to-day men fall through, because OOTP lets
+   * a manager use them and the season line is then the right thing to read.
+   */
+  if (injury && !injury.playable) {
+    return {
+      label: injury.daysLeft ? `Out about ${injury.daysLeft} more days` : 'Out — on the injured list',
+      tone: 'bad',
+    };
+  }
   const on = (d: number) => recent.find((a) => daysBetween(todayKey, a.dateKey) === d);
   const pitches3 = recent
     .filter((a) => daysBetween(todayKey, a.dateKey) <= 2)
@@ -180,8 +197,9 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
 
   // Shared with the injury report and the lineup card, so a man cannot be
   // available on one page and on the injured list on another
-  const injuryOf = (p: (typeof roster)[number]): { status: string; daysLeft: number | null } | null =>
-    healthOf(p);
+  // The whole record, playable included — the page filters on that flag rather
+  // than reading the wording of the status
+  const injuryOf = (p: (typeof roster)[number]): Health | null => healthOf(p);
 
   const describe = (p: (typeof roster)[number]) => {
     const apps = appearances.get(p.player_id) ?? [];
@@ -237,7 +255,9 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
     .map((p) => {
       const d = describe(p);
       const apps = appearances.get(p.player_id) ?? [];
-      const status = todayKey !== null ? bullpenStatus(apps, todayKey) : { label: '—', tone: 'ok' as const };
+      const status = todayKey !== null
+        ? bullpenStatus(apps, todayKey, d.injury)
+        : { label: '—', tone: 'ok' as const };
       // Same window bullpenStatus uses: today, yesterday, the day before
       const last3 = todayKey !== null
         ? apps.filter((a) => daysBetween(todayKey, a.dateKey) <= 2)

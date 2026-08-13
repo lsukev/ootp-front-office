@@ -97,6 +97,9 @@ export function buildFixture(): string {
     );
     CREATE TABLE games (
       game_id INTEGER, home_team INTEGER, away_team INTEGER, date TEXT, played INTEGER,
+      -- The staff page finds today by asking for the last played game in the
+      -- league, so the column has to be here as it is in the export
+      league_id INTEGER,
       -- Storylines reads the recent results off these
       runs0 INTEGER DEFAULT 0, runs1 INTEGER DEFAULT 0, innings INTEGER DEFAULT 9
     );
@@ -212,6 +215,11 @@ export function buildFixture(): string {
       split_id INTEGER, outs INTEGER, er INTEGER, ra INTEGER, ha INTEGER, bb INTEGER, k INTEGER,
       hra INTEGER, hp INTEGER, bf INTEGER, g INTEGER, gs INTEGER, w INTEGER, l INTEGER,
       s INTEGER, hld INTEGER, war REAL
+    );
+    -- One row per outing. Rest and recent workload are read from these rather
+    -- than from the season line, which is the whole point of the staff page
+    CREATE TABLE players_game_pitching_stats (
+      player_id INTEGER, game_id INTEGER, pi INTEGER, outs INTEGER, gs INTEGER
     );
     CREATE TABLE players_career_fielding_stats (
       player_id INTEGER, year INTEGER, level_id INTEGER, split_id INTEGER, position INTEGER,

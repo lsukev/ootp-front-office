@@ -1198,6 +1198,7 @@ button.cta {
   white-space: nowrap;
 }
 .subtle-count { font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.il-toggle { margin-left: 10px; }
 
 /* Schedule */
 .record-strip {

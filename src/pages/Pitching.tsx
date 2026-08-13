@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiGet } from '../api';
+import { apiGet, apiPost } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
 import { findStat, formatStat, plusColor as statPlusColor } from '../stats';
 import { Th } from '../Th';
@@ -45,7 +45,8 @@ interface Arm {
   velocity: number | null;
   daysRest: number | null;
   lastOuting: { date: string; pitches: number; outs: number } | null;
-  injury: { status: string; daysLeft: number | null } | null;
+  /** `playable` is false only for the injured list; day-to-day men can pitch. */
+  injury: { status: string; daysLeft: number | null; playable: boolean } | null;
   stats: Stats | null;
 }
 interface Starter extends Arm {
@@ -85,6 +86,12 @@ function InjuryTag({ injury }: { injury: Arm['injury'] }) {
 export function Pitching({ teamId }: { teamId: number }) {
   const [data, setData] = useState<PitchingData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Kept in settings.json rather than in the browser, because the desktop
+   * app's origin changes with every version and anything in localStorage goes
+   * with it — a preference that resets itself on each update is not one.
+   */
+  const [showIl, setShowIl] = useState(false);
 
   useEffect(() => {
     setData(null);
@@ -92,8 +99,25 @@ export function Pitching({ teamId }: { teamId: number }) {
     apiGet<PitchingData>(`/api/pitching/${teamId}`).then(setData).catch((e) => setError(e.message));
   }, [teamId]);
 
+  useEffect(() => {
+    apiGet<{ settings: { showUnavailablePitchers?: boolean } }>('/api/settings')
+      .then((r) => setShowIl(r.settings.showUnavailablePitchers === true))
+      .catch(() => {});
+  }, []);
+
+  const toggleIl = () => {
+    const next = !showIl;
+    setShowIl(next);
+    void apiPost('/api/settings', { showUnavailablePitchers: next });
+  };
+
   if (error) return <div className="banner error">{error}</div>;
   if (!data) return <p className="muted">Reading the staff…</p>;
+
+  // Day-to-day men stay: OOTP will let you use them, so that is your call
+  const onIl = data.bullpen.filter((p) => p.injury?.playable === false);
+  const bullpen = showIl ? data.bullpen : data.bullpen.filter((p) => p.injury?.playable !== false);
+  const limited = bullpen.filter((p) => p.tone !== 'ok').length;
 
   return (
     <div>
@@ -163,9 +187,18 @@ export function Pitching({ teamId }: { teamId: number }) {
       <section>
         <h2>
           Bullpen{' '}
-          {data.tired > 0 && (
+          {limited > 0 && (
             <span className="muted subtle-count">
-              — {data.tired} of {data.bullpen.length} limited or unavailable
+              — {limited} of {bullpen.length} limited or unavailable
+            </span>
+          )}
+          {onIl.length > 0 && (
+            <span className="subtle-count il-toggle">
+              <button type="button" className="link-button" onClick={toggleIl}>
+                {showIl
+                  ? `Hide the ${onIl.length === 1 ? 'arm' : `${onIl.length} arms`} on the IL`
+                  : `${onIl.length} on the IL — show`}
+              </button>
             </span>
           )}
         </h2>
@@ -186,7 +219,7 @@ export function Pitching({ teamId }: { teamId: number }) {
             </tr>
           </thead>
           <tbody>
-            {data.bullpen.map((p) => (
+            {bullpen.map((p) => (
               <tr key={p.player_id}>
                 <td className="name">
                   {p.isCloser && <span className="role-tag">CL</span>}

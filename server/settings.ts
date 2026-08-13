@@ -43,6 +43,15 @@ export interface Settings {
    */
   roundRatingsToFive: boolean;
   /**
+   * Keep pitchers on the injured list in the bullpen table.
+   *
+   * Off unless asked for. That page answers one question — who can throw
+   * tonight — and a man six weeks from a rehab start is not an answer to it.
+   * Nothing vanishes quietly: the heading says how many are being held back
+   * and hands them over in a click.
+   */
+  showUnavailablePitchers: boolean;
+  /**
    * Write the storylines and the briefing by themselves after each import.
    *
    * Off unless asked for. Both cost money on someone else's API key, and a
@@ -67,6 +76,7 @@ const DEFAULTS: Settings = {
   useTeamColors: true,
   nextSeasonBudget: {},
   roundRatingsToFive: false,
+  showUnavailablePitchers: false,
   autoGenerateAfterImport: false,
   defaultOrgId: null,
   theme: 'system',
