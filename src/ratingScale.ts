@@ -13,6 +13,26 @@
 
 let roundToFive = false;
 
+/*
+ * The top of the scale this save uses. OOTP lets the user pick 20-80, 1-20,
+ * 1-10, 2-8 or 1-5, and the export carries whichever they chose — so a bar
+ * that divided by eighty regardless drew a best-in-class 5 as a sliver.
+ */
+let scaleMax = 80;
+
+export function setRatingScaleMax(max: number | undefined): void {
+  scaleMax = typeof max === 'number' && max > 0 ? max : 80;
+}
+
+export function ratingScaleMax(): number {
+  return scaleMax;
+}
+
+/** How full a bar should be for this rating, 0-1. */
+export function ratingFraction(value: number): number {
+  return Math.max(0, Math.min(1, value / scaleMax));
+}
+
 /** Set from the app root as settings load, before anything renders with them. */
 export function setRatingRounding(on: boolean): void {
   roundToFive = on;
@@ -25,7 +45,14 @@ export function ratingRounding(): boolean {
 /** A single grade, as it should be written. */
 export function formatRating(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
-  return String(roundToFive ? Math.round(value / 5) * 5 : Math.round(value));
+  /*
+   * Rounding to fives is a habit of the 20-80 scale and nonsense anywhere
+   * else: on the 1-to-5 scale it would turn a 3 into a 5 and a 2 into
+   * nothing at all. The setting stays available and simply does not apply
+   * where the scale cannot carry it.
+   */
+  const round = roundToFive && scaleMax === 80;
+  return String(round ? Math.round(value / 5) * 5 : Math.round(value));
 }
 
 /**

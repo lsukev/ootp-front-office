@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { setRatingRounding } from './ratingScale';
+import { setRatingRounding, setRatingScaleMax } from './ratingScale';
 import {
   getOrgs, getSaves, getStatus, isStaticSite, setConfig, setStaticSite, triggerImport,
   type Org, type SaveInfo, type Status,
@@ -31,7 +31,7 @@ import { Standings } from './pages/Standings';
 import { PlayerModal } from './playerModal';
 import { Nav, type NavEntry } from './Nav';
 import { applyTeamTheme, type ThemeMode } from './theme';
-import { TeamLogo } from './TeamLogo';
+import { TeamLogo , setLogoToken } from './TeamLogo';
 import { FolderPicker } from './FolderPicker';
 import { Settings, type AppSettings } from './pages/Settings';
 import { UpdateBadge } from './Updater';
@@ -117,6 +117,10 @@ export function App() {
     // A static export has no server behind it: reads become file lookups and
     // every write-backed feature is hidden rather than left to fail on click
     if (s.exportedSite) setStaticSite(true);
+    // Logos are keyed by save; without this a new save shows the old one's art
+    setLogoToken(s.logoToken);
+    // The scale is the user's OOTP setting and travels with the save
+    setRatingScaleMax(s.ratingScaleMax);
     setStatus(s);
     if (s.hasData) {
       const os = await getOrgs();

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { countsAsBatterSql, countsAsPitcherSql } from './twoway.js';
 import { healthOf, type Health, type HealthFields } from './health.js';
 import { ON_ROSTER, usesDH, valuesByPlayer } from './valuation.js';
 import { computeBatting, leagueBaseline } from './stats.js';
@@ -132,7 +133,7 @@ function startingPitcherCandidate(teamId: number): Candidate | null {
             `SELECT p.player_id, p.first_name, p.last_name, p.age, p.position, p.bats
              FROM players p
              LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-             WHERE p.team_id = ? AND p.position = 1 AND p.retired = 0 AND ${ON_ROSTER}
+             WHERE p.team_id = ? AND ${countsAsPitcherSql()} AND p.retired = 0 AND ${ON_ROSTER}
              LIMIT 1`
           )
           .get(teamId)
@@ -301,7 +302,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_fielding f ON f.player_id = p.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1 AND ${ON_ROSTER}`
+       -- A pitcher who genuinely hits is a bat available to the card
+       WHERE p.team_id = ? AND p.retired = 0 AND ${countsAsBatterSql()} AND ${ON_ROSTER}`
     )
     .all(teamId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; position: number;

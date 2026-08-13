@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
-import { formatRatingPair } from './ratingScale';
+import { formatRatingPair, ratingFraction } from './ratingScale';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -597,10 +597,13 @@ function RatingRows({
           <div className="rating wide">
             <div
               className="rating-bar"
-              style={{ width: `${Math.min(100, (cur / 80) * 100)}%`, background: `hsl(${(cur / 80) * 120}, 65%, 45%)` }}
+              style={{
+                width: `${ratingFraction(cur) * 100}%`,
+                background: `hsl(${ratingFraction(cur) * 120}, 65%, 45%)`,
+              }}
             />
             {pot > cur && (
-              <div className="rating-pot" style={{ left: `${Math.min(100, (pot / 80) * 100)}%` }} />
+              <div className="rating-pot" style={{ left: `${ratingFraction(pot) * 100}%` }} />
             )}
             <span>{cur}{pot > cur ? ` / ${pot}` : ''}</span>
           </div>

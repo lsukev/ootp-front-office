@@ -21,6 +21,24 @@ function logoDir(): string | null {
   return fs.existsSync(dir) ? dir : null;
 }
 
+/**
+ * A token that changes when the save does.
+ *
+ * Team ids repeat across saves — team 18 is one club in one league and quite
+ * another elsewhere — so a URL of /api/logo/18 names two different pictures
+ * depending on which save is loaded. With a day's cache on it the browser went
+ * on showing the first one, which is how logos from an old save turned up
+ * against the clubs of a new one. Folding the save's own path into the URL
+ * gives each save its own cache entry.
+ */
+export function logoToken(): string {
+  const { csvDir } = loadConfig();
+  if (!csvDir) return 'none';
+  let hash = 0;
+  for (let i = 0; i < csvDir.length; i++) hash = (hash * 31 + csvDir.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
+}
+
 /** Guard against a malicious logo_file_name escaping the logo directory. */
 function safeJoin(dir: string, name: string): string | null {
   const resolved = path.resolve(dir, name);

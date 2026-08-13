@@ -21,6 +21,13 @@ export interface Status {
   hasData: boolean;
   /** ISO time a fresh export was spotted on disk but not yet imported. */
   exportPending: string | null;
+  /**
+   * Changes with the save. Rides on every logo URL so switching saves does not
+   * keep showing the previous one's art for team ids the new save reuses.
+   */
+  logoToken?: string;
+  /** Top of the rating scale this save uses: 80, 20, 10, 8 or 5. */
+  ratingScaleMax?: number;
 }
 
 export interface Team {

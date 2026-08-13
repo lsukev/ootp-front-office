@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { countsAsPitcherSql } from './twoway.js';
 import { healthOf } from './health.js';
 import { computePitching, leagueBaseline } from './stats.js';
 import { ON_ROSTER } from './valuation.js';
@@ -97,7 +98,8 @@ pitchingRoutes.get('/pitching/:teamId', (req, res) => {
        FROM players p
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE p.team_id = ? AND p.position = 1 AND p.retired = 0 AND ${ON_ROSTER}`
+       -- A two-way man's innings belong on the staff page as much as anyone's
+       WHERE p.team_id = ? AND ${countsAsPitcherSql()} AND p.retired = 0 AND ${ON_ROSTER}`
     )
     .all(teamId) as Array<{
     player_id: number; first_name: string; last_name: string; age: number; role: number;

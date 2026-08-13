@@ -15,7 +15,8 @@ import { storylineRoutes, startStorylineJob } from './storylines.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
-import { clearValuationCaches, valuesByPlayer } from './valuation.js';
+import { ratingScaleMax, clearScaleCache, clearValuationCaches, valuesByPlayer } from './valuation.js';
+import { clearTwoWayCache } from './twoway.js';
 import { dashboardRoutes } from './dashboard.js';
 import { rosterOpsRoutes } from './rosterops.js';
 import { tradeRoutes } from './trade.js';
@@ -23,7 +24,7 @@ import { contactProfiles } from './battedball.js';
 import { standingOf, type StandingFields } from './health.js';
 import { gameplanRoutes } from './gameplan.js';
 import { aiRoutes, startBriefingJob } from './ai.js';
-import { logoRoutes } from './logos.js';
+import { logoRoutes, logoToken } from './logos.js';
 import { settingsRoutes } from './settings.js';
 import { modelRoutes } from './models.js';
 import { exportRoutes } from './exporter.js';
@@ -131,6 +132,8 @@ export function runImport(csvDir: string): void {
     console.log(
       `[import] ${importState.lastImport.tables} tables, ${importState.lastImport.rows} rows imported`
     );
+    clearScaleCache();
+    clearTwoWayCache();
     autoGenerate();
   } catch (err) {
     importState.lastError = (err as Error).message;
@@ -184,6 +187,18 @@ api.get('/status', (_req, res) => {
     hasData: tableExists('players') && tableExists('teams'),
     /** Set when OOTP has written a fresh export the app has not imported yet. */
     exportPending: pendingExport(),
+    /*
+     * Changes with the save, and rides along on every logo URL. Without it the
+     * browser's day-long cache served the previous save's art for team ids the
+     * new one reuses.
+     */
+    logoToken: logoToken(),
+    /*
+     * The scale OOTP is set to show ratings on, read off the save. Bars used
+     * to divide by eighty regardless, so a 5 on the 1-to-5 scale drew at six
+     * per cent of the width.
+     */
+    ratingScaleMax: tableExists('players') ? ratingScaleMax() : 80,
   });
 });
 
