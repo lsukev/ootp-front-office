@@ -1,0 +1,7 @@
+OOTP Front Office 0.21.1 — everything since 0.21.0
+
+Fixed — The draft board no longer offers players who have already been drafted. It was going on the eligibility flag alone, and OOTP leaves that set after a man has been taken: in the save this was found in, 185 of the 1,014 players the board was putting forward were already gone, every one stamped with this year as his draft year. That fault was in every league, not only unusual ones.
+
+Fixed — A universe with its own high-school and college leagues runs more than one draft, and the board was pooling them. The export records which draft a player belongs to and nothing was reading it, so a reader with feeder leagues opened his board to 123 players, not one of whom was in the class his game had published that day. The board now keeps to the drafting league. A save that leaves the field unset still gets a board, as before.
+
+New — The draft board says what it left out, when it left anything out. Under the player count you may now see a line like "Not shown: 296 in another league's draft" — or already drafted, or carrying no scouted ceiling. It is there because a board showing the wrong players and a board that never saw yours look identical from the outside, and there was no way to tell which you were looking at.
