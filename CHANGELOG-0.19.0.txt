@@ -1,0 +1,7 @@
+OOTP Front Office 0.19.0 — everything since 0.18.1
+
+New — OpenCode Zen joins Anthropic, OpenAI and Google as a service the AI features can use. It is a gateway rather than a laboratory: one key reaching sixty-one models — Claude, GPT, Gemini, DeepSeek, Kimi, Qwen, Grok and the rest — six of which cost nothing at all. That is the reason to want it. The AI features here are optional and run on your own key, and until now trying them meant opening an account at one of three companies and putting money in it; with Zen you can see what Storylines and the staff chat actually do before deciding whether they are worth paying for. Choose it under Service in Settings. Anthropic remains what the app was built against and what the staff chat is tuned for, so it is still the one to reach for if you have the choice.
+
+Changed — The model picker lists Zen's whole catalogue before you have a key, because Zen publishes it openly. Every other service still needs the key first, since none of them will say what they offer without one.
+
+Fixed — A key is now genuinely checked before it is called verified. Every service here proves a key by asking for the list of models, and Zen answers that question for anybody — including a key typed at random. So the check would have accepted almost anything and left the truth to emerge later, in the middle of a generation. Zen is verified with a real request instead, on a model that costs nothing. A busy gateway or an account that has not set up billing yet does not count against the key; only an outright rejection does.
