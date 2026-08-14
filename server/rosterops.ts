@@ -529,9 +529,29 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
        FROM players p
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
-       WHERE p.draft_eligible = 1 AND p.retired = 0 AND p.hidden = 0`
+       /*
+        * Eligible, still on the board, and for THIS league's draft.
+        *
+        * The eligibility flag alone was doing all the work and it is not
+        * enough for either half of that. It stays set on a man after he has
+        * been taken — in the save this was checked against, 185 players
+        * carried both it and picked_in_draft, every one of them stamped with
+        * this year as his draft year — so the board went on offering men who
+        * were already gone.
+        *
+        * And a universe with high-school and college leagues of its own runs
+        * more than one draft. A reader whose amateurs play in feeder leagues
+        * found the board listing 123 players, none of whom were in the pool
+        * his game had just published, while none of his 296 were on it.
+        * draft_league_id is the export's own answer to which draft a man
+        * belongs to; an unset value is honoured rather than filtered out,
+        * since a save that does not populate it should still get a board.
+        */
+       WHERE p.draft_eligible = 1 AND p.retired = 0 AND p.hidden = 0
+         AND COALESCE(p.picked_in_draft, 0) != 1
+         AND COALESCE(p.draft_league_id, 0) IN (0, ?)`
     )
-    .all() as Array<Record<string, number | string | null>>;
+    .all(league.league_id) as Array<Record<string, number | string | null>>;
 
   const avg = (vals: Array<number | string | null>): number | null => {
     const nums = vals.filter((v): v is number => typeof v === 'number' && v > 0);
@@ -579,10 +599,37 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
     recommendation: advise(p, thin),
   }));
 
+  /*
+   * What was left out, and why.
+   *
+   * A reader reported a board with the wrong 123 men on it and had no way to
+   * tell whether the app had never seen his draft class or had seen it and
+   * ruled it out. These counts answer that from the page itself, and cost one
+   * query. They are shown only when they are not zero, so a save where none of
+   * this applies reads exactly as before.
+   */
+  const excluded = db
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN COALESCE(picked_in_draft, 0) = 1 THEN 1 ELSE 0 END) AS alreadyPicked,
+         SUM(CASE WHEN COALESCE(picked_in_draft, 0) != 1
+                   AND COALESCE(draft_league_id, 0) NOT IN (0, ?) THEN 1 ELSE 0 END) AS otherDraft
+       FROM players
+       WHERE draft_eligible = 1 AND retired = 0 AND hidden = 0`
+    )
+    .get(league.league_id) as { alreadyPicked: number | null; otherDraft: number | null };
+
   res.json({
     ...league,
     total: prospects.length,
     needs,
+    excluded: {
+      alreadyPicked: excluded.alreadyPicked ?? 0,
+      otherDraft: excluded.otherDraft ?? 0,
+      // Eligible, unpicked, in this draft, but carrying no scouted ceiling —
+      // there is nothing to rank him on
+      unrated: rows.length - prospects.length,
+    },
     prospects: withAdvice,
   });
 });

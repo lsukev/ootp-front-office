@@ -20,8 +20,32 @@ interface DraftData {
   combineDate: string | null;
   rounds: number;
   total: number;
+  /**
+   * Eligible men this board deliberately left out. Shown only when it is not
+   * empty: a reader whose universe runs its own high-school and college drafts
+   * saw a board full of the wrong players and had no way to tell whether the
+   * app had missed his class or ruled it out.
+   */
+  excluded?: { alreadyPicked: number; otherDraft: number; unrated: number };
   needs: Array<{ position: number; positionName: string; bestValue: number | null }>;
   prospects: DraftProspect[];
+}
+
+/**
+ * Says what the board left out, when it left anything out.
+ *
+ * Silent on a save where none of it applies, which is most of them. It exists
+ * because "these are the wrong players" and "the app cannot see my players"
+ * look identical from the outside, and a reader with high-school and college
+ * leagues of his own hit exactly that.
+ */
+function leftOut(x: DraftData['excluded']): string {
+  if (!x) return '';
+  const parts: string[] = [];
+  if (x.alreadyPicked > 0) parts.push(`${x.alreadyPicked} already drafted`);
+  if (x.otherDraft > 0) parts.push(`${x.otherDraft} in another league's draft`);
+  if (x.unrated > 0) parts.push(`${x.unrated} with no scouted ceiling`);
+  return parts.length ? ` Not shown: ${parts.join(', ')}.` : '';
 }
 
 /** Builds a local Date from YYYY-MM-DD, which Date.parse would read as UTC. */
@@ -248,6 +272,7 @@ export function Draft({ orgId }: { orgId: number }) {
               {data.rounds > 0 && <> — {data.rounds} rounds</>}.
             </>
           )}
+          {leftOut(data.excluded)}
         </span>
       </div>
 

@@ -134,6 +134,9 @@ export function buildFixture(): string {
       player_id INTEGER, first_name TEXT, last_name TEXT, age INTEGER, position INTEGER, role INTEGER,
       bats INTEGER, throws INTEGER, uniform_number INTEGER, team_id INTEGER, organization_id INTEGER,
       retired INTEGER, hidden INTEGER, draft_eligible INTEGER, college INTEGER,
+      -- Set once a man has been taken, and stamped with which draft he belongs
+      -- to. A universe with high-school and college leagues runs more than one
+      picked_in_draft INTEGER DEFAULT 0, draft_league_id INTEGER DEFAULT 0,
       injury_is_injured INTEGER DEFAULT 0, injury_dtd_injury INTEGER DEFAULT 0,
       injury_left INTEGER DEFAULT 0,
       -- Player Search reads this to offer free agents, and had no coverage at
