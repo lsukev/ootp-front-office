@@ -380,7 +380,7 @@ api.get('/roster/:teamId', (req, res) => {
       : null;
 
   const battingByPlayer = new Map<number, Record<string, number | null>>();
-  if (tableExists('players_career_batting_stats') && statYear !== null && baseline) {
+  if (tableExists('players_career_batting_stats') && statYear !== null && baseline && teamRow) {
     const rows = db
       .prepare(
         `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3,
@@ -390,9 +390,18 @@ api.get('/roster/:teamId', (req, res) => {
          FROM players_career_batting_stats
          -- A drafted amateur's school season lives here under no league at
          -- all, and summing it in credits him with what he did to schoolboys
-         WHERE year = ? AND split_id = 1 AND league_id != 0 ${idFilter} GROUP BY player_id`
+         --
+         -- And only what he did AT THIS LEVEL. A shuttling player has a line at
+         -- each, and adding them together produces a season nobody had: a
+         -- reader was shown a man recommended as a trade target on .313/.372/
+         -- .552 and a 155 wRC+ when almost all of it was Triple-A. Worse, the
+         -- rate stats below are scaled against this club's own league, so a
+         -- Triple-A line was being measured against major-league pitching and
+         -- coming out extraordinary.
+         WHERE year = ? AND split_id = 1 AND league_id != 0 AND level_id = ?
+               ${idFilter} GROUP BY player_id`
       )
-      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
+      .all(statYear, teamRow.level, ...rosterIds) as Array<Record<string, number>>;
     for (const row of rows) {
       battingByPlayer.set(row.player_id, computeBatting(row, baseline, teamId));
     }
@@ -469,7 +478,7 @@ api.get('/roster/:teamId', (req, res) => {
   }
 
   const pitchingByPlayer = new Map<number, Record<string, number | null>>();
-  if (tableExists('players_career_pitching_stats') && statYear !== null && baseline) {
+  if (tableExists('players_career_pitching_stats') && statYear !== null && baseline && teamRow) {
     const rows = db
       .prepare(
         `SELECT player_id, SUM(outs) AS outs, SUM(er) AS er, SUM(ra) AS ra, SUM(ha) AS ha,
@@ -477,9 +486,11 @@ api.get('/roster/:teamId', (req, res) => {
                 SUM(gs) AS gs, SUM(w) AS w, SUM(l) AS l, SUM(s) AS sv, SUM(hld) AS hld,
                 SUM(war) AS war
          FROM players_career_pitching_stats
-         WHERE year = ? AND split_id = 1 AND league_id != 0 ${idFilter} GROUP BY player_id`
+         -- This club's level only, for the same reason as the batting above
+         WHERE year = ? AND split_id = 1 AND league_id != 0 AND level_id = ?
+               ${idFilter} GROUP BY player_id`
       )
-      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
+      .all(statYear, teamRow.level, ...rosterIds) as Array<Record<string, number>>;
     for (const row of rows) {
       pitchingByPlayer.set(row.player_id, computePitching(row, baseline, teamId));
     }
