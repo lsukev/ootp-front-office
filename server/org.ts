@@ -196,37 +196,56 @@ orgRoutes.get('/depth-chart/:orgId', (req, res) => {
  * Only professional lines count. In this save the two are cleanly separable:
  * every `league_id = 0` row is level 10 or 11, and no real league uses either.
  */
-function seasonBatting(): Map<number, Record<string, number>> {
+/**
+ * One line per level, not one line per man.
+ *
+ * A reader wrote in about a prospect credited with "a 1.120 OPS and 21 HR in
+ * just 181 PAs" at Triple-A, where he was in fact hitting .200 — all 21 home
+ * runs were struck at Double-A, and the two seasons had been added together
+ * and then labelled with whichever club he happened to be on. A promotion case
+ * built on that is a promotion case for somebody who does not exist, and it
+ * was compared against the Triple-A average as well, so the mismatch was
+ * counted twice in his favour.
+ *
+ * Keying by level costs nothing and it is what the question means: how is he
+ * doing where he is now.
+ */
+const statKey = (playerId: number, level: number): string => `${playerId}:${level}`;
+
+function seasonBatting(): Map<string, Record<string, number>> {
   const t = 'players_career_batting_stats';
-  const out = new Map<number, Record<string, number>>();
+  const out = new Map<string, Record<string, number>>();
   if (!tableExists(t)) return out;
   const year = (db.prepare(`SELECT MAX(year) AS y FROM "${t}"`).get() as { y: number }).y;
   const rows = db
     .prepare(
-      `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t,
-              SUM(hr) AS hr, SUM(bb) AS bb, SUM(hp) AS hp, SUM(k) AS k, SUM(sf) AS sf,
-              SUM(sb) AS sb, SUM(war) AS war
-       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
+      `SELECT player_id, level_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d,
+              SUM(t) AS t, SUM(hr) AS hr, SUM(bb) AS bb, SUM(hp) AS hp, SUM(k) AS k,
+              SUM(sf) AS sf, SUM(sb) AS sb, SUM(war) AS war
+       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0
+       GROUP BY player_id, level_id`
     )
     .all(year) as Array<Record<string, number>>;
-  for (const r of rows) out.set(r.player_id, r);
+  for (const r of rows) out.set(statKey(r.player_id, r.level_id), r);
   return out;
 }
 
-/** Professional lines only, for the same reason as {@link seasonBatting}. */
-function seasonPitching(): Map<number, Record<string, number>> {
+/** Professional lines only, per level, for the same reasons as {@link seasonBatting}. */
+function seasonPitching(): Map<string, Record<string, number>> {
   const t = 'players_career_pitching_stats';
-  const out = new Map<number, Record<string, number>>();
+  const out = new Map<string, Record<string, number>>();
   if (!tableExists(t)) return out;
   const year = (db.prepare(`SELECT MAX(year) AS y FROM "${t}"`).get() as { y: number }).y;
   const rows = db
     .prepare(
-      `SELECT player_id, SUM(outs) AS outs, SUM(er) AS er, SUM(bb) AS bb, SUM(k) AS k,
-              SUM(bf) AS bf, SUM(ha) AS ha, SUM(g) AS g, SUM(gs) AS gs, SUM(war) AS war
-       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0 GROUP BY player_id`
+      `SELECT player_id, level_id, SUM(outs) AS outs, SUM(er) AS er, SUM(bb) AS bb,
+              SUM(k) AS k, SUM(bf) AS bf, SUM(ha) AS ha, SUM(g) AS g, SUM(gs) AS gs,
+              SUM(war) AS war
+       FROM "${t}" WHERE year = ? AND split_id = 1 AND league_id != 0
+       GROUP BY player_id, level_id`
     )
     .all(year) as Array<Record<string, number>>;
-  for (const r of rows) out.set(r.player_id, r);
+  for (const r of rows) out.set(statKey(r.player_id, r.level_id), r);
   return out;
 }
 
@@ -245,7 +264,7 @@ const ops = (s: Record<string, number>): number | null => {
  * of players with a meaningful sample), computed from THIS save's data so the
  * thresholds self-calibrate to the league environment.
  */
-function levelBaselines(batting: Map<number, Record<string, number>>, pitching: Map<number, Record<string, number>>) {
+function levelBaselines(batting: Map<string, Record<string, number>>, pitching: Map<string, Record<string, number>>) {
   const players = db
     .prepare(
       `SELECT p.player_id, p.age, p.position, t.level FROM players p
@@ -259,12 +278,14 @@ function levelBaselines(batting: Map<number, Record<string, number>>, pitching: 
     if (!acc.has(p.level)) acc.set(p.level, { ages: [], ops: [], era: [], kpct: [] });
     const a = acc.get(p.level)!;
     a.ages.push(p.age);
-    const b = batting.get(p.player_id);
+    // The line he produced AT this level, so the level's own average is not
+    // built partly out of what its players did somewhere else
+    const b = batting.get(statKey(p.player_id, p.level));
     if (b && (b.pa ?? 0) >= 50) {
       const o = ops(b);
       if (o !== null) a.ops.push(o);
     }
-    const pi = pitching.get(p.player_id);
+    const pi = pitching.get(statKey(p.player_id, p.level));
     if (pi && (pi.outs ?? 0) >= 45) {
       a.era.push(((pi.er ?? 0) / (pi.outs / 3)) * 9);
       if (pi.bf > 0) a.kpct.push(pi.k / pi.bf);
@@ -307,8 +328,11 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
     };
 
     if (p.position === 1) {
-      const s = pitching.get(p.player_id);
-      if (!s || (s.outs ?? 0) < 45) continue; // ~15 IP minimum
+      const s = pitching.get(statKey(p.player_id, team.level));
+      // ~15 IP minimum, at the level he is actually pitching at. A man who has
+      // just moved up has to earn the case again there rather than carry the
+      // one he made below.
+      if (!s || (s.outs ?? 0) < 45) continue;
       const ip = s.outs / 3;
       const era = ((s.er ?? 0) / ip) * 9;
       const kpct = s.bf > 0 ? s.k / s.bf : 0;
@@ -327,7 +351,7 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
         signal: eraDiff >= 1.0 && ip >= 30 ? 'promote' : score > 5 ? 'watch' : null,
       });
     } else {
-      const s = batting.get(p.player_id);
+      const s = batting.get(statKey(p.player_id, team.level));
       if (!s || (s.pa ?? 0) < 60) continue;
       const o = ops(s);
       if (o === null) continue;
