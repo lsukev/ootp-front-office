@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { isUnusable, markUnusable } from './unusable.js';
 
 /**
- * Three ways to reach a model, behind one shape.
+ * Four ways to reach a model, behind one shape.
  *
  * The app was written against Anthropic and every feature still works best
  * there — the chat's tool loop and prompt caching are Anthropic's shapes, and
@@ -18,13 +18,27 @@ import { isUnusable, markUnusable } from './unusable.js';
  * upstream never learn which provider answered.
  */
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode';
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; keyLabel: string; console: string }> = [
   { id: 'anthropic', label: 'Anthropic (Claude)', keyLabel: 'Anthropic API key', console: 'console.claude.com' },
   { id: 'openai', label: 'OpenAI', keyLabel: 'OpenAI API key', console: 'platform.openai.com' },
   { id: 'gemini', label: 'Google Gemini', keyLabel: 'Gemini API key', console: 'aistudio.google.com' },
+  { id: 'opencode', label: 'OpenCode Zen', keyLabel: 'OpenCode Zen API key', console: 'opencode.ai/auth' },
 ];
+
+/**
+ * OpenCode Zen is a gateway rather than a laboratory: one key reaching Claude,
+ * GPT, Gemini, DeepSeek, Kimi and the rest, including several that cost
+ * nothing. Worth having for exactly that — somebody who wants to try the AI
+ * features without opening an account at three companies.
+ *
+ * It answers on the OpenAI shape, so it borrows that implementation entire and
+ * changes only where the request is posted. Its own catalogue is already
+ * curated for agents, so unlike a real OpenAI account there is nothing to sift
+ * out — no embeddings or speech models to trip over.
+ */
+export const OPENCODE_BASE_URL = 'https://opencode.ai/zen/v1';
 
 export const isProviderId = (v: unknown): v is ProviderId =>
   PROVIDERS.some((p) => p.id === v);
@@ -135,9 +149,21 @@ const anthropic: Provider = {
 
 // ── OpenAI ──────────────────────────────────────────────────────────────
 
-const openai: Provider = {
+/**
+ * The OpenAI wire protocol, which more than one service speaks.
+ *
+ * Parameterised by where to post and what to keep from the catalogue, so a
+ * gateway that answers the same shape is a few lines rather than a second copy
+ * of all of this. `baseURL` undefined means OpenAI itself.
+ */
+function openAiCompatible(
+  baseURL: string | undefined,
+  keepModel: (id: string) => boolean
+): Provider {
+  const connect = (key: string) => new OpenAI({ apiKey: key, ...(baseURL ? { baseURL } : {}) });
+  return {
   async complete({ key, model, system, messages, maxTokens, schema }) {
-    const client = new OpenAI({ apiKey: key });
+    const client = connect(key);
     const response = await client.chat.completions.create({
       model,
       // Newer models reject max_tokens; max_completion_tokens is the current
@@ -164,16 +190,85 @@ const openai: Provider = {
   },
 
   async listModels(key) {
-    const client = new OpenAI({ apiKey: key });
+    const client = connect(key);
     const out: ModelChoice[] = [];
     for await (const m of client.models.list()) out.push({ id: m.id, label: m.id });
-    // The account's list includes embeddings, audio and image models, none of
-    // which can hold a conversation about a baseball club
-    return out.filter((m) => /^(gpt|o\d|chatgpt)/.test(m.id) && !/audio|realtime|image|tts|transcribe|search|embedding|moderation/.test(m.id));
+    return out.filter((m) => keepModel(m.id));
   },
 
   async validateKey(key) {
-    await new OpenAI({ apiKey: key }).models.list();
+    await connect(key).models.list();
+  },
+  };
+}
+
+/** A key the service rejected, as against a request that went wrong. */
+export function authRejected(err: unknown): boolean {
+  const e = err as { status?: number; message?: string };
+  if (e?.status === 401 || e?.status === 403) return true;
+  return /invalid[_ ]api[_ ]key|api[_ ]?key not valid|unauthorized|missing api key/i.test(e?.message ?? '');
+}
+
+/**
+ * An OpenAI account's list includes embeddings, audio and image models, none of
+ * which can hold a conversation about a baseball club.
+ */
+const openAiChatModel = (id: string): boolean =>
+  /^(gpt|o\d|chatgpt)/.test(id) && !/audio|realtime|image|tts|transcribe|search|embedding|moderation/.test(id);
+
+const openai: Provider = openAiCompatible(undefined, openAiChatModel);
+
+/**
+ * A model on Zen that costs nothing, used only to prove a key works.
+ *
+ * If it is ever withdrawn the check below degrades into accepting the key,
+ * which is the safe direction: the key is then tested by the first real
+ * request, which reports a bad one plainly.
+ */
+const OPENCODE_PROBE_MODEL = 'deepseek-v4-flash-free';
+
+// Zen publishes only models meant for agents, so everything it lists is offered
+const opencode: Provider = {
+  ...openAiCompatible(OPENCODE_BASE_URL, () => true),
+
+  /**
+   * The catalogue, which Zen serves to anyone — so the Settings picker can
+   * show all sixty before you have signed up for anything.
+   *
+   * The placeholder is there because the SDK refuses to be constructed without
+   * some key and this endpoint reads none. It is not a credential and is never
+   * sent anywhere else.
+   */
+  async listModels(key) {
+    const client = new OpenAI({ apiKey: key || 'public-catalogue', baseURL: OPENCODE_BASE_URL });
+    const out: ModelChoice[] = [];
+    for await (const m of client.models.list()) out.push({ id: m.id, label: m.id });
+    return out;
+  },
+
+  /**
+   * Zen's catalogue is public — its models endpoint answers a request with no
+   * key at all, and answers one with a fabricated key just the same. So the
+   * cheapest-call trick every other provider here uses would have told anybody
+   * who pasted sixteen characters that their key was saved and verified, and
+   * left them to discover otherwise when their storylines failed.
+   *
+   * A real inference call is the only thing that tests it, so that is what is
+   * made — on a model that costs nothing. Only an outright rejection counts
+   * against the key: a gateway that is busy, or an account without billing
+   * set up yet, has not shown the key to be wrong, and refusing to save a good
+   * key over either would be the worse mistake.
+   */
+  async validateKey(key) {
+    try {
+      await new OpenAI({ apiKey: key, baseURL: OPENCODE_BASE_URL }).chat.completions.create({
+        model: OPENCODE_PROBE_MODEL,
+        max_completion_tokens: 1,
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+    } catch (err) {
+      if (authRejected(err)) throw err;
+    }
   },
 };
 
@@ -307,7 +402,7 @@ async function geminiComplete(
     return text;
 }
 
-const IMPLEMENTATIONS: Record<ProviderId, Provider> = { anthropic, openai, gemini };
+const IMPLEMENTATIONS: Record<ProviderId, Provider> = { anthropic, openai, gemini, opencode };
 
 export const providerFor = (id: ProviderId): Provider => IMPLEMENTATIONS[id];
 
@@ -320,6 +415,9 @@ export const DEFAULT_MODEL: Record<ProviderId, string> = {
   anthropic: 'claude-sonnet-5',
   openai: 'gpt-5',
   gemini: 'gemini-2.5-pro',
+  // Every prompt in this app was written and tuned against Claude, and the
+  // gateway carries it, so that is where a Zen key starts
+  opencode: 'claude-sonnet-5',
 };
 
 // ── The tool loop, for providers that are not Anthropic ─────────────────
@@ -416,8 +514,8 @@ export function toOpenAiMessages(
   return out;
 }
 
-async function openAiToolLoop(o: ToolLoopOpts): Promise<ToolLoopResult> {
-  const client = new OpenAI({ apiKey: o.key });
+async function openAiToolLoop(o: ToolLoopOpts, baseURL?: string): Promise<ToolLoopResult> {
+  const client = new OpenAI({ apiKey: o.key, ...(baseURL ? { baseURL } : {}) });
   let answer = '';
 
   for (let turn = 0; turn < o.maxTurns; turn++) {
@@ -688,7 +786,8 @@ async function geminiLoop(o: ToolLoopOpts, model: string): Promise<ToolLoopResul
  * implementation in chat.ts, where the caching and thinking parameters live.
  */
 export function toolLoopFor(provider: ProviderId): ((o: ToolLoopOpts) => Promise<ToolLoopResult>) | null {
-  if (provider === 'openai') return openAiToolLoop;
+  if (provider === 'openai') return (o) => openAiToolLoop(o);
+  if (provider === 'opencode') return (o) => openAiToolLoop(o, OPENCODE_BASE_URL);
   if (provider === 'gemini') return geminiToolLoop;
   return null;
 }

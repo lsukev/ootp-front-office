@@ -27,6 +27,7 @@ describe('the providers on offer', () => {
     expect(isProviderId('anthropic')).toBe(true);
     expect(isProviderId('openai')).toBe(true);
     expect(isProviderId('gemini')).toBe(true);
+    expect(isProviderId('opencode')).toBe(true);
     expect(isProviderId('claude')).toBe(false);
     expect(isProviderId(undefined)).toBe(false);
     expect(isProviderId(null)).toBe(false);

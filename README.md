@@ -293,24 +293,35 @@ export, the richer your development history gets.
 
 ## Optional: enable the AI features
 
-Three features call the Anthropic API: **Storylines**, the **GM Briefing** on the
-dashboard, and **AI trade verdicts** in the Trade Center. Everything else works without
-a key.
+Four features call out to an AI service: **Storylines**, the **GM Briefing** on the
+dashboard, **AI trade verdicts** in the Trade Center, and the **staff chat**. Everything
+else works without a key.
 
-1. Get an API key at [console.claude.com](https://console.claude.com) (you'll need to add
-   a small amount of credit — each storyline generation costs a few cents)
-2. Open **⚙ Settings** in the app, paste the key, and hit **Verify and save**
+Four services are supported, and Settings lets you pick one:
+
+| Service | Key from | Notes |
+|---|---|---|
+| **Anthropic (Claude)** | [console.claude.com](https://console.claude.com) | What the app was built against. The staff chat uses tool calling with prompt caching, which is Anthropic's shape |
+| **OpenAI** | [platform.openai.com](https://platform.openai.com) | |
+| **Google Gemini** | [aistudio.google.com](https://aistudio.google.com) | |
+| **OpenCode Zen** | [opencode.ai/auth](https://opencode.ai/auth) | A gateway rather than a laboratory: one key reaching Claude, GPT, Gemini, DeepSeek, Kimi and the rest — several of them free |
+
+1. Get a key from whichever you prefer (on the paid ones you'll need a little credit —
+   each storyline generation costs a few cents)
+2. Open **⚙ Settings** in the app, choose the service, paste the key, and hit
+   **Verify and save**
 
 The key is checked against the API before it's stored, so a typo is caught immediately.
 In the desktop app it's encrypted against your OS keychain (Keychain on macOS, DPAPI on
 Windows); running from source without a keychain available, it falls back to a
 permission-restricted file and Settings tells you so.
 
-An `ANTHROPIC_API_KEY` environment variable (or a `.env` file) still works and takes
-priority, so existing setups are unchanged. If no key is present, the AI buttons explain
-how to set one up instead of failing.
+An environment variable (or a `.env` file) still works and takes priority, so existing
+setups are unchanged — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or
+`OPENCODE_API_KEY`, whichever matches the service you've chosen. If no key is present,
+the AI buttons explain how to set one up instead of failing.
 
-**What gets sent to Anthropic when you use these features:** your team's standings,
+**What gets sent to the service when you use these features:** your team's standings,
 recent results, stat leaders, prospect and contract summaries, and finances — all
 fictional game data. Nothing personal, and nothing at all if you never press those
 buttons.

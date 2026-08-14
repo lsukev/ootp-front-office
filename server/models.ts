@@ -48,6 +48,18 @@ export const FALLBACK_MODELS: Record<ProviderId, ModelChoice[]> = {
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextTokens: null, adaptiveThinking: null },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextTokens: null, adaptiveThinking: null },
   ],
+  /*
+   * Zen's catalogue is public — its models endpoint answers without a key — so
+   * this list is only ever seen when the machine is offline. Kept to the
+   * Claude models the app's prompts were written for, plus one that costs
+   * nothing, which is a fair sample of why somebody would want the gateway.
+   */
+  opencode: [
+    { id: 'claude-sonnet-5', name: 'claude-sonnet-5', contextTokens: null, adaptiveThinking: null },
+    { id: 'claude-opus-5', name: 'claude-opus-5', contextTokens: null, adaptiveThinking: null },
+    { id: 'claude-haiku-4-5', name: 'claude-haiku-4-5', contextTokens: null, adaptiveThinking: null },
+    { id: 'deepseek-v4-flash-free', name: 'deepseek-v4-flash-free', contextTokens: null, adaptiveThinking: null },
+  ],
 };
 
 export { DEFAULT_MODEL };
@@ -79,8 +91,13 @@ export async function listModels(
   provider: ProviderId = activeProvider()
 ): Promise<{ models: ModelChoice[]; live: boolean }> {
   const fallback = FALLBACK_MODELS[provider];
-  const key = getApiKey(provider);
-  if (!key) return { models: fallback, live: false };
+  /*
+   * Zen publishes its catalogue to anyone who asks — no key required — so the
+   * picker can show all sixty of them before you have an account, rather than
+   * the short offline list. Every other provider needs the key first.
+   */
+  const key = getApiKey(provider) ?? (provider === 'opencode' ? '' : null);
+  if (key === null) return { models: fallback, live: false };
 
   const fp = fingerprint(key);
   const hit = cache.get(provider);
@@ -92,7 +109,7 @@ export async function listModels(
     const models =
       provider === 'anthropic'
         ? await anthropicModels(key)
-        : // The other two report no capability tree, so nothing is claimed
+        : // The others report no capability tree, so nothing is claimed
           // about thinking — the chat only sends that parameter to Anthropic
           (await providerFor(provider).listModels(key)).map((m) => ({
             id: m.id,

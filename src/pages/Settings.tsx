@@ -6,7 +6,7 @@ import {
 import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode';
 
 interface ApiKeyStatus {
   configured: boolean;
@@ -50,12 +50,15 @@ const ENV_VAR: Record<ProviderId, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
+  opencode: 'OPENCODE_API_KEY',
 };
 
 const KEY_PLACEHOLDER: Record<ProviderId, string> = {
   anthropic: 'sk-ant-…',
   openai: 'sk-…',
   gemini: 'AIza…',
+  // Zen publishes no prefix, so nothing is implied about one
+  opencode: 'Your Zen key',
 };
 interface ModelChoice {
   id: string;
@@ -233,8 +236,9 @@ export function Settings({
             <strong>Service</strong>
             <div className="muted">
               Anthropic is what the app was built against, and the staff chat uses features only it
-              has — tool calling with prompt caching. The other two run the same prompts on your own
-              key if that is where your credit already is.
+              has — tool calling with prompt caching. The others run the same prompts on your own key
+              if that is where your credit already is. OpenCode Zen is a gateway rather than a
+              laboratory: one key reaching Claude, GPT, Gemini and the rest, several of them free.
             </div>
           </div>
           <select

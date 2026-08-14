@@ -173,6 +173,7 @@ const ENV_VAR: Record<ProviderId, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
+  opencode: 'OPENCODE_API_KEY',
 };
 
 function readKeyFile(): KeyFile {
@@ -342,6 +343,13 @@ const KEY_SHAPE: Record<ProviderId, { test: RegExp; hint: string }> = {
   openai: { test: /^sk-/, hint: 'OpenAI keys begin with "sk-".' },
   // Google's are a plain token with no prefix worth checking beyond length
   gemini: { test: /^.{20,}$/, hint: 'That looks too short for a Gemini key.' },
+  /*
+   * Zen does not document a prefix, so nothing is asserted about one. A guess
+   * here would reject a perfectly good key and the user would have no way to
+   * tell it was this check rather than the service — and the key is validated
+   * against the API a line later anyway, which is the test that matters.
+   */
+  opencode: { test: /^.{16,}$/, hint: 'That looks too short for an OpenCode Zen key.' },
 };
 
 /** Verifies a key against the API before saving, so a typo is caught here. */
