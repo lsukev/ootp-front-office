@@ -12,7 +12,9 @@ import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
 import { tradeVoice, type Persona } from './staff.js';
-import { calendarBriefing, currentGameDate, rulesBriefing, seasonYear, teamFinances } from './valuation.js';
+import {
+  VALUE_PERCENTILE_NOTE, calendarBriefing, currentGameDate, rulesBriefing, seasonYear, teamFinances,
+} from './valuation.js';
 
 export const aiRoutes = Router();
 
@@ -133,7 +135,7 @@ async function generateBriefing(orgId: number): Promise<void> {
     `these rules rather than the modern game. Be direct and decision-oriented: what happened, what ` +
     `needs a decision now, what to watch. Ground everything in the provided data with real numbers. ` +
     `Structure with short markdown headers (## Status, ## Decisions Needed, ## Watch List, ` +
-    `## Recommendation of the Week). Keep it under 500 words.`,
+    `## Recommendation of the Week). Keep it under 500 words. ${VALUE_PERCENTILE_NOTE}`,
     `Today is ${context.gameDate}, ${context.seasonYear} season. Organizational data:\n\n` +
       JSON.stringify(context, null, 1),
     16000,
@@ -199,6 +201,7 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined, leagueId?: nu
       `- Use the season line, and read it against the level it was produced at. OPS+ and ERA+ are ` +
       `scaled so 100 is average for that league, so they compare across levels; the raw rates do ` +
       `not. Say when a sample is too small to mean anything.\n` +
+    `- ${VALUE_PERCENTILE_NOTE}\n` +
     `- Judge the glove as well as the bat. "fielding" gives his rating at each position he can ` +
     `play, on the 20-80 scale, with his ceiling where he has one — "60 at 2B, 35 at SS ` +
     `(ceiling 55)" means he is a good second baseman who is not a shortstop yet and may never ` +

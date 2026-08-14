@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
+import { seasonFormByPlayer, type SeasonForm } from './form.js';
 import {
   contractsByPlayer, currentGameDate, leagueRules, mlbPercentiler, ON_ROSTER, seasonYear,
   teamFinances, valuesByPlayer,
@@ -46,7 +47,26 @@ interface Recommendation {
   reasons: string[];
 }
 
-function recommend(args: {
+/**
+ * The recommendations that amount to "commit to this man".
+ *
+ * These are the ones that must not rest on the Value figure alone, because
+ * that figure counts playing time: a long reliever with an earned run average
+ * over six can sit in the top tenth of the reliever pool purely for the number
+ * of innings he has soaked up, and the advice was telling its reader to extend
+ * him before somebody else did.
+ */
+const COMMITTING = new Set([
+  'Core keeper', 'Extension candidate', 'Extend now', 'Re-sign', 'Re-sign short-term',
+]);
+
+/**
+ * The value-based reading, before the season is allowed to speak.
+ *
+ * Kept whole and separate so the two arguments stay legible: this is what a
+ * man is worth on paper, and the gate below is what he has actually done.
+ */
+function recommendOnValue(args: {
   age: number;
   yearsAfterThis: number;
   reachingFA: boolean;
@@ -116,6 +136,49 @@ function recommend(args: {
 }
 
 /**
+ * The same reading, with this season's results given a veto.
+ *
+ * A man is not extended on his Value percentile alone. Where he has played
+ * enough for the line to mean anything and it is clearly below the league, the
+ * recommendation becomes "hold off" and says which two facts disagree — that
+ * is a genuinely useful thing to be told, and far better than either advising
+ * the extension or silently dropping him from the list.
+ *
+ * Where he has not played enough, the recommendation stands and says so. A man
+ * with nine innings has shown nothing, and treating that as evidence against
+ * him would be the same mistake pointing the other way.
+ */
+function recommend(
+  args: Parameters<typeof recommendOnValue>[0] & { form: SeasonForm | null }
+): Recommendation | null {
+  const rec = recommendOnValue(args);
+  if (!rec || !COMMITTING.has(rec.action)) return rec;
+
+  const form = args.form;
+  if (!form || form.verdict === 'unknown') {
+    return {
+      ...rec,
+      reasons: [
+        ...rec.reasons,
+        form?.line
+          ? `only ${form.line} so far — too little to judge, this is the value figure alone`
+          : 'no meaningful playing time yet — this is the value figure alone',
+      ],
+    };
+  }
+  if (form.verdict === 'poor') {
+    return {
+      action: 'Hold off',
+      reasons: [
+        `${rec.reasons[0]} — but ${form.line}`,
+        'the value figure counts playing time, not results; the season does not back an extension yet',
+      ],
+    };
+  }
+  return { ...rec, reasons: [...rec.reasons, `${form.line} backs it`] };
+}
+
+/**
  * What happens to a man when his deal runs out.
  *
  * "Expiring" and "leaving" are not the same thing, and the payroll page was
@@ -180,6 +243,9 @@ export function computeContracts(orgId: number) {
   const contracts = contractsByPlayer();
   const values = valuesByPlayer();
   const { overallPct, talentPct } = mlbPercentiler(values);
+  // What each man has actually done this season, so a percentile built out of
+  // playing time cannot recommend an extension by itself
+  const formByPlayer = seasonFormByPlayer(orgId);
   const rules = leagueRules(org.league_id);
   const { faMinYears, arbMinYears, hasFreeAgency, hasArbitration } = rules;
 
@@ -231,6 +297,7 @@ export function computeContracts(orgId: number) {
           : null;
       const oPct = overallPct(p.player_id);
       const tPct = talentPct(p.player_id);
+      const form = formByPlayer.get(p.player_id) ?? null;
       const rec = recommend({
         age: p.age,
         yearsAfterThis,
@@ -239,6 +306,7 @@ export function computeContracts(orgId: number) {
         overallPct: oPct,
         talentPct: tPct,
         salaryNow: c.salaryNow,
+        form,
       });
       const flags: string[] = [];
       if (c.extension) {
@@ -272,6 +340,14 @@ export function computeContracts(orgId: number) {
         arbYear,
         overallPct: oPct,
         talentPct: tPct,
+        /*
+         * Sent whether or not it changed the recommendation, because this is
+         * also what the assistants read. Handed a percentile and nothing else,
+         * the GM briefing described a 93rd-percentile Value as a man
+         * "performing at a 93rd-percentile MLB value" — a claim that figure
+         * never made, and one it had nothing in front of it to doubt.
+         */
+        seasonForm: form,
         flags,
         recommendation: rec,
       };

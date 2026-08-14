@@ -447,9 +447,26 @@ interface Percentiler {
 let percentilerCache: Percentiler | null = null;
 
 /**
+ * What these percentiles are, for every prompt that sends them.
+ *
+ * The GM briefing described a reliever with a 6.51 earned run average as
+ * "performing at a 93rd-percentile MLB value" — a claim that figure never
+ * made. It was handed the percentile, labelled value, with no statistics
+ * beside it, and narrated the only number it had. The fix is both halves: the
+ * season line now travels with it, and the prompt says plainly what the number
+ * is. Shared because the trade desk sends the same fields.
+ */
+export const VALUE_PERCENTILE_NOTE =
+  'NOTE ON overallPct AND talentPct: these are percentile ranks of OOTP\'s own Value and Talent ' +
+  'figures against comparable major leaguers. They are NOT measures of performance. OOTP\'s value ' +
+  'counts playing time, so a pitcher who has soaked up innings badly can rank high while pitching ' +
+  'poorly. Never describe them as how a player is performing or producing. When a seasonForm is ' +
+  'given, that is the performance — quote it, and say so if the two disagree.';
+
+/**
  * Percentile ranks against the players a man actually competes with. Built once
  * per import: it queries every MLB roster and sorts three pools, which is not
- * work worth repeating for each player card.
+ * work repeating for each player card.
  */
 export function mlbPercentiler(values: Map<number, PlayerValue>): Percentiler {
   if (percentilerCache) return percentilerCache;

@@ -123,8 +123,10 @@ export function Contracts({ orgId }: { orgId: number }) {
 
       <p className="muted hint-line">
         Sorted by urgency: expiring deals first, largest salary first. Value/Talent are percentiles against
-        MLB-rostered players in the same role — position players, starters and relievers ranked separately —
-        where value is current worth and talent is scouted ceiling.
+        MLB-rostered players in the same role — position players, starters and relievers ranked separately.
+        They are OOTP&rsquo;s own figures, and they are worth to the club rather than performance: playing time
+        counts towards them, so a man who has soaked up innings or plate appearances badly can still rank
+        high. That is why every recommendation here quotes what he has actually done this season.
       </p>
       <table>
         <thead>
