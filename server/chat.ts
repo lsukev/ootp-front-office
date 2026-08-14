@@ -8,6 +8,7 @@ import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
 import { calendarBriefing, currentGameDate, seasonYear } from './valuation.js';
+import { tradingBlock } from './tradingblock.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
 
 export const chatRoutes = Router();
@@ -274,6 +275,26 @@ export const TOOLS: Anthropic.Tool[] = [
       'user mentions into the team_id the other tools need.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
+  {
+    name: 'get_trading_block',
+    description:
+      "The players clubs have actually listed for trade, from the save's own trading block, with " +
+      'their season line, contract and age. This is who is genuinely available, as against who ' +
+      'might be pried loose — call it before proposing targets, and say when a man you are ' +
+      'suggesting is not on it. Omit team_id for the whole league.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        team_id: { type: 'number', description: 'Only this club’s listings.' },
+        level: {
+          type: 'string',
+          description: "'1' for MLB (the default), '2' AAA, '3' AA, or 'all' for every level.",
+        },
+        limit: { type: 'number', description: 'Max players, default 40, best first.' },
+      },
+      required: [],
+    },
+  },
 ];
 
 export async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -359,6 +380,16 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return cap(await callOwnApi(`leaderboards/${Number(input.team_id)}`));
     case 'get_teams':
       return cap(await callOwnApi('teams'));
+    case 'get_trading_block': {
+      const raw = input.level === undefined ? '1' : String(input.level);
+      return cap(
+        tradingBlock({
+          teamId: input.team_id ? Number(input.team_id) : undefined,
+          level: raw === 'all' ? 'all' : Number(raw),
+          limit: input.limit ? Number(input.limit) : undefined,
+        })
+      );
+    }
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

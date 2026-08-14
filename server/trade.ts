@@ -6,6 +6,7 @@ import { padDate } from './rosterops.js';
 import { contactProfiles } from './battedball.js';
 import { POSITION_CODES, glovesLine } from './gloves.js';
 import { computeBatting, computePitching, leagueBaseline } from './stats.js';
+import { blockedIds } from './tradingblock.js';
 
 export const tradeRoutes = Router();
 
@@ -608,6 +609,20 @@ export function tradeContext(orgId: number, giveIds: number[], getIds: number[])
   const values = valuesByPlayer();
   const mine = orgProfile(orgId, values);
 
+  /*
+   * Whether the men in this deal are actually on the market.
+   *
+   * It changes the read entirely and the desk had no way to know it. A club
+   * that has listed a player is telling you it wants to move him and the price
+   * starts lower; a club that has not is being asked for a favour. The save
+   * has carried this in the trading block all along.
+   */
+  const listed = blockedIds();
+  const onTheBlock = {
+    weGive: give.filter((p) => p && listed.has(p.player_id)).map((p) => p!.name),
+    weReceive: get.filter((p) => p && listed.has(p.player_id)).map((p) => p!.name),
+  };
+
   // The same totals the Compare cards put on screen, so a verdict citing a
   // number and the panel beside it can never disagree
   const giveTotals = summarizeSide(giveIds);
@@ -625,6 +640,8 @@ export function tradeContext(orgId: number, giveIds: number[], getIds: number[])
       salaryReceived: getTotals.totalSalary,
     },
     whoTheyWouldDisplace: incumbents,
+    /** Named here are the men their own clubs have listed for trade. */
+    onTheBlock,
     clubNeeds: mine
       ? { weakestPositions: mine.weakest, surplusPositions: mine.surplus }
       : null,

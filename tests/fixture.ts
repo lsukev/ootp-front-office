@@ -145,7 +145,9 @@ export function buildFixture(): string {
       is_on_secondary INTEGER, mlb_service_years REAL, mlb_service_days REAL,
       mlb_service_days_this_year REAL,
       designated_for_assignment INTEGER DEFAULT 0, days_on_dfa_left INTEGER DEFAULT 0,
-      is_on_waivers INTEGER DEFAULT 0
+      is_on_waivers INTEGER DEFAULT 0,
+      -- OOTP's trading block: 2 is listed for trade, 0 is everybody else
+      trade_status INTEGER DEFAULT 0
     );
     CREATE TABLE team_roster (team_id INTEGER, player_id INTEGER, list_id INTEGER);
     CREATE TABLE human_managers (

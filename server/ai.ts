@@ -11,6 +11,7 @@ import { TOOLS, runTool } from './chat.js';
 import { computeProspects } from './org.js';
 import { computeContracts } from './contracts.js';
 import { tradeContext } from './trade.js';
+import { tradingBlock } from './tradingblock.js';
 import { tradeVoice, type Persona } from './staff.js';
 import {
   VALUE_PERCENTILE_NOTE, calendarBriefing, currentGameDate, rulesBriefing, seasonYear, teamFinances,
@@ -103,6 +104,12 @@ function briefingContext(orgId: number) {
     standings,
     topProspects: { batters: prospects.batters.slice(0, 5), pitchers: prospects.pitchers.slice(0, 5) },
     contractSituations: contracts,
+    /*
+     * Who is genuinely for sale, which is most of what a deadline briefing is
+     * for. Trimmed to the best of them: the whole list runs to a hundred and
+     * fifty in a selling year, and the briefing is 500 words.
+     */
+    tradingBlock: tradingBlock({ limit: 12 }),
     injuries,
     finances: teamFinances(orgId),
     leagueRules: rulesBriefing(team.league_id as number, orgId),
@@ -202,6 +209,9 @@ function tradeSystem(voice: Persona, orgLabel: string | undefined, leagueId?: nu
       `scaled so 100 is average for that league, so they compare across levels; the raw rates do ` +
       `not. Say when a sample is too small to mean anything.\n` +
     `- ${VALUE_PERCENTILE_NOTE}\n` +
+    `- "onTheBlock" names the men in this deal whose own club has listed them for trade. A club ` +
+    `that has listed a player wants to move him and the price starts lower; a club that has not ` +
+    `is being asked for a favour and will charge for it. Say which of these you are dealing with.\n` +
     `- Judge the glove as well as the bat. "fielding" gives his rating at each position he can ` +
     `play, on the 20-80 scale, with his ceiling where he has one — "60 at 2B, 35 at SS ` +
     `(ceiling 55)" means he is a good second baseman who is not a shortstop yet and may never ` +
