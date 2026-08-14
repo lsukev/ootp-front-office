@@ -453,10 +453,24 @@ let percentilerCache: Percentiler | null = null;
  */
 export function mlbPercentiler(values: Map<number, PlayerValue>): Percentiler {
   if (percentilerCache) return percentilerCache;
+  /*
+   * Roster membership, not just the club's id on the player.
+   *
+   * OOTP parks a signing nobody has assigned yet on the parent club's team_id
+   * with no roster entry — the same thing that put sixteen-year-olds from the
+   * international complex in the major-league column of the depth chart. They
+   * were in these pools too, and a pool is a yardstick: 29 of the 309 arms
+   * being called major-league relievers averaged twenty years old, a stuff
+   * rating of 26 and a value of 254 against the real men's 841. Every genuine
+   * major leaguer was being measured against a field partly made of children,
+   * and every percentile in the app read high because of it.
+   */
   const rows = db
     .prepare(
-      `SELECT p.player_id, p.position, p.role FROM players p JOIN teams t ON t.team_id = p.team_id
-       WHERE t.level = 1 AND t.allstar_team = 0 AND p.retired = 0`
+      `SELECT p.player_id, p.position, p.role FROM players p
+       JOIN teams t ON t.team_id = p.team_id
+       JOIN players_roster_status rs ON rs.player_id = p.player_id
+       WHERE t.level = 1 AND t.allstar_team = 0 AND p.retired = 0 AND ${ON_ROSTER}`
     )
     .all() as Array<{ player_id: number; position: number; role: number }>;
 
