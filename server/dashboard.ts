@@ -198,6 +198,25 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
     ? (
         db
           .prepare(
+            /*
+             * One row per man, not one per streak.
+             *
+             * A hitter on a run is usually on both at once — reaching base
+             * every night and hitting most of them — so he came back twice and
+             * the strip spent its six places on three players. On this club it
+             * was Bellinger at 9 and 6, Luciano at 7 and 6, and half the panel
+             * saying the same two things.
+             *
+             * The on-base streak is the longer of the two by nature, so simply
+             * taking the longest would print "on-base streak" every time and
+             * never mention that a man is also hitting. Both are kept and the
+             * row says so.
+             *
+             * The roster filter is here for the same reason the depth chart
+             * has one: OOTP parks unassigned signings on the parent club, and
+             * a sixteen-year-old on a tear in the complex league is not news
+             * from the major-league dashboard.
+             */
             `SELECT s.player_id, s.streak_id, s.value, s.started,
                     p.first_name || ' ' || p.last_name AS name, p.position
              FROM players_streak s
@@ -205,17 +224,32 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
              WHERE p.team_id = ? AND s.has_ended = 0
                AND s.streak_id IN (${STREAK_HITTING}, ${STREAK_ON_BASE})
                AND s.value >= 5
-             ORDER BY s.value DESC LIMIT 6`
+               AND p.player_id IN (
+                 SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1
+               )
+             ORDER BY s.value DESC`
           )
-          .all(orgId) as Array<Record<string, number | string>>
-      ).map((r) => ({
-        player_id: r.player_id,
-        name: r.name,
-        positionName: POSITION_NAMES[r.position as number] ?? '',
-        games: r.value,
-        kind: r.streak_id === STREAK_HITTING ? 'hitting streak' : 'on-base streak',
-        since: r.started,
-      }))
+          .all(orgId, orgId) as Array<Record<string, number | string>>
+      ).reduce((out: Array<Record<string, unknown>>, r) => {
+        const kind = r.streak_id === STREAK_HITTING ? 'hitting' : 'on-base';
+        const existing = out.find((x) => x.player_id === r.player_id);
+        if (existing) {
+          // The shorter of his two streaks, named beside the longer one
+          existing.also = `${r.value}-game ${kind} streak`;
+          return out;
+        }
+        if (out.length >= 6) return out;
+        out.push({
+          player_id: r.player_id,
+          name: r.name,
+          positionName: POSITION_NAMES[r.position as number] ?? '',
+          games: r.value,
+          kind: `${kind} streak`,
+          since: r.started,
+          also: null,
+        });
+        return out;
+      }, [])
     : [];
 
   let hot: unknown[] = [];

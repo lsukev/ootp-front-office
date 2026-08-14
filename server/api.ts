@@ -456,9 +456,15 @@ api.get('/roster/:teamId', (req, res) => {
          -- dropped this year entirely. Each year carries exactly one split id,
          -- so leaving it out cannot double count. Batting and pitching are
          -- different — they really do split 1/2/3 — and keep their filter.
-         WHERE year = ? ${idFilter} GROUP BY player_id`
+         --
+         -- This club's level, for the same reason the batting above is: a man
+         -- who has shuttled fields at each, and adding them together describes
+         -- nobody. On this roster it was showing 587 innings and six errors
+         -- for a shortstop who has played 28 innings in the majors and made
+         -- none of them.
+         WHERE year = ? AND level_id = ? ${idFilter} GROUP BY player_id`
       )
-      .all(statYear, ...rosterIds) as Array<Record<string, number>>;
+      .all(statYear, teamRow?.level ?? 1, ...rosterIds) as Array<Record<string, number>>;
     for (const r of rows) {
       const chances = (r.po ?? 0) + (r.a ?? 0) + (r.e ?? 0);
       const innings = r.finn ?? 0;

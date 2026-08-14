@@ -31,7 +31,12 @@ interface DeadlineRead {
 }
 
 interface DashboardData {
-  streaks?: Array<{ player_id: number; name: string; positionName: string; games: number; kind: string; since: string }>;
+  streaks?: Array<{
+    player_id: number; name: string; positionName: string; games: number; kind: string;
+    since: string;
+    /** His other live streak, when he has one — "6-game hitting streak". */
+    also?: string | null;
+  }>;
   standings: Array<{ team_id: number; team: string; w: number; l: number; gb: number; streak: number }>;
   /** Absent on a save imported before this existed. */
   playoffs?: Playoffs | null;
@@ -204,10 +209,15 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
           {(data.streaks?.length ?? 0) > 0 && (
             <div className="streak-strip">
               {(data.streaks ?? []).map((s) => (
-                <span key={`${s.player_id}-${s.kind}`} className="streak-chip">
+                <span key={s.player_id} className="streak-chip">
                   <PlayerLink id={s.player_id}>{s.name}</PlayerLink>
                   <strong>{s.games}</strong>
-                  <span className="muted">game {s.kind}</span>
+                  <span className="muted">
+                    game {s.kind}
+                    {/* A man on a run is usually on both at once; saying so
+                        beats giving him two of the six places */}
+                    {s.also && <> · {s.also}</>}
+                  </span>
                 </span>
               ))}
             </div>

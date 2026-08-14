@@ -100,6 +100,9 @@ export function buildFixture(): string {
       -- The staff page finds today by asking for the last played game in the
       -- league, so the column has to be here as it is in the export
       league_id INTEGER,
+      -- The dashboard orders the fixture list by date then first pitch, and
+      -- reads game_type to keep exhibitions out of it
+      time INTEGER DEFAULT 1300, game_type INTEGER DEFAULT 0,
       -- Storylines reads the recent results off these
       runs0 INTEGER DEFAULT 0, runs1 INTEGER DEFAULT 0, innings INTEGER DEFAULT 9
     );
@@ -150,7 +153,9 @@ export function buildFixture(): string {
       designated_for_assignment INTEGER DEFAULT 0, days_on_dfa_left INTEGER DEFAULT 0,
       is_on_waivers INTEGER DEFAULT 0,
       -- OOTP's trading block: 2 is listed for trade, 0 is everybody else
-      trade_status INTEGER DEFAULT 0
+      trade_status INTEGER DEFAULT 0,
+      -- Days spent on the injured list this season, which the dashboard reads
+      dl_days_this_year INTEGER DEFAULT 0
     );
     CREATE TABLE team_roster (team_id INTEGER, player_id INTEGER, list_id INTEGER);
     CREATE TABLE human_managers (
@@ -229,6 +234,11 @@ export function buildFixture(): string {
     CREATE TABLE players_career_fielding_stats (
       player_id INTEGER, year INTEGER, level_id INTEGER, split_id INTEGER, position INTEGER,
       g INTEGER, gs INTEGER, ip REAL, po INTEGER, a INTEGER, e INTEGER, dp INTEGER
+    );
+    -- OOTP's own tracked runs. streak_id 0 is a hitting streak and 9 an
+    -- on-base one; a hot player is usually carrying both at once
+    CREATE TABLE players_streak (
+      player_id INTEGER, streak_id INTEGER, value INTEGER, started TEXT, has_ended INTEGER
     );
     CREATE TABLE projected_starting_pitchers (
       team_id INTEGER, starter_0 INTEGER, starter_1 INTEGER, starter_2 INTEGER, starter_3 INTEGER,

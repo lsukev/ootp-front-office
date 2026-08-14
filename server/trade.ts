@@ -530,12 +530,19 @@ function fieldingRecord(id: number, statYear: number | null): string | null {
   if (statYear === null || !tableExists('players_career_fielding_stats')) return null;
   const rows = db
     .prepare(
-      `SELECT year, position, SUM(g) AS g, SUM(po) AS po, SUM(a) AS a, SUM(e) AS e,
-              SUM(dp) AS dp, AVG(zr) AS zr
+      `SELECT year, position, level_id, SUM(g) AS g, SUM(po) AS po, SUM(a) AS a,
+              SUM(e) AS e, SUM(dp) AS dp, AVG(zr) AS zr
        FROM players_career_fielding_stats
        -- The season in progress is split 0; the ones behind it are split 1
+       --
+       -- Level is in the grouping rather than the filter. A man who spent half
+       -- the year at Triple-A has two records at the same position and they are
+       -- two different pieces of evidence: a clean glove in the minors is not a
+       -- clean glove in the majors, and merging them says he has one when the
+       -- desk cannot tell which
        WHERE player_id = ? AND year >= ? AND split_id IN (0, 1)
-       GROUP BY year, position HAVING g > 0 ORDER BY year DESC, g DESC`
+       GROUP BY year, position, level_id HAVING g > 0
+       ORDER BY year DESC, g DESC`
     )
     .all(id, statYear - 1) as Array<Record<string, number>>;
   if (rows.length === 0) return null;
@@ -546,7 +553,10 @@ function fieldingRecord(id: number, statYear: number | null): string | null {
       const pct = chances > 0 ? ((r.po + r.a) / chances).toFixed(3).replace(/^0/, '') : '—';
       const zr = r.zr ? `, ${r.zr > 0 ? '+' : ''}${r.zr.toFixed(2)} ZR` : '';
       const when = r.year === statYear ? 'this year' : `${r.year}`;
-      return `${POSITION_CODES[(r.position ?? 1) - 1] ?? '?'} ${when}: ${r.g}g, ${r.e}E, ${pct} fpct${zr}`;
+      // Named, so a Triple-A glove is never read as a major-league one
+      const where = LEVEL_NAMES[r.level_id] ?? `L${r.level_id}`;
+      return `${POSITION_CODES[(r.position ?? 1) - 1] ?? '?'} ${when} (${where}): ` +
+        `${r.g}g, ${r.e}E, ${pct} fpct${zr}`;
     })
     .join('; ');
 }
