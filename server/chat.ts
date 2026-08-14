@@ -7,7 +7,9 @@ import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
-import { calendarBriefing, currentGameDate, seasonYear } from './valuation.js';
+import {
+  VALUE_PERCENTILE_NOTE, calendarBriefing, currentGameDate, seasonYear,
+} from './valuation.js';
 import { tradingBlock } from './tradingblock.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
 
@@ -275,6 +277,60 @@ export const TOOLS: Anthropic.Tool[] = [
       'user mentions into the team_id the other tools need.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
+  /*
+   * The four below reach analysis the app already does and the chat could not.
+   * Asked whether to buy or sell — the question a GM asks most — it had the
+   * standings and had to reason from them, while the dashboard beside it was
+   * carrying a worked postseason probability the whole time.
+   */
+  {
+    name: 'get_dashboard',
+    description:
+      'The club at a glance: playoff picture (games back, wild-card rank, magic number), the ' +
+      'buy/hold/sell read with the postseason odds behind it and days to the deadline, recent ' +
+      'and upcoming games, hot and cold players, injuries. Call this for "how are we doing", ' +
+      '"should we buy or sell", or anything about the race.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
+  {
+    name: 'get_contracts',
+    description:
+      "Every contract on the club: salary, years left, service time, whether he is leaving or " +
+      'still controlled, and a recommendation (extend, re-sign, let walk, hold off) with the ' +
+      "season line behind it. Use this for extensions, who is expiring, and who is worth keeping " +
+      '— get_payroll has the money but not the decisions.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
+  {
+    name: 'get_free_agents',
+    description:
+      'Who can be signed now, who reaches free agency after this season, the club’s holes, and ' +
+      'what money there is to spend.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
+  {
+    name: 'get_roster_crunch',
+    description:
+      'Roster pressure: 40-man count, players out of options, Rule 5 exposure, and men who will ' +
+      'need a decision. Use this before suggesting a call-up or a signing that needs a spot.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
   {
     name: 'get_trading_block',
     description:
@@ -380,6 +436,14 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return cap(await callOwnApi(`leaderboards/${Number(input.team_id)}`));
     case 'get_teams':
       return cap(await callOwnApi('teams'));
+    case 'get_dashboard':
+      return cap(await callOwnApi(`dashboard/${Number(input.team_id) || defaultOrgId()}`));
+    case 'get_contracts':
+      return cap(await callOwnApi(`contracts/${Number(input.team_id) || defaultOrgId()}`));
+    case 'get_free_agents':
+      return cap(await callOwnApi(`free-agents/${Number(input.team_id) || defaultOrgId()}`));
+    case 'get_roster_crunch':
+      return cap(await callOwnApi(`roster-crunch/${Number(input.team_id) || defaultOrgId()}`));
     case 'get_trading_block': {
       const raw = input.level === undefined ? '1' : String(input.level);
       return cap(
@@ -425,9 +489,28 @@ function systemPrompt(orgId: number, persona: Persona): string {
   return [
     personaBrief(persona, orgId),
     '',
+    /*
+     * Brevity, said in a way that can actually be obeyed.
+     *
+     * "Short messages" was the whole of the old instruction and it lost every
+     * argument with the five separate rules below it that each ask for more —
+     * cite the numbers, explain the surprising ones, break out the stint, name
+     * the man in full. Answers came back as essays with headings. A stated
+     * ceiling and an explicit list of what to cut are checkable; "short" is
+     * not.
+     */
     'This is a text-message conversation, so write like one: short messages, plain sentences, no',
     'greeting or sign-off on every reply. You can be dry and opinionated the way a trusted analyst',
     'is with a colleague — but never invent a number to be interesting.',
+    '',
+    'BE BRIEF. Under 120 words unless the GM asks for more. One or two short paragraphs. A single',
+    'sentence is often the entire answer and a good one — give it and stop. Go longer only when',
+    'asked for a rundown, a plan, or several players compared, and stop the moment the question is',
+    'answered rather than rounding the reply off.',
+    '',
+    'Leave out: restating the question, the men you considered and rejected, caveats the GM already',
+    'knows, closing summaries, and offers of further help. No headings. Bullets only for a list of',
+    'players or steps that was actually asked for.',
     '',
     `They run the ${label} (team_id ${orgId}). It is the ${year} season${date ? `, currently ${date}` : ''}.`,
     '',
@@ -446,15 +529,23 @@ function systemPrompt(orgId: number, persona: Persona): string {
     'from memory: real-world knowledge about a same-named player is almost always wrong here,',
     'because the sim has diverged. If the tools cannot answer something, say so plainly.',
     '',
-    'Lead with the answer, then the evidence.',
-    'Cite the numbers you used. Keep it conversational — no headers or bullet lists unless the',
-    'user asks for a rundown of several things. When a number is surprising, say why it might be',
-    '(small sample, park, level) rather than presenting it flatly.',
+    'Lead with the answer, then the evidence. Back it with the one or two numbers that carry the',
+    'claim, not every number you looked at. When one of them is surprising, say why in a clause —',
+    'small sample, park, level — rather than a paragraph.',
     '',
-    'A player may have split the season between clubs. His season line is the whole of it, both',
-    'clubs together, and his dossier breaks it out by stint — so when somebody arrived mid-season,',
-    'say how he has hit since the trade as well as across the year. The two are different questions',
-    'and the split is usually the more interesting one.',
+    /*
+     * Rewritten because the app changed underneath it. Season lines used to be
+     * summed across every level a man played at, and this said so. They are now
+     * read at one level, which is the fix for a reader being sold a Triple-A
+     * season as a major-league one — but a prompt still describing the old
+     * behaviour would have the model narrating the numbers wrongly instead.
+     */
+    'A season line is one level, not a career total. A man who has shuttled has a separate line at',
+    'each, and every tool reports the one for the level being asked about — a roster line is what he',
+    'did on that roster. His dossier holds the rest, and search results carry a per-club breakdown',
+    'where he moved mid-season. If he arrived recently, say how he has gone since arriving; that is',
+    'usually the more interesting number, and never present a line from one level as though it were',
+    'another.',
     '',
     'A contract ending is not the same as a player leaving. Every player carries a "control"',
     'field saying which it is: "leaving" reaches free agency, "arbitration" means the club keeps',
@@ -465,9 +556,11 @@ function systemPrompt(orgId: number, persona: Persona): string {
     '',
     'Useful context on the numbers: OPS+, wRC+, and ERA+ are scaled so 100 is league average and',
     'are park- and league-adjusted, so they compare players across teams and levels fairly.',
-    'Minor-league stat lines are much weaker evidence than major-league ones. The app\'s lineup',
-    'and value rankings come from OOTP\'s own ratings, which are projections of talent rather than',
-    'a record of what the player has done this season — mention that distinction when it matters.',
+    'Minor-league stat lines are much weaker evidence than major-league ones.',
+    '',
+    // The same warning the briefing and the trade desk carry. The chat reads
+    // the same fields and can make the same claim
+    VALUE_PERCENTILE_NOTE,
     '',
     'Name a player in full — first name and surname — the first time you mention him in a reply.',
     'After that, talk about him however you like. The app links names to their cards and files your',
