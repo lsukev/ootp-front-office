@@ -17,10 +17,17 @@ import { IDS } from './fixture.js';
  * done and never offered.
  */
 
+/*
+ * These tools call back into the app over HTTP, so an unreachable server means
+ * a fetch with nothing to time it out. Bounded explicitly: a hanging suite
+ * tells you far less than a failing one, and takes an hour to do it.
+ */
+const LIMIT = 30_000;
+
 beforeAll(async () => {
   // request() starts the server the tools call back into and publishes its port
   await request('/api/status');
-});
+}, LIMIT);
 
 const argsFor = (name: string): Record<string, unknown> => {
   if (name === 'search_players') return { q: 'Fill', limit: 5 };
@@ -64,5 +71,5 @@ describe('every offered tool', () => {
       }
     }
     expect(broken, `tools declared but not answering: ${broken.join('; ')}`).toEqual([]);
-  });
+  }, LIMIT);
 });

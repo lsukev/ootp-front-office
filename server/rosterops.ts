@@ -512,6 +512,41 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
     return res.json({ ...league, total: 0, batters: [], pitchers: [] });
   }
 
+  /*
+   * How this save marks the class, which is not the same in every save.
+   *
+   * A league whose amateurs are free-floating players — the ordinary case —
+   * has them flagged draft_eligible, and that is what to read. A league that
+   * runs its own high-school and college competitions does not: its amateurs
+   * are rostered players on school clubs, OOTP works eligibility out from
+   * their class when the draft comes round, and the flag stays at zero.
+   *
+   * A reader's export settled it. His pool players carried draft_eligible = 0
+   * with hsc_status 4 and his own league in draft_league_id, while the 123 the
+   * flag did pick out belonged, every one, to a second league's draft. So the
+   * flag is used where it says something and the school class where it does
+   * not — 4 is a high-school senior, 9 and 10 the college upperclassmen.
+   *
+   * The class rule reproduced his published pool exactly: 298 men in those
+   * classes, two of them with a career-ending injury, and OOTP's own screen
+   * said 296.
+   */
+  const eligibleByFlag = (db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM players
+       WHERE draft_eligible = 1 AND retired = 0 AND hidden = 0
+         AND COALESCE(picked_in_draft, 0) != 1
+         AND COALESCE(draft_league_id, 0) IN (0, ?)`
+    )
+    .get(league.league_id) as { n: number }).n;
+
+  const classRule =
+    `COALESCE(p.draft_league_id, 0) = ? AND p.hsc_status IN (4, 9, 10)
+     AND COALESCE(p.injury_career_ending, 0) != 1`;
+  const flagRule =
+    `p.draft_eligible = 1 AND COALESCE(p.draft_league_id, 0) IN (0, ?)`;
+  const poolRule = eligibleByFlag > 0 ? flagRule : classRule;
+
   const rows = db
     .prepare(
       `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.age, p.position, p.role,
@@ -530,26 +565,14 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
        /*
-        * Eligible, still on the board, and for THIS league's draft.
-        *
-        * The eligibility flag alone was doing all the work and it is not
-        * enough for either half of that. It stays set on a man after he has
-        * been taken — in the save this was checked against, 185 players
-        * carried both it and picked_in_draft, every one of them stamped with
-        * this year as his draft year — so the board went on offering men who
-        * were already gone.
-        *
-        * And a universe with high-school and college leagues of its own runs
-        * more than one draft. A reader whose amateurs play in feeder leagues
-        * found the board listing 123 players, none of whom were in the pool
-        * his game had just published, while none of his 296 were on it.
-        * draft_league_id is the export's own answer to which draft a man
-        * belongs to; an unset value is honoured rather than filtered out,
-        * since a save that does not populate it should still get a board.
+        * Still on the board, and for THIS league's draft, by whichever rule
+        * this save answers to. The eligibility flag also stays set after a man
+        * has been taken — 185 players in one save carried both it and
+        * picked_in_draft, every one stamped with this year as his draft year —
+        * so the board went on offering men who were already gone.
         */
-       WHERE p.draft_eligible = 1 AND p.retired = 0 AND p.hidden = 0
-         AND COALESCE(p.picked_in_draft, 0) != 1
-         AND COALESCE(p.draft_league_id, 0) IN (0, ?)`
+       WHERE ${poolRule} AND p.retired = 0 AND p.hidden = 0
+         AND COALESCE(p.picked_in_draft, 0) != 1`
     )
     .all(league.league_id) as Array<Record<string, number | string | null>>;
 
@@ -625,11 +648,19 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
     needs,
     excluded: {
       alreadyPicked: excluded.alreadyPicked ?? 0,
-      otherDraft: excluded.otherDraft ?? 0,
+      /*
+       * Only meaningful while the flag is what the board reads. Once it has
+       * fallen back to the school class, the men the flag picked out belong to
+       * another league's draft by definition, and saying so on this page would
+       * be reporting a fact about somebody else's club.
+       */
+      otherDraft: eligibleByFlag > 0 ? excluded.otherDraft ?? 0 : 0,
       // Eligible, unpicked, in this draft, but carrying no scouted ceiling —
       // there is nothing to rank him on
       unrated: rows.length - prospects.length,
     },
+    /** Which rule found this class, so the page can say when it is the class. */
+    poolRule: eligibleByFlag > 0 ? 'flag' : 'class',
     prospects: withAdvice,
   });
 });

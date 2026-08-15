@@ -140,6 +140,10 @@ export function buildFixture(): string {
       -- Set once a man has been taken, and stamped with which draft he belongs
       -- to. A universe with high-school and college leagues runs more than one
       picked_in_draft INTEGER DEFAULT 0, draft_league_id INTEGER DEFAULT 0,
+      -- School class. A league with its own high-school and college
+      -- competitions never sets draft_eligible; eligibility is the class:
+      -- 4 is a high-school senior, 9 and 10 the college upperclassmen
+      hsc_status INTEGER DEFAULT 0, injury_career_ending INTEGER DEFAULT 0,
       injury_is_injured INTEGER DEFAULT 0, injury_dtd_injury INTEGER DEFAULT 0,
       injury_left INTEGER DEFAULT 0,
       -- Player Search reads this to offer free agents, and had no coverage at

@@ -27,6 +27,11 @@ interface DraftData {
    * app had missed his class or ruled it out.
    */
   excluded?: { alreadyPicked: number; otherDraft: number; unrated: number };
+  /**
+   * 'flag' where OOTP marks the class itself, 'class' where the league runs its
+   * own school competitions and eligibility has to be read from the year group.
+   */
+  poolRule?: 'flag' | 'class';
   needs: Array<{ position: number; positionName: string; bestValue: number | null }>;
   prospects: DraftProspect[];
 }
@@ -273,6 +278,12 @@ export function Draft({ orgId }: { orgId: number }) {
             </>
           )}
           {leftOut(data.excluded)}
+          {/* Said out loud because it is a judgement rather than a lookup, and
+              the reader is the one who can tell us if it has the class wrong */}
+          {data.poolRule === 'class' && (
+            <> Your league runs its own school competitions, so the class is read
+              from school year — seniors and college upperclassmen.</>
+          )}
         </span>
       </div>
 
