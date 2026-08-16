@@ -140,6 +140,18 @@ leagueRoutes.get('/players', (req, res) => {
   const q = String(req.query.q ?? '').trim();
   const level = req.query.level === 'all' ? null : Number(req.query.level ?? 1);
   const orgId = req.query.orgId ? Number(req.query.orgId) : null;
+  /*
+   * Whose eyes this is being read through, which is not the same as the org
+   * filter: the chat searches other clubs' players constantly and still wants
+   * to know which of them are its own. Falls back to the club the save is
+   * being played as, so the flag is right even when nobody passed anything.
+   */
+  const viewerOrg =
+    (req.query.viewer ? Number(req.query.viewer) : null) ??
+    orgId ??
+    ((db.prepare(`SELECT team_id FROM teams WHERE human_team = 1 LIMIT 1`).get() as
+      | { team_id: number }
+      | undefined)?.team_id ?? null);
   const group = req.query.group === 'pitching' ? 'pitching' : 'batting';
   const freeAgents = req.query.freeAgents === '1';
   const limit = Math.min(Number(req.query.limit ?? 100), 300);
@@ -237,10 +249,26 @@ leagueRoutes.get('/players', (req, res) => {
 
   const rows = db
     .prepare(
+      /*
+       * The organisation travels with every player, named.
+       *
+       * A reader asked his assistant about a man at Norfolk and was told he
+       * was not in the organisation — it had the club filed under the Astros,
+       * from real baseball, and nothing in the row it was reading said
+       * otherwise. The club was here; whose club it is was not. So a model had
+       * to supply that from memory, and memory is the one source that is
+       * certainly wrong about a simulated league.
+       *
+       * Naming it is the fix that holds whatever model is answering. Telling a
+       * model not to guess is advice; leaving it nothing to guess at is not.
+       */
       `SELECT p.player_id, p.first_name, p.last_name, p.age, p.position, p.role, p.bats, p.throws,
               p.team_id, p.free_agent, t.level, t.league_id,
-              CASE WHEN t.team_id IS NULL THEN NULL ELSE ${teamLabel} END AS team, t.abbr
+              CASE WHEN t.team_id IS NULL THEN NULL ELSE ${teamLabel} END AS team, t.abbr,
+              p.organization_id,
+              CASE WHEN o.team_id IS NULL THEN NULL ELSE ${teamLabel.replace(/t\./g, 'o.')} END AS organization
        FROM players p LEFT JOIN teams t ON t.team_id = p.team_id
+       LEFT JOIN teams o ON o.team_id = p.organization_id
        ${ptJoin}
        WHERE ${ptWhere.join(' AND ')}
        ORDER BY ${orderBy}
@@ -354,6 +382,14 @@ leagueRoutes.get('/players', (req, res) => {
       team: r.team ?? (r.free_agent === 1 ? 'Free Agent' : null),
       abbr: r.abbr,
       levelName: r.level !== null ? LEVEL_NAMES[r.level as number] ?? 'R' : null,
+      /*
+       * Whose player he is, and whether he is yours. Both stated so that
+       * neither has to be recalled: an affiliate's parent is not something a
+       * model can know about a simulated league, and in a save that runs a few
+       * seasons the affiliations move anyway.
+       */
+      organization: r.organization ?? (r.free_agent === 1 ? 'Free Agent' : null),
+      inYourOrg: viewerOrg === null ? null : r.organization_id === viewerOrg,
       stats: statsById.get(r.player_id as number) ?? null,
       // Present only when he played for more than one club this year
       stints: stintsById.get(r.player_id as number) ?? undefined,

@@ -104,9 +104,14 @@ playerRoutes.get('/player/:id', (req, res) => {
 
   const p = db
     .prepare(
+      // The parent club as well as the club. An affiliate's owner is not
+      // something a model can know about a simulated league, and it moves
+      // between seasons in any save that runs a few
       `SELECT p.*, t.name AS team_name, t.nickname AS team_nickname, t.level AS team_level,
-              t.league_id AS team_league
+              t.league_id AS team_league,
+              o.name AS org_name, o.nickname AS org_nickname
        FROM players p LEFT JOIN teams t ON t.team_id = p.team_id
+       LEFT JOIN teams o ON o.team_id = p.organization_id
        WHERE p.player_id = ?`
     )
     .get(id) as Record<string, unknown> | undefined;
@@ -392,6 +397,8 @@ playerRoutes.get('/player/:id', (req, res) => {
     team: p.team_name
       ? `${p.team_name} ${p.team_nickname}${p.team_level ? ` (${LEVEL_NAMES[p.team_level as number] ?? ''})` : ''}`
       : (p.free_agent === 1 ? 'Free Agent' : null),
+    /** Whose player he is — the parent club, named rather than inferred. */
+    organization: p.org_name ? `${p.org_name} ${p.org_nickname}` : (p.free_agent === 1 ? 'Free Agent' : null),
     serviceYears: rosterStatus?.mlb_service_years ?? null,
     overallPct: overallPct(id),
     talentPct: talentPct(id),
