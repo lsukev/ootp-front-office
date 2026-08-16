@@ -1,0 +1,7 @@
+OOTP Front Office 0.23.1 — everything since 0.23.0
+
+Fixed — The assistants no longer have to remember which clubs are yours. A reader asked about a player at Norfolk and was told he was not in the organisation; the assistant had the club filed under the Astros, from real baseball. His export was right and always had been — Norfolk's parent is Baltimore, in the very column the app reads. The assistant had answered from what it knows of the real game instead of looking, and he found it corrected itself when he switched from Haiku to Opus, which is what that failure looks like from outside.
+
+Mostly the model, then. But the app made it easy: it named the club you run and stopped there, so "is this man in my organisation" could only be answered by fetching three hundred clubs and reading the parent of each — and a model that would rather not is a model that guesses. Two changes, because an instruction not to guess is only advice. The staff chat is now told your organisation top to bottom, with team ids, the way it is already told the calendar. And every player the app hands an assistant carries his parent club by name, with a flat statement of whether he is one of yours. An assistant that now gets an affiliation wrong has to contradict the line it is quoting, which is a rarer and harder mistake than filling a silence.
+
+Worth having whichever model you use: affiliations in a save are not the real-world ones, and in any league that runs a few seasons they move.
