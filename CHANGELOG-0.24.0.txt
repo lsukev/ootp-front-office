@@ -1,0 +1,9 @@
+OOTP Front Office 0.24.0 — everything since 0.23.1
+
+New — The batting order is now searched, not just written. The slot rule was tested against every one of the 362,880 ways to order a real club's nine hitters, each scored with an exact expected-runs model over the 24 base-out states. The rule's card came out 16,718th — the top 4.6% of all possible orders, which is a good card — and worth 736.7 runs a season against a true optimum of 746.2. About a win short, then. So the rule still writes the card and a pairwise search now polishes the sequence, seeded from the rule's own output: it can never return an order the rule beats, it settles in a hundred-odd tries rather than a third of a million, and the result still looks like an order a person would recognise. On the club it was built against it moves the card three and a half runs a season, in about half a second.
+
+The gain is printed on the lineup page with the model's blind spots named — it leaves out double plays and stolen bases — because it is a claim you can check, and a card that quietly rearranges itself is unnerving.
+
+Rates are pulled hard toward the league average by sample size before the search sees them. A search is exactly the machinery to take a fortnight of luck seriously and bat it cleanup, so a man newly called up is read as close to average until he has shown otherwise. Where a club has barely started its season the search is skipped entirely, and where it finds less than a run it leaves the card alone.
+
+Worth saying plainly: the whole distance from the best possible order to the worst is about thirty runs a season. Who plays matters far more than the order they bat in, and no lineup tool can do much about that.
