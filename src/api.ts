@@ -392,6 +392,14 @@ export interface LineupResponse {
   /** What the league itself says, regardless of the override. */
   leagueUsesDH?: boolean;
   dhOverridden?: boolean;
+  /**
+   * What the pairwise search did to the card the slot rule wrote. Null when it
+   * was skipped — too little season played — or moved nobody worth moving.
+   */
+  runSearch?: {
+    seededRuns: number; optimisedRuns: number; gain: number;
+    evaluations: number; moved: boolean;
+  } | null;
   lineup: LineupSlot[];
   bench: Array<{ player_id: number; name: string; positionName: string; off: number }>;
   /** On the roster but out tonight — named so a missing star reads as injured

@@ -157,6 +157,17 @@ export function Lineup({ teamId }: { teamId: number }) {
                 whole season, so the vs-LHP/RHP choice only moves the defensive assignment.{' '}
               </>
             )}
+            {/* Said out loud because it is a claim the reader can check, and
+                because a card that quietly rearranges itself is unnerving */}
+            {data.runSearch?.moved && data.runSearch.gain >= 1 && (
+              <>
+                Then searched: swapping pairs against an expected-runs model moved this card from{' '}
+                {data.runSearch.seededRuns.toFixed(1)} to {data.runSearch.optimisedRuns.toFixed(1)} runs
+                a season,{' '}
+                <strong>+{data.runSearch.gain.toFixed(1)}</strong> in {data.runSearch.evaluations} tries. The model
+                leaves out double plays and steals, so read that as an estimate.{' '}
+              </>
+            )}
             {data.dhOverridden ? (
               <strong>
                 {data.usesDH
