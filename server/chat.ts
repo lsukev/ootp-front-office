@@ -8,7 +8,7 @@ import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, stripProviderExtras, toolLoopFor, type ProviderId } from './providers.js';
 import { supportsAdaptiveThinking } from './models.js';
 import {
-  VALUE_PERCENTILE_NOTE, calendarBriefing, currentGameDate, seasonYear,
+  VALUE_PERCENTILE_NOTE, calendarBriefing, currentGameDate, orgBriefing, seasonYear,
 } from './valuation.js';
 import { tradingBlock } from './tradingblock.js';
 import { personaBrief, personaById, personasFor, type Persona } from './staff.js';
@@ -522,6 +522,14 @@ function systemPrompt(orgId: number, persona: Persona): string {
      * than leave behind a tool somebody has to think to call.
      */
     team ? calendarBriefing(team.league_id) : '',
+    '',
+    /*
+     * Named up front rather than left to a tool call. Asked about a man at an
+     * affiliate, an assistant answered that he was not in the organisation —
+     * it had the club down as somebody else's from real baseball, and never
+     * looked. The save says otherwise and always did.
+     */
+    orgBriefing(orgId),
     '',
     'Everything you say about this league must come from the tools. They read the actual save, so',
     'they are the only source of truth here — this is a simulated league, and your training data',

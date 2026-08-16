@@ -195,6 +195,46 @@ export function calendarBriefing(leagueId: number): string {
   );
 }
 
+/**
+ * The club and its affiliates, named, for a system prompt.
+ *
+ * A reader asked his assistant about a man at Norfolk and was told he was not
+ * in the organisation — the assistant had it down as an Astros affiliate. The
+ * export was right: Norfolk's parent is Baltimore, plainly, in the column the
+ * teams tool returns. The assistant had simply answered from what it knew of
+ * real baseball rather than looking, and a smaller model does that more
+ * readily than a large one.
+ *
+ * The app made it easy. It named the club the reader runs and stopped there,
+ * so "is this player in my organisation" could only be answered by fetching
+ * three hundred clubs and reading the parent column of each — and a model that
+ * would rather not is a model that guesses. Eight lines of prose removes the
+ * question. Affiliations move between seasons in any save that runs long
+ * enough, so this is worth stating even when a model would have got it right.
+ */
+export function orgBriefing(orgId: number): string {
+  if (!tableExists('teams')) return '';
+  const clubs = db
+    .prepare(
+      `SELECT team_id, name, nickname, level FROM teams
+       WHERE team_id = ? OR parent_team_id = ?
+       ORDER BY level, team_id`
+    )
+    .all(orgId, orgId) as Array<{ team_id: number; name: string; nickname: string; level: number }>;
+  if (clubs.length === 0) return '';
+
+  const said = clubs.map((c) => {
+    const label = c.name === c.nickname ? c.name : `${c.name} ${c.nickname}`;
+    return `${label} (${LEVEL_NAMES[c.level] ?? `L${c.level}`}, team_id ${c.team_id})`;
+  });
+  return (
+    `YOUR ORGANISATION, top to bottom: ${said.join('; ')}. ` +
+    'Those clubs and no others. A player anywhere else belongs to somebody else, whatever you ' +
+    'may know of the real clubs of the same names — affiliations in a save are not the ' +
+    'real-world ones and they move between seasons.'
+  );
+}
+
 export function rulesBriefing(leagueId: number, teamId?: number): string {
   const r = leagueRules(leagueId);
   const parts: string[] = [];
