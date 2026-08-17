@@ -457,6 +457,9 @@ th.sortable button {
 th.sortable button:hover { color: var(--text); }
 th.sortable.sorted button { color: var(--accent); }
 .sort-arrow { font-size: 9px; margin-left: 4px; vertical-align: middle; }
+/* The label inside a sortable header explains itself AND sorts, so it takes
+   the clickable cursor rather than the question mark Tip normally shows. */
+th.sortable .tip { cursor: pointer; }
 
 
 .rec-action { color: var(--text); }

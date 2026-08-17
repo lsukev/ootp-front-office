@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiGet, type Org } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
 import { ColumnPicker } from '../ColumnPicker';
+import { define } from '../glossary';
 import {
   DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, loadColumns, plusColor, saveColumns,
   type StatGroup,
@@ -125,12 +126,27 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
       if (sort!.dir === first) return setSort({ key: sortKey, dir: first === 'asc' ? 'desc' : 'asc' });
       return setSort(null);
     };
+    /*
+     * The hover explanation stays, and it is the same one Th renders.
+     *
+     * The first version of this replaced it with the browser's title
+     * attribute, which meant every stat column silently lost the definition it
+     * had — the sort arrived and the explanations left. Tip is a plain span
+     * with a CSS hover, so it sits inside the button perfectly happily; the
+     * glossary is consulted exactly as Th does it, so a column documented
+     * there is documented here without being told twice.
+     */
+    const label = typeof children === 'string' ? children : null;
+    const definition = tip ?? (label ? define(label) : undefined);
+    const inner = (
+      <>
+        {definition ? <Tip label={children} tip={definition} /> : children}
+        {active && <span className="sort-arrow">{sort!.dir === 'asc' ? '▲' : '▼'}</span>}
+      </>
+    );
     return (
       <th className={active ? 'sortable sorted' : 'sortable'}>
-        <button type="button" onClick={() => { setOffset(0); cycle(); }} title={tip}>
-          {children}
-          {active && <span className="sort-arrow">{sort!.dir === 'asc' ? '▲' : '▼'}</span>}
-        </button>
+        <button type="button" onClick={() => { setOffset(0); cycle(); }}>{inner}</button>
       </th>
     );
   }
