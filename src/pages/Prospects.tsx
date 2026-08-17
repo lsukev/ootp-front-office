@@ -20,7 +20,11 @@ export function Prospects({ orgId }: { orgId: number }) {
     <div>
       <p className="muted hint-line">
         Minor leaguers ranked by promotion signal: production vs level average, age vs level average, and
-        current-vs-potential ratings. Sample minimums: 60 PA / 15 IP this season.
+        current-vs-potential ratings. Sample minimums: 60 PA / 15 IP this season.{' '}
+        <strong>Demote</strong> marks a man clearly below his level who is not young for it — it asks a
+        bigger gap and a longer look than promote does, because sending somebody down is the easier call
+        to get wrong, and it is never shown for the lowest club in the organisation.{' '}
+        Those sit at the bottom of each table, since the order runs on the same signal.
       </p>
       <h2>Batters</h2>
       <ProspectTable prospects={data.batters} kind="batter" />

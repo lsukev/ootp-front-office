@@ -308,6 +308,14 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
   const batters: unknown[] = [];
   const pitchers: unknown[] = [];
 
+  /*
+   * The bottom of the organisation, so nobody is told to send a man below it.
+   * Read rather than assumed: an org may have two rookie clubs and no Single-A,
+   * or a level this app has never seen, and "demote" only means something if
+   * there is somewhere for him to go.
+   */
+  const lowestLevel = Math.max(...[...teams.values()].map((t) => t.level));
+
   for (const p of orgPlayers(orgId)) {
     const team = teams.get(p.team_id);
     if (!team || team.level <= 1) continue; // only minor leaguers
@@ -340,6 +348,18 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
       const kDiff = base.avgKpct !== null ? kpct - base.avgKpct : 0;
       const reasons: string[] = [];
       if (eraDiff >= 1.0) reasons.push(`ERA ${era.toFixed(2)} vs level avg ${base.avgEra!.toFixed(2)}`);
+      /*
+       * The case against him, said out loud. Without this a man carried a
+       * DEMOTE badge beside an empty column: the app asserting something and
+       * showing nothing for it, which is the one thing every other
+       * recommendation in here is careful not to do.
+       */
+      if (eraDiff <= -1.25) {
+        reasons.push(`ERA ${era.toFixed(2)} against a level average of ${base.avgEra!.toFixed(2)}`);
+        if (ageDiff !== null && ageDiff < 0) {
+          reasons.push(`and ${Math.abs(ageDiff).toFixed(1)} years older than the level`);
+        }
+      }
       if (kDiff >= 0.05) reasons.push(`K% ${(kpct * 100).toFixed(0)} vs level avg ${(base.avgKpct! * 100).toFixed(0)}`);
       if (ageDiff !== null && ageDiff >= 1.5) reasons.push(`young for level (${p.age} vs avg ${base.avgAge!.toFixed(1)})`);
       if (cur !== null && pot !== null && pot - cur <= 5) reasons.push('near ceiling — development mostly done');
@@ -348,7 +368,19 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
         ...common, role: p.role, ip: Number(ip.toFixed(1)), era: Number(era.toFixed(2)),
         kpct: Number((kpct * 100).toFixed(1)), war: s.war ?? 0,
         score: Number(score.toFixed(1)), reasons,
-        signal: eraDiff >= 1.0 && ip >= 30 ? 'promote' : score > 5 ? 'watch' : null,
+        /*
+         * Demotion asks more than promotion does, on purpose. Sending a man
+         * down is the more consequential call and the easier one to get wrong,
+         * so it wants a bigger gap, a longer look, and — the part that matters
+         * most — a man who is not young for where he is. A nineteen-year-old
+         * struggling at Double-A is on schedule; a twenty-six-year-old
+         * struggling at Single-A is not the same sentence.
+         */
+        signal:
+          eraDiff >= 1.0 && ip >= 30 ? 'promote'
+          : overmatched(eraDiff <= -1.25, ip >= 30, ageDiff, team.level) ? 'demote'
+          : score > 5 ? 'watch'
+          : null,
       });
     } else {
       const s = batting.get(statKey(p.player_id, team.level));
@@ -358,6 +390,13 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
       const opsDiff = base.avgOps !== null ? o - base.avgOps : 0;
       const reasons: string[] = [];
       if (opsDiff >= 0.1) reasons.push(`OPS ${o.toFixed(3)} vs level avg ${base.avgOps!.toFixed(3)}`);
+      // The case against him, for the same reason as the pitchers above
+      if (opsDiff <= -0.1) {
+        reasons.push(`OPS ${o.toFixed(3)} against a level average of ${base.avgOps!.toFixed(3)}`);
+        if (ageDiff !== null && ageDiff < 0) {
+          reasons.push(`and ${Math.abs(ageDiff).toFixed(1)} years older than the level`);
+        }
+      }
       if (ageDiff !== null && ageDiff >= 1.5) reasons.push(`young for level (${p.age} vs avg ${base.avgAge!.toFixed(1)})`);
       if (cur !== null && pot !== null && pot - cur <= 5) reasons.push('near ceiling — development mostly done');
       if (cur !== null && pot !== null && pot - cur >= 15) reasons.push('high remaining upside');
@@ -365,9 +404,33 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
       batters.push({
         ...common, pa: s.pa, opsVal: Number(o.toFixed(3)), hr: s.hr, sb: s.sb, war: s.war ?? 0,
         score: Number(score.toFixed(1)), reasons,
-        signal: opsDiff >= 0.075 && s.pa >= 100 ? 'promote' : score > 5 ? 'watch' : null,
+        signal:
+          opsDiff >= 0.075 && s.pa >= 100 ? 'promote'
+          : overmatched(opsDiff <= -0.100, s.pa >= 100, ageDiff, team.level) ? 'demote'
+          : score > 5 ? 'watch'
+          : null,
       });
     }
+  }
+
+  /**
+   * Clearly below his level, with enough season behind it, and not young for it.
+   *
+   * The sample it asks for is the same one promote asks for; the asymmetry sits
+   * entirely in how big the gap has to be. That is the honest place for it —
+   * the claim is what differs, not the evidence needed to look. Demanding more
+   * innings as well simply hid the men the feature exists to find: a
+   * twenty-six-year-old carrying a 6.95 earned run average in Single-A missed
+   * the first version of this by six innings and showed no badge at all.
+   */
+  function overmatched(
+    belowLevel: boolean, enoughPlayed: boolean, ageDiff: number | null, level: number
+  ): boolean {
+    if (!belowLevel || !enoughPlayed) return false;
+    // Being young for the level excuses the numbers; being old for it does not
+    if (ageDiff === null || ageDiff > 0) return false;
+    // Nowhere below to send him
+    return level < lowestLevel;
   }
 
   const byScore = (a: unknown, b: unknown) => (b as { score: number }).score - (a as { score: number }).score;

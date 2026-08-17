@@ -488,8 +488,28 @@ th.sortable .tip { cursor: pointer; }
   font-family: var(--font-display);
   letter-spacing: 0.05em;
 }
-.badge.promote { background: #17402a; color: var(--good); border: 1px solid var(--good); }
-.badge.watch { background: #423113; color: var(--accent); border: 1px solid var(--accent); }
+/*
+ * Tinted from the theme rather than a fixed dark green and brown.
+ *
+ * The backgrounds were hardcoded for a dark table while the text used the
+ * theme's own good and accent — which light mode turns dark. Dark text on a
+ * dark plate: a reader in light mode could not read either badge. Mixing the
+ * plate from the same colour over the current background keeps the look in
+ * dark mode and inverts properly in light.
+ */
+/*
+ * No fill: the colour and the border carry it.
+ *
+ * A tinted plate seemed the obvious way to keep the badge looking like a badge,
+ * and every tint tried cost contrast the accent could not spare — the theme's
+ * accent clears AA against the page by a hair on most clubs, so any wash behind
+ * it pushed the label under. Left on the page's own background, all three
+ * inherit exactly the contrast the theme check already guarantees, and the
+ * border plus the uppercase display type is quite enough to read as a badge.
+ */
+.badge.promote { background: none; color: var(--good); border: 1px solid var(--good); }
+.badge.watch { background: none; color: var(--accent); border: 1px solid var(--accent); }
+.badge.demote { background: none; color: var(--bad); border: 1px solid var(--bad); }
 
 .reasons { white-space: normal; color: var(--muted); font-size: 12px; max-width: 340px; }
 .hint-line { margin-top: 0; font-size: 12px; }
