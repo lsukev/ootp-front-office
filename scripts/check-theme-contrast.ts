@@ -45,6 +45,26 @@ const ratio = (a: string, b: string) => {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 };
 
+/**
+ * The colour plusColor mixes for a stat, resolved so Node can weigh it.
+ *
+ * That function returns a color-mix() between the theme's good/bad and the body
+ * text, which only a browser evaluates — so this reproduces the interpolation.
+ * It is here because the check reported 60/60 while every stat column in light
+ * mode was an unreadable neon green: plusColor was building its own fixed
+ * hsl(), nothing in this script looked at it, and a reader had to notice.
+ *
+ * The weakest visible mix is the hardest case, since it is the one closest to
+ * plain text and furthest from a colour chosen for contrast.
+ */
+function statMix(end: string, text: string, sharePct: number): string {
+  const a = hslToRgb(end);
+  const b = hslToRgb(text);
+  const f = sharePct / 100;
+  const mixed = a.map((v, i) => Math.round(v * f + b[i] * (1 - f)));
+  return `#${mixed.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 const teams = db
   .prepare(
     `SELECT name, nickname, background_color_id AS bg, text_color_id AS fg,
@@ -69,6 +89,14 @@ for (const t of teams) {
     accentPanel: ratio(p['--accent'], p['--panel']),
     ink: ratio(p['--accent-ink'], p['--accent']),
     plate: ratio(p['--team-fg'], p['--team']),
+    good: ratio(p['--good'], p['--bg']),
+    bad: ratio(p['--bad'], p['--bg']),
+    // The stat columns, at the faintest mix the app will actually draw
+    statGood: ratio(statMix(p['--good'], p['--text'], 45), p['--bg']),
+    statBad: ratio(statMix(p['--bad'], p['--text'], 45), p['--bg']),
+    // And at full strength, which is what an outlier gets
+    statGoodMax: ratio(statMix(p['--good'], p['--text'], 100), p['--bg']),
+    statBadMax: ratio(statMix(p['--bad'], p['--text'], 100), p['--bg']),
   };
   const bad = Object.entries(checks).filter(([, v]) => v < AA);
   if (bad.length) failures++;

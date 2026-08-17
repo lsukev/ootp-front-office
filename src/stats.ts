@@ -201,12 +201,27 @@ export function formatStat(
   }
 }
 
-/** Subtle color for plus stats so 100 reads as the midpoint at a glance. */
+/**
+ * Subtle colour for plus stats so 100 reads as the midpoint at a glance.
+ *
+ * Mixed from the theme's own good and bad rather than built here. It used to
+ * return a fixed hsl() at 62-70% lightness, which is right on a dark table and
+ * close to unreadable on a white one — a pale neon green on near-white, as a
+ * reader in light mode reported. The theme already flips those two colours for
+ * light mode and the contrast check already covers them, so borrowing them
+ * means this cannot drift away from either again.
+ *
+ * The mix runs toward the body text, so a number barely off average reads
+ * almost as ordinary text and only a genuine outlier takes the full colour.
+ * That is the same effect the lightness ramp was reaching for, expressed in a
+ * way that survives a change of background.
+ */
 export function plusColor(def: StatDef, value: number | null | undefined): string | undefined {
   if (def.format !== 'plus' || value === null || value === undefined) return undefined;
   const delta = Math.max(-60, Math.min(60, value - 100));
-  const hue = delta >= 0 ? 120 : 0;
   const strength = Math.abs(delta) / 60;
   if (strength < 0.12) return undefined;
-  return `hsl(${hue}, ${45 + strength * 30}%, ${62 + strength * 8}%)`;
+  const end = delta >= 0 ? 'var(--good)' : 'var(--bad)';
+  const share = Math.round(45 + strength * 55);
+  return `color-mix(in srgb, ${end} ${share}%, var(--text))`;
 }
