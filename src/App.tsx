@@ -96,6 +96,47 @@ const NAV: Array<NavEntry<Page>> = [
   },
 ];
 
+/**
+ * What the import is doing, while it does it.
+ *
+ * Pressing Refresh used to freeze the window for half a minute and then simply
+ * work, with nothing to say whether it was busy or broken — a reader reported
+ * exactly that. The bar is only possible because the import now yields between
+ * chunks, so the request asking about it is answered rather than queued behind
+ * it.
+ *
+ * The count of files carries the bar rather than the row count: seventy files
+ * is a number that means something to somebody watching, and rows arrive in
+ * bursts of very different sizes. The rows are shown as a total because they
+ * are the reassuring part — it is plainly getting somewhere.
+ */
+function ImportBar({ progress }: { progress: Status['importProgress'] }) {
+  const pct = progress ? Math.round((progress.fileIndex / progress.files) * 100) : null;
+  const what = !progress
+    ? 'Starting…'
+    : progress.phase === 'indexing'
+      ? 'Building indexes'
+      : `${progress.phase === 'reading' ? 'Reading' : 'Importing'} ${progress.table}`;
+  return (
+    <div className="import-bar" role="status" aria-live="polite">
+      <div className="import-bar-track">
+        <div
+          className={`import-bar-fill${pct === null ? ' indeterminate' : ''}`}
+          style={pct === null ? undefined : { width: `${pct}%` }}
+        />
+      </div>
+      <div className="import-bar-text">
+        <strong>{what}</strong>
+        {progress && (
+          <span className="muted">
+            {' '}file {progress.fileIndex} of {progress.files} · {progress.rows.toLocaleString()} rows
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [saves, setSaves] = useState<SaveInfo[]>([]);
@@ -103,6 +144,8 @@ export function App() {
   const [orgId, setOrgId] = useState<number | null>(null);
   const [page, setPage] = useState<Page>('dashboard');
   const [switching, setSwitching] = useState(false);
+  /** Live import progress, so a thirty-second wait is not a blank screen. */
+  const [importing, setImporting] = useState<Status['importProgress']>(null);
   const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   // Set during render rather than in an effect: the player card and hover card
   // read it as they draw, and an effect would land a paint too late
@@ -175,16 +218,32 @@ export function App() {
     applyTeamTheme(appSettings?.useTeamColors === false ? null : org?.colors ?? null, mode);
   }, [org, appSettings?.useTeamColors, mode]);
 
+  /*
+   * Polls until the import is done, keeping the last progress it saw.
+   *
+   * Every half second rather than every one and a half, now that there is
+   * something to show for it: the import yields between chunks, so these
+   * requests are actually answered while it runs. A failed poll is kept rather
+   * than treated as an error — the largest files are read in one synchronous
+   * parse the server cannot break up, so a request landing in one of those
+   * stretches times out, and blanking the bar for it would make the thing
+   * flicker exactly when the reader most wants to know it is alive.
+   */
   const waitForImport = useCallback(async () => {
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 360; i++) {
       try {
         const s = await getStatus();
-        if (!s.importing && (s.hasData || s.lastError)) return s;
+        if (s.importProgress) setImporting(s.importProgress);
+        if (!s.importing && (s.hasData || s.lastError)) {
+          setImporting(null);
+          return s;
+        }
       } catch {
-        // server busy with a synchronous import — keep polling
+        // Mid-parse on a big file; the last progress stands
       }
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 500));
     }
+    setImporting(null);
     return null;
   }, []);
 
@@ -230,6 +289,9 @@ export function App() {
   return (
     <div className="shell">
       <PlayerModal />
+      {/* Only while something is actually running; the rest of the app stays
+          usable behind it, since the import no longer blocks every request */}
+      {(busy || importing) && <ImportBar progress={importing} />}
       <header className="masthead-bar">
         <div className="wordmark">
           <span className="wordmark-ball">⚾</span>

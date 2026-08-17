@@ -1162,6 +1162,40 @@ table.mini th, table.mini td { padding: 3px 8px; font-size: 12.5px; }
   cursor: pointer;
 }
 
+
+/* ── Import progress ──────────────────────────────────────── */
+
+.import-bar {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  margin: 0 -24px 10px;
+  padding: 8px 24px 10px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--accent);
+}
+.import-bar-track {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  overflow: hidden;
+}
+.import-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+/* Before the first file reports, and while a large one is being read */
+.import-bar-fill.indeterminate {
+  width: 35%;
+  animation: import-sweep 1.1s ease-in-out infinite;
+}
+@keyframes import-sweep {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+.import-bar-text { margin-top: 6px; font-size: 12px; }
+
 /* Auto-update */
 .update-badge {
   border-color: var(--accent);

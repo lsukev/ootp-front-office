@@ -11,6 +11,43 @@ export interface ImportResult {
   files: Array<{ table: string; rows: number }>;
 }
 
+/** Where the import has got to, for a page that would rather not look frozen. */
+export interface ImportProgress {
+  /** The table being written, as OOTP names the file. */
+  table: string;
+  /** 1-based, so it reads as "12 of 70" without arithmetic. */
+  fileIndex: number;
+  files: number;
+  /** Rows written so far, across every table. */
+  rows: number;
+  phase: 'reading' | 'writing' | 'indexing';
+}
+
+/**
+ * Hands the event loop back.
+ *
+ * The import used to be one synchronous run of seventy files and three hundred
+ * megabytes, which on a single-threaded server meant nothing else was answered
+ * for its whole duration — around thirty seconds. The page could poll for
+ * progress all it liked; the reply was queued behind the very work it was
+ * asking about. So a reader pressing Refresh saw the app hang and then simply
+ * come back, with no way to tell the difference between working and broken.
+ *
+ * Yielding between chunks costs a few milliseconds in total and makes the
+ * difference between a frozen window and a progress bar.
+ */
+const breathe = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/**
+ * Rows written between breaths.
+ *
+ * The largest file in a real export is sixty-six megabytes and some seven
+ * hundred thousand rows; per-FILE yielding alone would still hold the server
+ * for the ten seconds that one takes. Twenty thousand keeps each stretch to a
+ * couple of hundred milliseconds, which a poll every half second cannot notice.
+ */
+const CHUNK = 20_000;
+
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
 function sanitizeIdent(name: string): string {
@@ -63,7 +100,10 @@ function detectDelimiter(text: string): string {
  * columns taken from each file's header row. Values that look numeric are
  * stored as numbers so comparisons and math work in SQL.
  */
-export function importCsvDir(csvDir: string): ImportResult {
+export async function importCsvDir(
+  csvDir: string,
+  onProgress?: (p: ImportProgress) => void
+): Promise<ImportResult> {
   const startedAt = new Date().toISOString();
   const files = fs
     .readdirSync(csvDir)
@@ -74,8 +114,14 @@ export function importCsvDir(csvDir: string): ImportResult {
   const result: ImportResult['files'] = [];
   let totalRows = 0;
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const tableName = sanitizeIdent(file.replace(/\.csv$/, ''));
+    const say = (phase: ImportProgress['phase']) =>
+      onProgress?.({ table: tableName, fileIndex: index + 1, files: files.length, rows: totalRows, phase });
+    say('reading');
+    // Reading and parsing a sixty-megabyte file is itself a second of work, so
+    // the breath comes before it rather than after
+    await breathe();
     const text = decodeCsv(path.join(csvDir, file));
     let records: string[][];
     try {
@@ -101,22 +147,46 @@ export function importCsvDir(csvDir: string): ImportResult {
     db.exec(`CREATE TABLE "${tableName}" (${columnDefs})`);
     const insert = db.prepare(`INSERT INTO "${tableName}" VALUES (${placeholders})`);
 
-    const insertAll = db.transaction((rows: string[][]) => {
-      for (const row of rows) {
-        const values = header.map((_, i) => {
-          const v = row[i];
-          if (v === undefined || v === '') return null;
-          return NUMERIC.test(v) ? Number(v) : v;
-        });
-        insert.run(values);
+    /*
+     * One transaction per file still, but driven by hand so the loop can
+     * breathe inside it. better-sqlite3's transaction() wrapper is synchronous
+     * by design and cannot be awaited across, and committing per chunk instead
+     * would leave a half-written table behind any failure. Readers are
+     * unaffected either way — the database is in write-ahead mode, so the
+     * pages the app queries stay available while this transaction is open.
+     */
+    say('writing');
+    db.exec('BEGIN');
+    try {
+      const writeChunk = db.transaction((rows: string[][]) => {
+        for (const row of rows) {
+          const values = header.map((_, i) => {
+            const v = row[i];
+            if (v === undefined || v === '') return null;
+            return NUMERIC.test(v) ? Number(v) : v;
+          });
+          insert.run(values);
+        }
+      });
+      for (let at = 0; at < dataRows.length; at += CHUNK) {
+        writeChunk(dataRows.slice(at, at + CHUNK));
+        totalRows += Math.min(CHUNK, dataRows.length - at);
+        say('writing');
+        await breathe();
       }
-    });
-    insertAll(dataRows);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
 
     result.push({ table: tableName, rows: dataRows.length });
-    totalRows += dataRows.length;
   }
 
+  onProgress?.({
+    table: 'indexes', fileIndex: files.length, files: files.length, rows: totalRows, phase: 'indexing',
+  });
+  await breathe();
   buildIndexes();
 
   return {

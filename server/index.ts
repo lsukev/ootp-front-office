@@ -91,7 +91,7 @@ function requireLocalHost(
 function bootstrapData(): void {
   const config = loadConfig();
   if (!config.csvDir || !fs.existsSync(config.csvDir)) return;
-  if (!tableExists('players')) runImport(config.csvDir);
+  if (!tableExists('players')) void runImport(config.csvDir);
   // Indexes used to be built only by the importer, so upgrading the app left
   // every existing database without them — the same full table scans as before,
   // and an export that took twenty-five minutes with the UI wedged behind it.

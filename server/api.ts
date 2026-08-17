@@ -4,7 +4,7 @@ import path from 'node:path';
 import { db, tableExists, tableColumns, locateColumn } from './db.js';
 import { detectSaves, resolveChosenFolder, searchLocations } from './paths.js';
 import { DATA_DIR, loadConfig, saveConfig } from './config.js';
-import { importCsvDir, type ImportResult } from './importer.js';
+import { importCsvDir, type ImportProgress, type ImportResult } from './importer.js';
 import { clearPendingExport, pendingExport, startWatcher } from './watcher.js';
 import { getApiKey, loadSettings } from './settings.js';
 import { orgRoutes } from './org.js';
@@ -75,7 +75,9 @@ export const importState: {
   importing: boolean;
   lastImport: ImportResult | null;
   lastError: string | null;
-} = { importing: false, lastImport: loadImportMeta(), lastError: null };
+  /** Where the running import has got to, so the page can show a bar. */
+  progress: ImportProgress | null;
+} = { importing: false, lastImport: loadImportMeta(), lastError: null, progress: null };
 
 /**
  * Kicks off the storylines and the briefing after an import, when the club has
@@ -113,12 +115,15 @@ function humanOrgId(): number | null {
   }
 }
 
-export function runImport(csvDir: string): void {
+export async function runImport(csvDir: string): Promise<void> {
   if (importState.importing) return;
   importState.importing = true;
   importState.lastError = null;
+  importState.progress = null;
   try {
-    importState.lastImport = importCsvDir(csvDir);
+    importState.lastImport = await importCsvDir(csvDir, (p) => {
+      importState.progress = p;
+    });
     // Whatever was waiting on disk has now been read
     clearPendingExport();
     fs.writeFileSync(META_PATH, JSON.stringify(importState.lastImport));
@@ -140,6 +145,7 @@ export function runImport(csvDir: string): void {
     console.error('[import] failed:', err);
   } finally {
     importState.importing = false;
+    importState.progress = null;
   }
 }
 
@@ -182,6 +188,12 @@ api.get('/status', (_req, res) => {
     csvDir: config.csvDir,
     csvDirExists: config.csvDir ? fs.existsSync(config.csvDir) : false,
     importing: importState.importing,
+    /*
+     * Where it has got to. Only meaningful because the import yields now — a
+     * synchronous one could set this all it liked and the request asking for it
+     * would still be queued behind the work.
+     */
+    importProgress: importState.progress,
     lastImport: importState.lastImport,
     lastError: importState.lastError,
     hasData: tableExists('players') && tableExists('teams'),
@@ -210,7 +222,7 @@ api.post('/config', (req, res) => {
     importState.importing = true; // visible to /status before the import starts
     setImmediate(() => {
       importState.importing = false;
-      runImport(csvDir);
+      void runImport(csvDir);
     });
     startWatcher(csvDir);
   }
@@ -223,7 +235,7 @@ api.post('/import', (_req, res) => {
   if (!fs.existsSync(config.csvDir)) {
     return res.status(400).json({ error: `CSV directory not found: ${config.csvDir}` });
   }
-  runImport(config.csvDir);
+  void runImport(config.csvDir);
   res.json({ ok: true, lastImport: importState.lastImport, lastError: importState.lastError });
 });
 

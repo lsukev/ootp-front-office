@@ -16,6 +16,18 @@ export interface Status {
   csvDir: string | null;
   csvDirExists: boolean;
   importing: boolean;
+  /**
+   * Where a running import has got to. Null when nothing is importing — and
+   * briefly null while a very large file is being read, since that stretch is
+   * one synchronous parse the server cannot interrupt.
+   */
+  importProgress?: {
+    table: string;
+    fileIndex: number;
+    files: number;
+    rows: number;
+    phase: 'reading' | 'writing' | 'indexing';
+  } | null;
   lastImport: { tables: number; rows: number; finishedAt: string } | null;
   lastError: string | null;
   hasData: boolean;
