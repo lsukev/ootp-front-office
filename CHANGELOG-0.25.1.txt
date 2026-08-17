@@ -1,0 +1,7 @@
+OOTP Front Office 0.25.1 — everything since 0.25.0
+
+Fixed — The green and red on the plus columns are readable in light mode. A reader described the green as hard to read and was being generous: measured against the light background it came out at 1.36 where 4.5 is the standard. The colouring built its own shade at a lightness that suits a dark table and disappears on a white one, and it never touched the good and bad colours the theme already flips for light mode. It borrows those now, mixed toward the body text so a number barely off average reads almost as ordinary text and only a real outlier takes the full colour. Worst case on screen is now 5.6 in light mode and 9.3 in dark, and dark mode reads better than it did.
+
+The contrast check that ships with the app reported everything passing throughout, which is the more useful part of this: it weighed the text, the accent and the team colours and never looked at these two or anything mixed from them, so the one colour somebody complained about was the one nothing verified. It now checks both, at the faintest shade the app will draw and at full strength.
+
+Fixed — The hover definitions are back on the Player Search headers. Making them clickable last release took the explanations with them: the sort control handed each definition to the browser's tooltip instead of the app's own, so every column quietly lost the description it had. Nothing failed and nothing looked wrong, which is why a reader found it rather than a test.
