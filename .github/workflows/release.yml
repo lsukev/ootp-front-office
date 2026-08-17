@@ -140,14 +140,53 @@ jobs:
             exit 1
           fi
 
-          gh release create "${GITHUB_REF_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
-            || echo "Release already exists — uploading to it"
+          # A failed create does NOT mean the release is already there. The old
+          # blanket `|| echo "already exists"` read a GitHub 503 as exactly that
+          # and went on to upload twelve assets to a release that was never
+          # created — twelve "release not found" lines and a red run holding a
+          # perfectly good pair of installers. Retry the create; only an explicit
+          # "already exists" is a reason to skip it.
+          created=
+          for attempt in 1 2 3 4 5; do
+            if out=$(gh release create "${GITHUB_REF_NAME}" \
+                       --repo "${GITHUB_REPOSITORY}" \
+                       --title "${GITHUB_REF_NAME}" \
+                       --generate-notes 2>&1); then
+              created=yes
+              echo "Release created"
+              break
+            fi
+            echo "${out}"
+            case "${out}" in
+              *already*exists*)
+                created=yes
+                echo "Release already exists — uploading to it"
+                break
+                ;;
+            esac
+            echo "Create failed (attempt ${attempt}); GitHub may be having a moment"
+            sleep $(( attempt * 15 ))
+          done
+          if [ -z "${created}" ]; then
+            echo "::error::Could not create the release after 5 attempts"
+            exit 1
+          fi
 
-          xargs -0 -I{} gh release upload "${GITHUB_REF_NAME}" {} \
-            --repo "${GITHUB_REPOSITORY}" --clobber < assets.zero
+          # Uploads get the same treatment for the same reason: one transient
+          # 5xx should not cost the release an installer.
+          upload() {
+            for attempt in 1 2 3 4 5; do
+              gh release upload "${GITHUB_REF_NAME}" "$1" \
+                --repo "${GITHUB_REPOSITORY}" --clobber && return 0
+              echo "Upload of $1 failed (attempt ${attempt})"
+              sleep $(( attempt * 15 ))
+            done
+            echo "::error::Could not upload $1"
+            return 1
+          }
+          while IFS= read -r -d '' asset; do
+            upload "${asset}" || exit 1
+          done < assets.zero
 
           # The manifests must be present or clients never learn a release exists
           gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
