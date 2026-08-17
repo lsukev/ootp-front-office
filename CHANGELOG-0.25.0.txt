@@ -1,0 +1,9 @@
+OOTP Front Office 0.25.0 — everything since 0.24.0
+
+New — Every column on Player Search sorts. Click a header to order by it, click again to reverse, a third time to put the table back. The first click takes the direction you meant — highest first for a statistic, A to Z for a name — because asking for the home-run column and being shown the men with none of them is not what anybody wants.
+
+It sorts the whole search, not the page you are looking at. That distinction is the reason this took some care: a typical search matches a few hundred players and a hundred come back, so ordering what arrived would have sorted the page rather than the league, and the man leading a category could have sat on page three and never reached the top of a table sorted by him. The plain columns are ordered by the database; the rate stats are worked out from a league baseline and a park factor and so cannot be, and those searches now compute every match before choosing the page. On the widest search a save can produce — four thousand players across every level — that costs about a sixth of a second.
+
+Men with no line at the level being searched always sort to the bottom, whichever direction you pick, so nobody heads a table sorted by earned run average on the strength of having never pitched.
+
+One thing worth knowing: sorting by a rate will put small samples at the top, because a hundred plate appearances really can produce a better figure than a full season. The Min PA box beside the filters is there for exactly that.
