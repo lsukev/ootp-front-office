@@ -220,9 +220,41 @@ leagueRoutes.get('/players', (req, res) => {
                     WHERE year = ${statYear} AND split_id = 1 GROUP BY player_id) pt
          ON pt.player_id = p.player_id`
       : '';
-  const orderBy = statYear !== null
+  /*
+   * Sorting, which has to happen before the page is cut rather than after.
+   *
+   * A reader asked to sort by the stat columns. The obvious place is the
+   * browser, and it would have been wrong: 233 players match a typical search
+   * and a hundred come back, so sorting what arrived would have ordered the
+   * page rather than the league — the leader in a category could sit on page
+   * three and never appear at the top of a sorted table.
+   *
+   * The plain columns sort in SQL, which is free. The stat columns cannot: the
+   * rate stats are computed in JavaScript from a league baseline and a park
+   * factor, so they do not exist for SQL to order by, and reimplementing them
+   * there would be two engines to keep agreeing. Those sorts instead widen the
+   * query to every match, compute, order, and cut the page afterwards.
+   */
+  const PLAIN_SORTS: Record<string, string> = {
+    name: 'p.last_name, p.first_name',
+    age: 'p.age',
+    pos: 'p.position, p.last_name',
+    team: 't.abbr, p.last_name',
+    level: 't.level, p.last_name',
+    pt: 'COALESCE(pt.pt, 0)',
+  };
+  const sortKey = typeof req.query.sort === 'string' ? req.query.sort : null;
+  const descending = req.query.dir !== 'asc';
+  const plainSort = sortKey !== null ? PLAIN_SORTS[sortKey] : undefined;
+  /** A stat sort: not a plain column, so it needs every match computed first. */
+  const statSort = sortKey !== null && plainSort === undefined ? sortKey : null;
+
+  const defaultOrder = statYear !== null
     ? 'COALESCE(pt.pt, 0) DESC, p.last_name, p.first_name'
     : 'p.last_name, p.first_name';
+  const orderBy = plainSort
+    ? `${plainSort.split(', ').map((c, i) => (i === 0 ? `${c} ${descending ? 'DESC' : 'ASC'}` : c)).join(', ')}`
+    : defaultOrder;
 
   /*
    * A playing-time floor is the one filter that cannot come from the players
@@ -272,9 +304,10 @@ leagueRoutes.get('/players', (req, res) => {
        ${ptJoin}
        WHERE ${ptWhere.join(' AND ')}
        ORDER BY ${orderBy}
-       LIMIT ? OFFSET ?`
+       ${statSort === null ? 'LIMIT ? OFFSET ?' : ''}`
     )
-    .all(...ptParams, limit, offset) as Array<Record<string, number | string | null>>;
+    .all(...(statSort === null ? [...ptParams, limit, offset] : ptParams)) as
+      Array<Record<string, number | string | null>>;
 
   const ids = rows.map((r) => r.player_id as number);
   const statsById = new Map<number, Record<string, number | string | null>>();
@@ -368,11 +401,38 @@ leagueRoutes.get('/players', (req, res) => {
     }
   }
 
+  /*
+   * The stat sorts happen here, on every match, and the page is cut afterwards.
+   *
+   * Nulls always sink. A man with no line at this level should not head a table
+   * sorted by earned run average just because zero-of-nothing sorts low, and
+   * ascending order is exactly where that would put him.
+   */
+  let page = rows;
+  if (statSort !== null) {
+    const value = (r: Record<string, number | string | null>): number | null => {
+      const v = statsById.get(r.player_id as number)?.[statSort];
+      return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    };
+    page = [...rows].sort((a, b) => {
+      const x = value(a);
+      const y = value(b);
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return descending ? y - x : x - y;
+    });
+    page = page.slice(offset, offset + limit);
+  }
+
   res.json({
     total,
     offset,
     limit,
-    players: rows.map((r) => ({
+    /** Echoed so the page can show which column it is ordered by. */
+    sort: sortKey,
+    dir: descending ? 'desc' : 'asc',
+    players: page.map((r) => ({
       player_id: r.player_id,
       name: `${r.first_name} ${r.last_name}`,
       age: r.age,

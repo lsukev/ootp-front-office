@@ -439,6 +439,25 @@ tr:hover td { background: rgba(255,255,255,0.03); }
 /* Sortable headers read as clickable */
 thead th[onclick], thead th { user-select: none; }
 
+/* A header you can click to order by. The button carries the header's own
+   typography so the table does not suddenly look like a form. */
+th.sortable { padding: 0; }
+th.sortable button {
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  padding: 6px 10px;
+  width: 100%;
+  text-align: inherit;
+  cursor: pointer;
+}
+th.sortable button:hover { color: var(--text); }
+th.sortable.sorted button { color: var(--accent); }
+.sort-arrow { font-size: 9px; margin-left: 4px; vertical-align: middle; }
+
 
 .rec-action { color: var(--text); }
 .slot-num { font-family: var(--font-display); font-weight: 700; color: var(--accent); font-size: 16px; }

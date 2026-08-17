@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiGet, type Org } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
 import { ColumnPicker } from '../ColumnPicker';
@@ -60,6 +60,16 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
   const [group, setGroup] = useState<StatGroup>('batting');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [offset, setOffset] = useState(0);
+
+  /*
+   * Which column the table is ordered by, and which way.
+   *
+   * Held here and sent to the server rather than sorting what arrived: a
+   * typical search matches a few hundred players and a hundred come back, so
+   * sorting in the browser would order the page instead of the league and the
+   * leader in a category could sit on page three.
+   */
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [data, setData] = useState<PlayersResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -89,8 +99,41 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
       if (scope === 'org') params.set('orgId', String(orgId));
     }
     for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+    if (sort) {
+      params.set('sort', sort.key);
+      params.set('dir', sort.dir);
+    }
     apiGet<PlayersResponse>(`/api/players?${params}`).then(setData).catch((e) => setError(e.message));
-  }, [debounced, level, scope, group, offset, orgId, filters]);
+  }, [debounced, level, scope, group, offset, orgId, filters, sort]);
+
+  /**
+   * A header you can click to order by.
+   *
+   * First click takes the useful direction — highest first for a statistic,
+   * A to Z for a name — because asking for the home-run column and being shown
+   * the men with none of them is not what anybody meant. Clicking again turns
+   * it around, and a third time returns the table to its own order.
+   */
+  function SortTh({ sortKey, children, tip }: {
+    sortKey: string; children: ReactNode; tip?: string;
+  }) {
+    const active = sort?.key === sortKey;
+    const textual = sortKey === 'name' || sortKey === 'team' || sortKey === 'pos';
+    const cycle = () => {
+      const first: 'asc' | 'desc' = textual ? 'asc' : 'desc';
+      if (!active) return setSort({ key: sortKey, dir: first });
+      if (sort!.dir === first) return setSort({ key: sortKey, dir: first === 'asc' ? 'desc' : 'asc' });
+      return setSort(null);
+    };
+    return (
+      <th className={active ? 'sortable sorted' : 'sortable'}>
+        <button type="button" onClick={() => { setOffset(0); cycle(); }} title={tip}>
+          {children}
+          {active && <span className="sort-arrow">{sort!.dir === 'asc' ? '▲' : '▼'}</span>}
+        </button>
+      </th>
+    );
+  }
 
   // Changing what you are looking for should not leave you on page four of it
   const setFilter = (key: keyof Filters, value: string) => {
@@ -202,10 +245,16 @@ export function Players({ orgs, orgId }: { orgs: Org[]; orgId: number }) {
           <table>
             <thead>
               <tr>
-                <Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>B/T</Th><Th>Team</Th>
+                <SortTh sortKey="name">Player</SortTh>
+                <SortTh sortKey="age">Age</SortTh>
+                <SortTh sortKey="pos">Pos</SortTh>
+                <Th>B/T</Th>
+                <SortTh sortKey="team">Team</SortTh>
                 {columns.map((key) => {
                   const def = findStat(group, key);
-                  return def ? <th key={key}><Tip label={def.label} tip={def.desc} /></th> : null;
+                  return def ? (
+                    <SortTh key={key} sortKey={key} tip={def.desc}>{def.label}</SortTh>
+                  ) : null;
                 })}
               </tr>
             </thead>
