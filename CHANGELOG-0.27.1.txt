@@ -1,0 +1,7 @@
+OOTP Front Office 0.27.1 — everything since 0.27.0
+
+Fixed — The Plan button on the schedule works on exports that are shaped differently from mine. It asked games.csv for the two columns that name the starting pitchers of a game already played, without checking they were there — and where they are not, that one missing column cost the whole feature, on every game in the schedule. Nothing is lost by their absence: a plan is for a game that has not been played, and the projected rotation is the answer for that anyway. The head-to-head tables and the ball-tracking columns are checked the same way now, since exit velocity and launch angle are a newer addition to the export than the table that carries them.
+
+Fixed — A part of the plan the export cannot supply now costs that part and not the page. The head-to-head history and the opponent scouting are extras, and neither has any business taking the whole plan down with it; whatever could not be read is named at the top, so a blank panel is never left looking like a club with no history against this pitcher.
+
+Fixed — When something does go wrong, the app tells you what. Errors were coming back as a web page, and the app, looking for a message, could only show you "500 Internal Server Error" — while the real reason went to a log nobody opens. That reason reaches the screen now. Everything runs against a file on your own machine, so there is nothing to protect by keeping it, and it turns an unreportable failure into one sentence worth sending.
