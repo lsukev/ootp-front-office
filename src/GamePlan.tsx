@@ -39,6 +39,8 @@ interface Plan {
   lineupVs: 'r' | 'l';
   matchups: { vsPitcher: MatchupLine[]; vsTeam: MatchupLine[] };
   opponent: { dangerous: Dangerous[] };
+  /** Parts this export could not supply, so the gaps are named and not guessed at. */
+  missing?: string[];
 }
 
 const avg3 = (v: number | null): string => (v === null ? '—' : v.toFixed(3).replace(/^0\./, '.'));
@@ -92,6 +94,13 @@ export function GamePlan({ teamId, gameId, onClose }: { teamId: number; gameId: 
           <span className="muted">No starter named or projected for this game yet.</span>
         )}
       </p>
+
+      {plan.missing && plan.missing.length > 0 && (
+        <p className="muted game-plan-missing">
+          This save's export does not carry {plan.missing.join(' or ')}, so those parts of the plan are
+          blank. The rest is unaffected.
+        </p>
+      )}
 
       <div className="game-plan-cols">
         <section>

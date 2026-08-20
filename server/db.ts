@@ -20,6 +20,20 @@ export function tableColumns(name: string): string[] {
 }
 
 /**
+ * Whether a table has every column named.
+ *
+ * `tableExists` is not enough on its own. OOTP's CSV export changes shape
+ * between versions, and a table that is present with an older set of columns
+ * passes the existence check and then throws "no such column" the moment it is
+ * queried — which reaches the reader as a bare 500 with nothing to act on.
+ * Ask for the columns a query actually needs.
+ */
+export function hasColumns(table: string, ...columns: string[]): boolean {
+  const present = new Set(tableColumns(table));
+  return columns.every((c) => present.has(c));
+}
+
+/**
  * Find where a column lives. OOTP's CSV schema shifts slightly between
  * versions, so callers pass candidate (table, column) pairs and get back the
  * first one that exists in the imported data.

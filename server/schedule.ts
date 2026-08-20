@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists } from './db.js';
+import { db, hasColumns, tableExists } from './db.js';
 import { DATE_KEY } from './dashboard.js';
 
 export const scheduleRoutes = Router();
@@ -51,11 +51,14 @@ scheduleRoutes.get('/schedule/:teamId', (req, res) => {
   const teamId = Number(req.params.teamId);
   if (!tableExists('games')) return res.status(400).json({ error: 'No data imported yet' });
 
+  // The named starters are not in every version of games.csv, and asking for a
+  // column that is not there costs the whole schedule rather than the probables
+  const named = hasColumns('games', 'starter0', 'starter1');
   const rows = db
     .prepare(
       `SELECT g.game_id, g.date, ${DATE_KEY('g.date')} AS dateKey, g.time,
               g.home_team, g.away_team, g.played, g.runs0, g.runs1, g.innings,
-              g.starter0, g.starter1,
+              ${named ? 'g.starter0, g.starter1' : 'NULL AS starter0, NULL AS starter1'},
               ${teamLabel('ht')} AS home_label, ${teamLabel('at2')} AS away_label
        FROM games g
        JOIN teams ht ON ht.team_id = g.home_team

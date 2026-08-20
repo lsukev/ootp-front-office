@@ -1820,6 +1820,7 @@ button.cta {
 .game-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .game-plan-head strong { font-family: var(--font-display); letter-spacing: 0.04em; font-size: 14px; }
 .game-plan-starter { margin: 4px 0 10px; font-size: 13px; }
+.game-plan-missing { margin: 0 0 10px; font-size: 12px; }
 .game-plan-cols {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px;
 }

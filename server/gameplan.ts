@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists } from './db.js';
+import { db, hasColumns, tableExists } from './db.js';
 import { contactProfiles } from './battedball.js';
 import { padDate } from './rosterops.js';
 
@@ -29,8 +29,6 @@ interface GameRow {
   home_team: number;
   away_team: number;
   played: number;
-  runs0: number | null;
-  runs1: number | null;
   starter0: number | null;
   starter1: number | null;
   game_type: number | null;
@@ -51,6 +49,26 @@ const POSITION_NAMES: Record<number, string> = {
 };
 
 /**
+ * The position players on a club's active roster.
+ *
+ * `team_roster` carries the list a man is on — 1 is the active roster — and
+ * where the export does not include it at all, the club's players are the next
+ * best answer rather than an error: a plan built from the whole organisation is
+ * worth more to a reader than a 500.
+ */
+function activeHitters(teamId: number) {
+  const active = hasColumns('team_roster', 'team_id', 'player_id', 'list_id');
+  return db
+    .prepare(
+      `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.position, p.bats
+       FROM players p
+       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1
+         ${active ? 'AND p.player_id IN (SELECT player_id FROM team_roster WHERE team_id = p.team_id AND list_id = 1)' : ''}`
+    )
+    .all(teamId) as Array<{ player_id: number; name: string; position: number; bats: number }>;
+}
+
+/**
  * How our hitters have done against one pitcher, and against one club.
  *
  * Career head-to-head comes from OOTP's own batter-versus-pitcher table; the
@@ -58,14 +76,7 @@ const POSITION_NAMES: Record<number, string> = {
  * pitcher and therefore his team.
  */
 function matchups(teamId: number, oppTeamId: number, pitcherId: number | null) {
-  const hitters = db
-    .prepare(
-      `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.position, p.bats
-       FROM players p
-       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1
-         AND p.player_id IN (SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1)`
-    )
-    .all(teamId, teamId) as Array<{ player_id: number; name: string; position: number; bats: number }>;
+  const hitters = activeHitters(teamId);
 
   const ids = hitters.map((h) => h.player_id);
   const byId = new Map<number, Hitter>(
@@ -76,7 +87,7 @@ function matchups(teamId: number, oppTeamId: number, pitcherId: number | null) {
   );
 
   const vsPitcher =
-    pitcherId && ids.length > 0 && tableExists('players_individual_batting_stats')
+    pitcherId && ids.length > 0 && hasColumns('players_individual_batting_stats', 'player_id', 'opponent_id', 'ab', 'h', 'hr')
       ? (db
           .prepare(
             `SELECT player_id, SUM(ab) AS ab, SUM(h) AS h, SUM(hr) AS hr
@@ -88,7 +99,7 @@ function matchups(teamId: number, oppTeamId: number, pitcherId: number | null) {
       : [];
 
   const vsTeam =
-    ids.length > 0 && tableExists('players_at_bat_batting_stats')
+    ids.length > 0 && hasColumns('players_at_bat_batting_stats', 'player_id', 'opponent_player_id', 'result')
       ? (db
           .prepare(
             `SELECT a.player_id,
@@ -122,14 +133,7 @@ function matchups(teamId: number, oppTeamId: number, pitcherId: number | null) {
 
 /** What the opposing club does well and badly, so the plan has a shape. */
 function scoutOpponent(oppTeamId: number) {
-  const hitters = db
-    .prepare(
-      `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.position, p.bats
-       FROM players p
-       WHERE p.team_id = ? AND p.retired = 0 AND p.position != 1
-         AND p.player_id IN (SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1)`
-    )
-    .all(oppTeamId, oppTeamId) as Array<{ player_id: number; name: string; position: number; bats: number }>;
+  const hitters = activeHitters(oppTeamId);
 
   const profiles = contactProfiles(hitters.map((h) => h.player_id));
   const dangerous = hitters
@@ -202,6 +206,22 @@ function projectedStarter(teamId: number, slot: number): number | null {
 }
 
 /**
+ * Run one optional half of the plan, and carry on without it if it fails.
+ *
+ * Returns what the reader should be told is absent alongside the fallback, so
+ * an empty table is never left to look like a club with no history against
+ * this pitcher.
+ */
+function attempt<T>(work: () => T, fallback: T, what: string): { value: T; missing: string | null } {
+  try {
+    return { value: work(), missing: null };
+  } catch (err) {
+    console.error(`[game-plan] ${what} could not be read:`, err);
+    return { value: fallback, missing: what };
+  }
+}
+
+/**
  * Everything worth knowing before one game.
  *
  * The opposing starter is taken from the game itself when the export names
@@ -213,9 +233,21 @@ gameplanRoutes.get('/game-plan/:teamId/:gameId', (req, res) => {
   const gameId = Number(req.params.gameId);
   if (!tableExists('games')) return res.status(400).json({ error: 'No data imported yet' });
 
+  /*
+   * Ask games.csv only for the columns this export actually has.
+   *
+   * The named starters are the ones that move: `starter0` and `starter1` are
+   * not in every version of the export, and selecting them where they are
+   * absent throws "no such column" — which is why pressing Plan on a save
+   * without them returned a 500 on every game in the schedule. Their absence
+   * is not a problem worth reporting to the reader, because the projected
+   * rotation below is the answer for an unplayed game anyway.
+   */
+  const named = hasColumns('games', 'starter0', 'starter1');
   const g = db
     .prepare(
-      `SELECT game_id, date, home_team, away_team, played, runs0, runs1, starter0, starter1
+      `SELECT game_id, date, home_team, away_team, played,
+              ${named ? 'starter0, starter1' : 'NULL AS starter0, NULL AS starter1'}
        FROM games WHERE game_id = ?`
     )
     .get(gameId) as GameRow | undefined;
@@ -241,6 +273,20 @@ gameplanRoutes.get('/game-plan/:teamId/:gameId', (req, res) => {
         .get(pitcherId) as { player_id: number; name: string; throws: number; age: number } | undefined)
     : undefined;
 
+  /*
+   * The history and the scouting are the extras, and an extra must not be able
+   * to take the page down with it. Both read tables that not every export
+   * carries, in shapes that differ between versions of the game; before this,
+   * one unfamiliar column anywhere in them meant no plan at all — not a
+   * thinner plan, no plan, on every game in the schedule.
+   */
+  const matchupsOrNothing = attempt(
+    () => matchups(teamId, oppId, pitcherId ?? null),
+    { vsPitcher: [], vsTeam: [] },
+    'the head-to-head history'
+  );
+  const scouting = attempt(() => scoutOpponent(oppId), { dangerous: [] }, "the opponent's contact quality");
+
   res.json({
     game: {
       game_id: g.game_id,
@@ -263,8 +309,11 @@ gameplanRoutes.get('/game-plan/:teamId/:gameId', (req, res) => {
     // ranks hitters by their split, so the page asks it for this hand rather
     // than duplicating the ordering here.
     lineupVs: pitcher ? (HAND[pitcher.throws] === 'L' ? 'l' : 'r') : 'r',
-    matchups: matchups(teamId, oppId, pitcherId ?? null),
-    opponent: scoutOpponent(oppId),
+    matchups: matchupsOrNothing.value,
+    opponent: scouting.value,
+    // Anything the export could not supply, said plainly rather than shown as
+    // an empty table the reader has to interpret
+    missing: [matchupsOrNothing.missing, scouting.missing].filter(Boolean) as string[],
   });
 });
 

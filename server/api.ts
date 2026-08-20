@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists, tableColumns, locateColumn } from './db.js';
@@ -542,4 +542,25 @@ api.get('/roster/:teamId', (req, res) => {
   });
 
   res.json({ players: roster, ratingMax, ratingKeys: [...ratingSources.keys()] });
+});
+
+/**
+ * Say what went wrong.
+ *
+ * Express's default handler answers a thrown error with an HTML page, so the
+ * client — which looks for `error` in a JSON body — fell back to printing the
+ * status line and nothing else. A reader pressed Plan, got "500 Internal
+ * Server Error" on every game in the schedule, and had nothing to send us; the
+ * cause was one missing column in their export, and the message said so all
+ * along, into a log nobody reads.
+ *
+ * The message goes to the reader now. Everything here runs against a file on
+ * their own machine, so there is nothing to leak by telling them which column
+ * their save is missing, and a specific complaint is one they can report.
+ */
+api.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`[api] ${req.method} ${req.originalUrl} failed:`, err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: message });
 });

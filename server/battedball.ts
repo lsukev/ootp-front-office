@@ -1,4 +1,4 @@
-import { db, tableExists } from './db.js';
+import { db, hasColumns } from './db.js';
 
 /**
  * Contact quality, from the pitch-by-pitch table OOTP exports and never shows.
@@ -23,7 +23,14 @@ const T = 'players_at_bat_batting_stats';
 /** Verified against season totals; see the note above. */
 const RESULT = { K: 1, BB: 2, GB_OUT: 4, AIR_OUT: 5, SINGLE: 6, DOUBLE: 7, TRIPLE: 8, HR: 9, HBP: 10 } as const;
 
-export const hasBattedBalls = (): boolean => tableExists(T);
+/*
+ * The table is not enough on its own: the ball-tracking columns are a newer
+ * addition to the export, and a save that has the at-bat rows without them
+ * passed a plain existence check and then threw "no such column" from every
+ * query in this file. Ask for the columns the work actually needs.
+ */
+export const hasBattedBalls = (): boolean =>
+  hasColumns(T, 'player_id', 'team_id', 'exit_velo', 'launch_angle', 'sprint_speed', 'result');
 
 /**
  * A barrel: struck hard enough, at an angle that rewards it.
@@ -264,7 +271,10 @@ export interface Situational {
  * stored with every plate appearance.
  */
 export function situationalSplits(playerId: number): Situational[] {
-  if (!hasBattedBalls()) return [];
+  // A different set of columns from the batted-ball work above, so it asks for
+  // its own rather than riding on that check
+  if (!hasColumns(T, 'player_id', 'result', 'base1', 'base2', 'base3', 'outs',
+                  'inning', 'run_diff', 'Close', 'balls', 'strikes')) return [];
   const rows = db
     .prepare(
       `SELECT result, base1, base2, base3, outs, inning, run_diff, "Close" AS close, balls, strikes
