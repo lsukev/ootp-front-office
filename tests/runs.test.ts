@@ -131,3 +131,81 @@ describe('rates drawn from a season line', () => {
     }
   });
 });
+
+/**
+ * Orders that are not nine men long.
+ *
+ * The loops counted to nine flat, so an eight-man card read one past the end of
+ * itself and threw "Cannot read properties of undefined (reading 'out')" — and
+ * every card in a league where the pitcher hits is eight men long, because he
+ * is added after the order is built. A reader on such a league got that
+ * sentence instead of a lineup.
+ */
+describe('an order that is not nine men', () => {
+  it('scores an eight-man order instead of reading past it', () => {
+    const runs = expectedRuns(Array.from({ length: 8 }, () => average));
+    expect(Number.isFinite(runs), 'the model fell off the end of the order').toBe(true);
+    expect(runs).toBeGreaterThan(3.4);
+  });
+
+  it('reads the same nine men the same whether the order is eight long or nine', () => {
+    // Nothing distinguishes the slots when every man in them is identical, so
+    // the length must not move the answer on its own
+    expect(expectedRuns(Array.from({ length: 8 }, () => average))).toBeCloseTo(
+      expectedRuns(nineOf(average)),
+      10
+    );
+  });
+
+  it('brings the good bats round oftener when the order is shorter', () => {
+    /*
+     * The check that the length is genuinely being used rather than quietly
+     * padded back to nine: eight good hitters outscore the same eight with a
+     * ninth man making outs behind them.
+     */
+    const good = outcomesFrom({ pa: 650, h: 190, d: 40, t: 2, hr: 25, bb: 70, hp: 5 }, league);
+    const poor = outcomesFrom({ pa: 400, h: 40, d: 4, t: 0, hr: 0, bb: 8, hp: 0 }, league);
+    const eight = expectedRuns(Array.from({ length: 8 }, () => good));
+    const nine = expectedRuns([...Array.from({ length: 8 }, () => good), poor]);
+    expect(eight).toBeGreaterThan(nine);
+  });
+
+  it('is not disturbed by the length of the order before it', () => {
+    // The model reuses its buffers between calls, and a shorter order leaves
+    // the tail of them behind
+    const first = expectedRuns(nineOf(average));
+    expectedRuns(Array.from({ length: 8 }, () => average));
+    expect(expectedRuns(nineOf(average))).toBeCloseTo(first, 10);
+  });
+});
+
+describe('a slot the search may not touch', () => {
+  const weak = outcomesFrom({ pa: 400, h: 40, d: 4, t: 0, hr: 0, bb: 8, hp: 0 }, league);
+  const strong = outcomesFrom({ pa: 700, h: 220, d: 50, t: 3, hr: 40, bb: 90, hp: 6 }, league);
+
+  it('leaves him where he stands', () => {
+    /*
+     * The pitcher bats ninth for where he stands in the field, not for how the
+     * bats sorted, and a search free to move him would put him somewhere no
+     * manager would write him.
+     */
+    const seed = [...Array.from({ length: 8 }, () => strong), weak];
+    const movable = [0, 1, 2, 3, 4, 5, 6, 7];
+    const { order } = climb(seed, movable);
+    expect(order[8], 'the search moved the man it was told to leave alone').toBe(8);
+  });
+
+  it('still counts him', () => {
+    // His outs are three of the twenty-seven; an order judged without them is
+    // being judged on a game nobody is playing
+    const withWeak = expectedRuns([...Array.from({ length: 8 }, () => strong), weak]);
+    const allStrong = expectedRuns(Array.from({ length: 9 }, () => strong));
+    expect(withWeak).toBeLessThan(allStrong);
+  });
+
+  it('never returns a worse order than it was given', () => {
+    const seed = [weak, strong, average, strong, weak, average, strong, average, weak];
+    const { runs } = climb(seed, [0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(runs).toBeGreaterThanOrEqual(expectedRuns(seed) - 1e-12);
+  });
+});

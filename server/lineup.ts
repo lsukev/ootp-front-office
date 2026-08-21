@@ -500,9 +500,31 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     // A club that has not yet batted around ten times over
     if (played < 900) return card;
 
-    const outcomes = lines.map((l) => outcomesFrom(l as BattingLine, leagueLine as BattingLine));
+    /*
+     * Where the pitcher hits, he is part of the order being measured.
+     *
+     * The card handed here holds only the eight bats — he is appended after
+     * the search, because he bats ninth for where he stands in the field and
+     * not for how the bats sorted. Leaving him out of the model entirely was
+     * the first thing tried and it is wrong twice over: eight men cycling
+     * means every hitter comes up more often than he will, and the three outs
+     * an inning that go through the pitcher never appear at all. So he goes in
+     * as the ninth line and is held there while the eight ahead of him move.
+     *
+     * Without his season line there is nothing honest to put in his place, and
+     * an invented one would be an invented input to a model whose only output
+     * is a number of runs. The card stands as the rule wrote it.
+     */
+    const pitcherLine = pitcher ? rawById.get(pitcher.player_id) : null;
+    if (pitcher && !pitcherLine) return card;
+    const batting = pitcherLine ? [...lines, pitcherLine] : lines;
+
+    const outcomes = batting.map((l) => outcomesFrom(l as BattingLine, leagueLine as BattingLine));
     const before = expectedRuns(outcomes);
-    const { order, runs, evaluations } = climb(outcomes);
+    const { order, runs, evaluations } = climb(
+      outcomes,
+      card.map((_, i) => i)
+    );
     searchNote = {
       seededRuns: Number((before * 162).toFixed(1)),
       optimisedRuns: Number((runs * 162).toFixed(1)),
@@ -525,7 +547,7 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
      * a reason, and a card that argues for itself wrongly is worse than one
      * that says plainly who put him there.
      */
-    return order.map((from, to) => ({
+    return order.slice(0, card.length).map((from, to) => ({
       ...card[from],
       slot: card[to].slot,
       /*

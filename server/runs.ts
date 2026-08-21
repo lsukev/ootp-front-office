@@ -97,7 +97,16 @@ const KINDS = ['bb', '1b', '2b', '3b', 'hr'] as const;
 /** Precomputed once: for each base state and event, where everyone ends up. */
 const MOVES: Move[][][] = Array.from({ length: BASES }, (_, s) => KINDS.map((k) => advance(s, k)));
 
-const SIZE = 9 * 3 * BASES;
+/**
+ * The longest batting order this model will be handed.
+ *
+ * Nine is the usual answer and was once the only one the code could take: the
+ * loops below counted to nine flat, so a card of eight — which is every card in
+ * a league where the pitcher hits, since he is added after the order is built —
+ * read past the end of it and threw. The order's own length settles it now.
+ */
+const MAX_ORDER = 12;
+const SIZE = MAX_ORDER * 3 * BASES;
 const idx = (b: number, o: number, s: number) => (b * 3 + o) * BASES + s;
 
 /*
@@ -106,7 +115,7 @@ const idx = (b: number, o: number, s: number) => (b * 3 + o) * BASES + s;
  */
 const bufA = new Float64Array(SIZE);
 const bufB = new Float64Array(SIZE);
-const bufCarry = new Float64Array(9);
+const bufCarry = new Float64Array(MAX_ORDER);
 
 /**
  * Expected runs for one nine-inning game from a batting order.
@@ -115,6 +124,7 @@ const bufCarry = new Float64Array(9);
  * matters at all.
  */
 export function expectedRuns(order: Outcomes[]): number {
+  const n = order.length;
   let dist = bufA;
   let spare = bufB;
   dist.fill(0);
@@ -136,14 +146,14 @@ export function expectedRuns(order: Outcomes[]): number {
     for (let step = 0; step < 24; step++) {
       next.fill(0);
       let any = false;
-      for (let b = 0; b < 9; b++) {
+      for (let b = 0; b < n; b++) {
         const p = order[b];
         for (let o = 0; o < 3; o++) {
           for (let s = 0; s < BASES; s++) {
             const mass = live[idx(b, o, s)];
             if (mass < 1e-14) continue;
             any = true;
-            const nb = (b + 1) % 9;
+            const nb = (b + 1) % n;
             if (p.out > 0) {
               if (o === 2) carry[nb] += mass * p.out;
               else next[idx(nb, o + 1, s)] += mass * p.out;
@@ -171,7 +181,7 @@ export function expectedRuns(order: Outcomes[]): number {
     dist = live === bufA ? bufA : bufB;
     spare = dist === bufA ? bufB : bufA;
     dist.fill(0);
-    for (let b = 0; b < 9; b++) if (carry[b] > 0) dist[idx(b, 0, 0)] += carry[b];
+    for (let b = 0; b < n; b++) if (carry[b] > 0) dist[idx(b, 0, 0)] += carry[b];
   }
   return runs;
 }
@@ -231,8 +241,18 @@ export function outcomesFrom(line: BattingLine, league: BattingLine): Outcomes {
  * the rule's card ranked 16,718th and scored 736.7 runs a season, the true
  * optimum 746.2, and this climb reached 744.3 in 109 evaluations.
  */
-export function climb(seed: Outcomes[]): { order: number[]; runs: number; evaluations: number } {
-  const n = seed.length;
+export function climb(
+  seed: Outcomes[],
+  /**
+   * Which slots the search may touch. Everything by default; a league where the
+   * pitcher hits passes the eight bats and leaves him where he stands, since
+   * nobody is moving the pitcher up to bat second. He is still IN the seed —
+   * his outs are three of the twenty-seven and the order around him is being
+   * judged on how often it turns over past them.
+   */
+  movable?: number[]
+): { order: number[]; runs: number; evaluations: number } {
+  const free = movable ?? seed.map((_, i) => i);
   let order = seed.map((_, i) => i);
   const at = (o: number[]) => o.map((i) => seed[i]);
   let evaluations = 1;
@@ -240,8 +260,9 @@ export function climb(seed: Outcomes[]): { order: number[]; runs: number; evalua
 
   for (let pass = 0; pass < 20; pass++) {
     let moved = false;
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
+    for (const i of free) {
+      for (const j of free) {
+        if (j <= i) continue;
         const trial = [...order];
         [trial[i], trial[j]] = [trial[j], trial[i]];
         evaluations++;
