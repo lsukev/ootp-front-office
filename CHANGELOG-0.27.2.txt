@@ -1,0 +1,5 @@
+OOTP Front Office 0.27.2 — everything since 0.27.1
+
+Fixed — Lineups work in leagues where the pitcher hits. The run search that builds the batting order counted the card to nine, and in a league with no DH the card it is handed holds eight: the pitcher is added afterwards, because he bats ninth for where he stands in the field and not for how the bats sorted. The ninth read came back empty and the request died, which killed the Lineup page and the schedule's Plan button on every no-DH league since 0.24.0.
+
+Changed — The pitcher is now part of the order the search is judging. Leaving him out would have been the quicker fix and it is wrong twice over: eight men cycling means every hitter comes up oftener than he really will, and the three outs an inning that go through the pitcher never appear at all. He goes into the model as the ninth bat and stays in the ninth slot while the eight ahead of him move. Where he has no season line at all — as in any DH league, if you flip the override on to compare the two cards — the order stands as the slot rule wrote it, because an invented line is an invented input to a model whose only output is a number of runs.
