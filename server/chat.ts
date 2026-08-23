@@ -254,7 +254,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'get_prospects',
-    description: 'Minor leaguers ranked by promotion signal, with the reasoning behind each ranking.',
+    description: 'Minor leaguers ranked by promotion signal, with the reasoning behind each ranking. Each man also carries the corresponding move: who he would displace on the big club, or who is blocking him. A signal of "blocked" means he has earned a promotion where he is but everybody at his position in the majors is graded above him — do not recommend calling him up.',
     input_schema: {
       type: 'object',
       properties: { team_id: { type: 'number' } },

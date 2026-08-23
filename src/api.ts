@@ -306,7 +306,15 @@ export interface Prospect {
   ageDiff: number | null;
   score: number;
   reasons: string[];
-  signal: 'promote' | 'watch' | null;
+  signal: 'promote' | 'blocked' | 'watch' | 'demote' | null;
+  /** Who he would displace on the big club, and whether that is an upgrade. */
+  move: {
+    replaces: { player_id: number; name: string; cur: number | null } | null;
+    ahead: number;
+    bestAhead: { player_id: number; name: string; cur: number | null } | null;
+    blocked: boolean;
+    note: string;
+  } | null;
   war: number;
   // batters
   pa?: number;

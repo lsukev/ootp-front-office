@@ -510,6 +510,9 @@ th.sortable .tip { cursor: pointer; }
 .badge.promote { background: none; color: var(--good); border: 1px solid var(--good); }
 .badge.watch { background: none; color: var(--accent); border: 1px solid var(--accent); }
 .badge.demote { background: none; color: var(--bad); border: 1px solid var(--bad); }
+/* Earned it where he is, but the big club has no room — a statement of fact
+   rather than a verdict on the man, so it takes the muted text colour */
+.badge.blocked { background: none; color: var(--muted); border: 1px solid var(--muted); }
 
 .reasons { white-space: normal; color: var(--muted); font-size: 12px; max-width: 340px; }
 .hint-line { margin-top: 0; font-size: 12px; }

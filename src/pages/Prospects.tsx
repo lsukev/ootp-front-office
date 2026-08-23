@@ -26,6 +26,16 @@ export function Prospects({ orgId }: { orgId: number }) {
         to get wrong, and it is never shown for the lowest club in the organisation.{' '}
         Those sit at the bottom of each table, since the order runs on the same signal.
       </p>
+      <p className="muted hint-line">
+        <strong>The move</strong> is the other half of a call-up: who comes off the big club to make
+        room, and whether the swap is an improvement. It compares OOTP's Overall grade rather than the
+        season lines, because a .900 OPS in Double-A and a .900 OPS in the majors are not the same
+        achievement — the grade is scouted current ability and means the same thing at every level. A
+        man graded below everyone at his listed position is marked <strong>blocked</strong> instead of
+        promote: he has earned it where he is, but the club is better as it stands. The comparison runs
+        on his listed position only, so a shortstop blocked by a shortstop may still have a home at
+        second or third.
+      </p>
       <h2>Batters</h2>
       <ProspectTable prospects={data.batters} kind="batter" />
       <h2>Pitchers</h2>
@@ -62,6 +72,7 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
           )}
           <Th>WAR</Th>
           <th><Tip label="Cur→Pot" tip={TIP_CURPOT} /></th>
+          <Th>The move</Th>
           <Th>Why</Th>
         </tr>
       </thead>
@@ -91,6 +102,9 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
             <td className="num">{p.war?.toFixed(1)}</td>
             <td className="num">
               {formatRatingPair(p.cur, p.pot)}
+            </td>
+            <td className="reasons">
+              {p.signal === 'promote' || p.signal === 'blocked' ? p.move?.note ?? '—' : ''}
             </td>
             <td className="reasons">{p.reasons.join('; ')}</td>
           </tr>

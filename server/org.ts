@@ -299,6 +299,109 @@ function levelBaselines(batting: Map<string, Record<string, number>>, pitching: 
   return out;
 }
 
+
+const POSITION_NAMES: Record<number, string> = {
+  1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
+};
+
+/** What calling a man up would actually cost, and whether it is worth it. */
+export interface CorrespondingMove {
+  /** The weakest man at his spot on the big club — the one he would displace. */
+  replaces: { player_id: number; name: string; cur: number | null } | null;
+  /** How many men at his spot are graded above him. */
+  ahead: number;
+  /** The best of the men ahead of him, for the sentence the page prints. */
+  bestAhead: { player_id: number; name: string; cur: number | null } | null;
+  blocked: boolean;
+  note: string;
+}
+
+/**
+ * Who would have to come off the big club to make room, and whether the swap
+ * is an improvement.
+ *
+ * The farm page ranked minor leaguers against their own level and stopped
+ * there, so it recommended three call-ups without once looking at the men
+ * already in the majors — and a reader with a better man at every one of those
+ * spots was being told to make his club worse. A promotion is a swap; naming
+ * only half of it is naming none of it.
+ *
+ * The comparison runs on OOTP's Overall grade rather than on the season lines,
+ * and that is the whole reason it can be made at all: a .900 OPS in Double-A
+ * and a .900 OPS in the majors are not the same achievement, and putting them
+ * in the same column would be the exact mistake this exists to prevent. The
+ * grade is scouted current ability, level-independent by construction, and it
+ * is the number the rest of the app already quotes.
+ *
+ * The bar is beating the WEAKEST man at the spot, which is the least he can be
+ * asked: he is not being made a starter, he is being given a place on the
+ * roster. Where the grade is missing for either man no verdict is offered at
+ * all, since the alternative is a recommendation resting on a blank.
+ */
+function correspondingMoves(orgId: number, players: OrgPlayer[]): Map<number, CorrespondingMove> {
+  const out = new Map<number, CorrespondingMove>();
+
+  /*
+   * The big club, and only men actually on a roster there. OOTP parks an
+   * unassigned signing on the parent club's team_id with no roster row, and a
+   * sixteen-year-old out of the international complex is not somebody a
+   * call-up displaces.
+   */
+  const majors = players.filter((p) => p.team_id === orgId && p.rostered);
+  const byPosition = new Map<number, Array<{ player_id: number; name: string; cur: number | null }>>();
+  for (const m of majors) {
+    const { cur } = composites(m);
+    if (cur === null) continue;
+    /*
+     * Pitchers are grouped as pitchers rather than by rotation slot. A starter
+     * and a reliever hold the same kind of place on a twenty-six-man roster,
+     * and OOTP's role flag moves around often enough that splitting on it
+     * would have men blocked one week and clear the next.
+     */
+    const spot = m.position === 1 ? 1 : m.position;
+    const list = byPosition.get(spot) ?? [];
+    list.push({ player_id: m.player_id, name: `${m.first_name} ${m.last_name}`, cur });
+    byPosition.set(spot, list);
+  }
+
+  for (const p of players) {
+    if (p.team_id === orgId) continue; // already there
+    const { cur } = composites(p);
+    if (cur === null) continue;
+    const spot = p.position === 1 ? 1 : p.position;
+    const incumbents = byPosition.get(spot);
+    const where = POSITION_NAMES[spot] ?? `position ${spot}`;
+    if (!incumbents || incumbents.length === 0) {
+      out.set(p.player_id, {
+        replaces: null, ahead: 0, bestAhead: null, blocked: false,
+        note: `nobody at ${where} on the big club`,
+      });
+      continue;
+    }
+    const sorted = [...incumbents].sort((a, b) => (a.cur ?? 0) - (b.cur ?? 0));
+    const weakest = sorted[0];
+    const ahead = sorted.filter((m) => (m.cur ?? 0) >= cur);
+    const blocked = ahead.length === incumbents.length;
+    const best = sorted[sorted.length - 1];
+    out.set(p.player_id, {
+      replaces: blocked ? null : weakest,
+      ahead: ahead.length,
+      bestAhead: ahead.length > 0 ? best : null,
+      blocked,
+      /*
+       * A grade equal to the man in the way is not a reason to move anybody, so
+       * it counts as blocked — the tie goes to the roster you already have.
+       */
+      note: blocked
+        ? incumbents.length === 1
+          ? `blocked at ${where} — ${best.name} grades ${best.cur} to his ${cur}`
+          : `blocked at ${where} — all ${incumbents.length} graded above him, best ${best.name} at ${best.cur} to his ${cur}`
+        : `would take ${weakest.name}'s spot at ${where} — ${cur} to his ${weakest.cur}`,
+    });
+  }
+  return out;
+}
+
 export function computeProspects(orgId: number): { batters: unknown[]; pitchers: unknown[]; baselines: unknown } {
   const batting = seasonBatting();
   const pitching = seasonPitching();
@@ -307,6 +410,8 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
 
   const batters: unknown[] = [];
   const pitchers: unknown[] = [];
+  const roster = orgPlayers(orgId);
+  const moves = correspondingMoves(orgId, roster);
 
   /*
    * The bottom of the organisation, so nobody is told to send a man below it.
@@ -316,7 +421,7 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
    */
   const lowestLevel = Math.max(...[...teams.values()].map((t) => t.level));
 
-  for (const p of orgPlayers(orgId)) {
+  for (const p of roster) {
     const team = teams.get(p.team_id);
     if (!team || team.level <= 1) continue; // only minor leaguers
     const base = baselines[team.level];
@@ -333,6 +438,7 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
       cur,
       pot,
       ageDiff,
+      move: moves.get(p.player_id) ?? null,
     };
 
     if (p.position === 1) {
@@ -377,7 +483,7 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
          * struggling at Single-A is not the same sentence.
          */
         signal:
-          eraDiff >= 1.0 && ip >= 30 ? 'promote'
+          eraDiff >= 1.0 && ip >= 30 ? callUp(p.player_id)
           : overmatched(eraDiff <= -1.25, ip >= 30, ageDiff, team.level) ? 'demote'
           : score > 5 ? 'watch'
           : null,
@@ -405,12 +511,26 @@ export function computeProspects(orgId: number): { batters: unknown[]; pitchers:
         ...common, pa: s.pa, opsVal: Number(o.toFixed(3)), hr: s.hr, sb: s.sb, war: s.war ?? 0,
         score: Number(score.toFixed(1)), reasons,
         signal:
-          opsDiff >= 0.075 && s.pa >= 100 ? 'promote'
+          opsDiff >= 0.075 && s.pa >= 100 ? callUp(p.player_id)
           : overmatched(opsDiff <= -0.100, s.pa >= 100, ageDiff, team.level) ? 'demote'
           : score > 5 ? 'watch'
           : null,
       });
     }
+  }
+
+  /**
+   * A man who has earned a promotion, and what the big club has to say about it.
+   *
+   * Earning it at his level is the whole of what the signal used to mean, and
+   * a reader with a better man at the same spot in the majors was being told
+   * to make his club worse. Where every man at his position is graded above
+   * him the verdict becomes `blocked` — he is still on the page, still worth
+   * knowing about for an injury or a trade, but the app stops calling for a
+   * move that costs the club something.
+   */
+  function callUp(playerId: number): 'promote' | 'blocked' {
+    return moves.get(playerId)?.blocked ? 'blocked' : 'promote';
   }
 
   /**
