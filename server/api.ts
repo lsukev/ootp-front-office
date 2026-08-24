@@ -12,6 +12,7 @@ import { contractRoutes } from './contracts.js';
 import { freeAgentRoutes } from './freeagents.js';
 import { lineupRoutes } from './lineup.js';
 import { storylineRoutes, startStorylineJob } from './storylines.js';
+import { recapRoutes, startRecapJob } from './recap.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
@@ -60,6 +61,7 @@ api.use(contractRoutes);
 api.use(freeAgentRoutes);
 api.use(lineupRoutes);
 api.use(storylineRoutes);
+api.use(recapRoutes);
 
 const META_PATH = path.join(DATA_DIR, 'last-import.json');
 
@@ -94,9 +96,12 @@ function autoGenerate(): void {
     if (!settings.autoGenerateAfterImport || !getApiKey()) return;
     const orgId = settings.defaultOrgId ?? humanOrgId();
     if (!orgId) return;
-    console.log('[import] starting storylines and briefing for org', orgId);
+    console.log('[import] starting storylines, briefing and recap for org', orgId);
     startStorylineJob(orgId);
     startBriefingJob(orgId);
+    // The recap is of yesterday's games, so a fresh import is exactly when it
+    // is worth writing — that is the whole point of it being a daily thing
+    startRecapJob(orgId);
   } catch (err) {
     // A failure here must never take the import down with it
     console.error('[import] could not start the generations:', err);

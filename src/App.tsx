@@ -15,6 +15,7 @@ import { Pitching } from './pages/Pitching';
 import { Schedule } from './pages/Schedule';
 import { Trends } from './pages/Trends';
 import { Storylines } from './pages/Storylines';
+import { LeagueRecap } from './pages/LeagueRecap';
 import { Dashboard } from './pages/Dashboard';
 import { Development } from './pages/Development';
 import { TradeCenter } from './pages/TradeCenter';
@@ -39,7 +40,7 @@ import { Chat } from './Chat';
 import { apiGet, apiPost } from './api';
 
 type Page =
-  | 'dashboard' | 'storylines' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
+  | 'dashboard' | 'storylines' | 'recap' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
   | 'staff' | 'watchlist' | 'players' | 'standings' | 'pitching' | 'schedule' | 'payroll' | 'trends' | 'settings';
 
@@ -84,6 +85,7 @@ const NAV: Array<NavEntry<Page>> = [
   {
     kind: 'group', label: 'League', icon: '📊',
     items: [
+      { page: 'recap', label: 'Daily Recap', hint: "Yesterday's games, written up" },
       { page: 'standings', label: 'Standings', hint: 'Every division, run differential' },
       { page: 'franchise', label: 'Franchise History', hint: 'Every season the club has played' },
       { page: 'orgcompare', label: 'Org Comparison', hint: 'Your system against the other 29' },
@@ -421,6 +423,7 @@ export function App() {
               <>
                 {page === 'dashboard' && <Dashboard orgId={orgId} onNavigate={(p) => setPage(p as Page)} />}
                 {page === 'storylines' && <Storylines orgId={orgId} orgLabel={org.label} />}
+                {page === 'recap' && <LeagueRecap orgId={orgId} />}
                 {page === 'rosters' && <RosterPage orgId={orgId} />}
                 {page === 'depth' && <DepthChart orgId={orgId} />}
                 {page === 'prospects' && <Prospects orgId={orgId} />}

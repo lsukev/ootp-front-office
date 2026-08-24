@@ -1913,3 +1913,10 @@ button.cta {
   display: inline-block; min-width: 62px; font-size: 10px; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--muted);
 }
+
+/* The league recap: a lead paragraph, the divisions as cards, then the notes */
+.recap-summary { font-size: 15px; line-height: 1.55; margin: 0 0 16px; }
+.recap-notes { margin-top: 18px; }
+.recap-notes h3 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.recap-notes ul { margin: 0; padding-left: 18px; }
+.recap-notes li { margin-bottom: 4px; line-height: 1.5; }

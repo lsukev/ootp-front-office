@@ -272,6 +272,24 @@ export interface PlayerDossier {
 }
 
 export const getPlayer = (id: number) => json<PlayerDossier>(`/api/player/${id}`);
+export interface RecapCache {
+  generatedAt?: string;
+  /** The day the recap covers — the last one the league played, not the save's today. */
+  gameDate?: string | null;
+  leagueName?: string;
+  /** Null before one has been written for this club. */
+  recap: {
+    summary: string;
+    divisions: Array<{ division: string; body: string }>;
+    notes: string[];
+  } | null;
+  /** The last day the league played, so a recap the save has moved past can say so. */
+  latestPlayed?: string | null;
+  stale?: boolean;
+  notice?: { message: string; from: string; to: string; provider: string } | null;
+  job?: { state: 'idle' | 'running' | 'done' | 'error'; startedAt: string | null; finishedAt: string | null; error: string | null };
+}
+
 export const getStorylines = (orgId: number) => json<StorylineCache | null>(`/api/storylines/${orgId}`);
 export const generateStorylines = (orgId: number) =>
   json<StorylineCache>(`/api/storylines/${orgId}`, { method: 'POST' });
