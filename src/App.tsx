@@ -16,6 +16,7 @@ import { Schedule } from './pages/Schedule';
 import { Trends } from './pages/Trends';
 import { Storylines } from './pages/Storylines';
 import { LeagueRecap } from './pages/LeagueRecap';
+import { PageBoundary } from './PageBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Development } from './pages/Development';
 import { TradeCenter } from './pages/TradeCenter';
@@ -420,7 +421,12 @@ export function App() {
           <Nav entries={navEntries} current={page} onNavigate={setPage} />
           <main>
             {orgId !== null && org && (
-              <>
+              /*
+               * Keyed by page so leaving a broken one and coming back gets a
+               * clean mount, rather than the error persisting because the
+               * boundary never re-rendered.
+               */
+              <PageBoundary key={page} onLeave={() => setPage('dashboard')}>
                 {page === 'dashboard' && <Dashboard orgId={orgId} onNavigate={(p) => setPage(p as Page)} />}
                 {page === 'storylines' && <Storylines orgId={orgId} orgLabel={org.label} />}
                 {page === 'recap' && <LeagueRecap orgId={orgId} />}
@@ -455,7 +461,7 @@ export function App() {
                     onSaveChanged={switchSave}
                   />
                 )}
-              </>
+              </PageBoundary>
             )}
           </main>
 

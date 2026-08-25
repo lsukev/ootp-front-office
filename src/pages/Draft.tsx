@@ -129,7 +129,12 @@ export function Draft({ orgId }: { orgId: number }) {
   const arrow = (key: string) => (key === sortKey ? (sortDir === 1 ? ' ▲' : ' ▼') : '');
 
   const filtered = useMemo(() => {
-    if (!data) return [];
+    /*
+     * These run before the lines below that hand back "no draft" and "class not
+     * published", so they see every answer the endpoint can give — including
+     * the ones with no class in them at all.
+     */
+    if (!data?.prospects) return [];
     const needle = q.trim().toLowerCase();
     const rows = data.prospects.filter((p) => {
       if (needle && !p.name.toLowerCase().includes(needle)) return false;
@@ -167,9 +172,9 @@ export function Draft({ orgId }: { orgId: number }) {
    * because a draft pick is years from helping the club he is drafted by.
    */
   const shortlist = useMemo(() => {
-    if (!data) return { best: [] as DraftProspect[], fits: [] as DraftProspect[] };
+    if (!data?.prospects) return { best: [] as DraftProspect[], fits: [] as DraftProspect[] };
     const best = data.prospects.slice(0, 5);
-    const thin = new Set(data.needs.slice(0, 3).map((h) => h.positionName));
+    const thin = new Set((data.needs ?? []).slice(0, 3).map((h) => h.positionName));
     const chosen = new Set(best.map((p) => p.player_id));
     const fits = data.prospects
       .filter((p) => thin.has(p.positionName) && !chosen.has(p.player_id))
@@ -244,7 +249,7 @@ export function Draft({ orgId }: { orgId: number }) {
           {shortlist.fits.length > 0 && (
             <div>
               <strong className="muted">
-                Best at your thinnest spots ({data.needs.slice(0, 3).map((h) => h.positionName).join(', ')})
+                Best at your thinnest spots ({(data.needs ?? []).slice(0, 3).map((h) => h.positionName).join(', ')})
               </strong>
               <table className="mini">
                 <tbody>

@@ -507,9 +507,20 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
   const league = draftLeague(Number(req.params.orgId));
   if (!league) return res.status(404).json({ error: 'Unknown team' });
 
-  // Nothing is read from the players table until OOTP itself publishes the class
+  /*
+   * Nothing is read from the players table until OOTP itself publishes the
+   * class — but the shape of the answer does not change with it.
+   *
+   * This used to hand back `batters` and `pitchers`, names the page stopped
+   * using a long time ago, and no `prospects` or `needs` at all. The board
+   * filters and sorts the class as it renders, before it gets as far as the
+   * line that would have said the class is not published, so it read `filter`
+   * off nothing and threw — and with no boundary above it, the throw took the
+   * whole window down: blank screen, no navigation, no way back. Between
+   * drafts, which is most of the year, that was every visit to the page.
+   */
   if (!league.poolVisible) {
-    return res.json({ ...league, total: 0, batters: [], pitchers: [] });
+    return res.json({ ...league, total: 0, prospects: [], needs: [] });
   }
 
   /*
