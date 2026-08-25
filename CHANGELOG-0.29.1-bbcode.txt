@@ -1,0 +1,5 @@
+[b][size=4]OOTP Front Office 0.29.1 — everything since 0.29.0[/size][/b]
+[list]
+[*][b]Fixed[/b] — The Draft Board no longer blanks the app between drafts. When the class has not been published yet, the server was answering with a shape the page stopped using long ago, and the board — which filters and sorts the class as it draws — read off nothing and crashed before it got as far as the line that says the class is not published. That was every visit to the page for most of the year. Saves with a published class were unaffected, which is why it took a report to find.
+[*][b]Fixed[/b] — A page that cannot draw itself no longer takes the whole window with it. Nothing in the app caught a render error anywhere, so a single bad read on one page unmounted everything, navigation included, and left no way back but quitting. Now the page says what broke, the navigation keeps working, and there is a button back to the dashboard. The message is the real one rather than a blank screen: it all runs against a file on your own machine, so there is nothing to protect by hiding it, and a specific sentence is one you can report.
+[/list]
