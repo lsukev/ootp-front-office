@@ -82,6 +82,16 @@ function leagueGameDate(): string | null {
   }
 }
 
+/**
+ * A date OOTP wrote as text, as a number that sorts. `2006-6-9` becomes
+ * 20060609, so June the ninth stops outranking June the twenty-third.
+ */
+const SNAPSHOT_KEY = `(
+  CAST(substr(game_date, 1, 4) AS INTEGER) * 10000 +
+  CAST(substr(game_date, 6, CASE WHEN substr(game_date, 7, 1) = '-' THEN 1 ELSE 2 END) AS INTEGER) * 100 +
+  CAST(substr(game_date, 6 + CASE WHEN substr(game_date, 7, 1) = '-' THEN 2 ELSE 3 END) AS INTEGER)
+)`;
+
 /** Capture a ratings snapshot of every rostered player. Idempotent per game date. */
 export function takeSnapshot(): { gameDate: string; players: number } | null {
   if (!tableExists('players') || !tableExists('players_batting')) return null;
@@ -141,11 +151,29 @@ export function takeSnapshot(): { gameDate: string; players: number } | null {
   return { gameDate, players: rows.length };
 }
 
+/**
+ * Every snapshot this save has kept, oldest first.
+ *
+ * Ordered on the date read as a number rather than as text, which is the whole
+ * of a bug a reader reported and could not have been expected to diagnose.
+ * OOTP writes dates without padding, so as text "2006-6-9" sorts after
+ * "2006-6-23" — nine beats two on the first character. His newest snapshot was
+ * the twenty-third and the page was certain it was the ninth: it compared
+ * everything against the wrong end, offered seven of his eight snapshots in
+ * the menu, and listed those seven in an order with no meaning. Three symptoms,
+ * one `ORDER BY`.
+ *
+ * The stored strings are left exactly as they are. They are the key rows are
+ * written under and the value the page hands back to ask for a comparison;
+ * rewriting them to be tidy would be a migration of somebody's history to fix
+ * a sort. The padding is done for display, where it belongs.
+ */
 export function snapshotDates(): string[] {
   return (
     historyDb
       .prepare(
-        `SELECT DISTINCT game_date FROM rating_snapshots WHERE save_name = ? ORDER BY game_date`
+        `SELECT DISTINCT game_date FROM rating_snapshots WHERE save_name = ?
+         ORDER BY ${SNAPSHOT_KEY}`
       )
       .all(currentSaveName()) as Array<{ game_date: string }>
   ).map((r) => r.game_date);

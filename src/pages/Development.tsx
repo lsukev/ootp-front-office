@@ -12,6 +12,19 @@ interface DevData { snapshots: number; dates: string[]; from?: string; to?: stri
 
 const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
 
+/**
+ * A snapshot date, padded for reading.
+ *
+ * OOTP writes them unpadded, so a menu of them reads as a jumble even in the
+ * right order — "2006-6-2" above "2006-6-16" looks like a mistake until the
+ * eye works out why it is not. The stored string is untouched; this is only
+ * what the reader sees.
+ */
+const readable = (raw: string): string => {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw.trim());
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : raw;
+};
+
 export function Development({ orgId }: { orgId: number }) {
   const [data, setData] = useState<DevData | null>(null);
   const [from, setFrom] = useState<string | null>(null);
@@ -32,7 +45,7 @@ export function Development({ orgId }: { orgId: number }) {
         <h3>Development tracking is armed</h3>
         <p>
           A ratings snapshot of every player was captured as of your current export
-          ({data.dates[0] ?? 'no date'}). After your next sim + CSV export, this page will show every scout-rating
+          ({data.dates[0] ? readable(data.dates[0]) : 'no date'}). After your next sim + CSV export, this page will show every scout-rating
           change in your organization — who's developing, who's declining, whose ceiling moved.
         </p>
       </div>
@@ -46,14 +59,22 @@ export function Development({ orgId }: { orgId: number }) {
     <div>
       <div className="toolbar">
         <span className="muted">
-          Rating changes from
+          Rating changes since
         </span>
+        {/*
+          Newest first, because the snapshot before this one is the comparison
+          almost everybody wants and it should not be at the bottom of a list.
+          The last entry is left out: it is the export you are looking at, and
+          comparing it with itself would show nothing.
+        */}
         <select value={from ?? data.from} onChange={(e) => setFrom(e.target.value)}>
-          {data.dates.slice(0, -1).map((d) => (
-            <option key={d} value={d}>{d}</option>
+          {data.dates.slice(0, -1).reverse().map((d) => (
+            <option key={d} value={d}>{readable(d)}</option>
           ))}
         </select>
-        <span className="muted">to {data.to} ({data.snapshots} snapshots kept)</span>
+        <span className="muted">
+          — measured against your current export of {readable(data.to ?? '')} ({data.snapshots} snapshots kept)
+        </span>
       </div>
 
       {data.changes.length === 0 && (

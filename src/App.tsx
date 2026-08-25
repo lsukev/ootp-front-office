@@ -145,7 +145,32 @@ export function App() {
   const [saves, setSaves] = useState<SaveInfo[]>([]);
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [orgId, setOrgId] = useState<number | null>(null);
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPageState] = useState<Page>('dashboard');
+  /**
+   * Where the reader has been, so there is a way back.
+   *
+   * A reader wrote that he dared to dream of a Back button. There was nothing
+   * to dream about: the page is a single piece of state and the app has no
+   * browser chrome around it, so following a player from the farm page into a
+   * comparison and wanting to return meant finding the farm page again in the
+   * menus. This is a stack rather than a toggle, so several steps in still
+   * unwind one at a time.
+   */
+  const [trail, setTrail] = useState<Page[]>([]);
+  const setPage = useCallback((next: Page) => {
+    setPageState((current) => {
+      // Re-selecting the page you are on is not a step worth being able to undo
+      if (current !== next) setTrail((t) => [...t, current]);
+      return next;
+    });
+  }, []);
+  const goBack = useCallback(() => {
+    setTrail((t) => {
+      if (t.length === 0) return t;
+      setPageState(t[t.length - 1]);
+      return t.slice(0, -1);
+    });
+  }, []);
   const [switching, setSwitching] = useState(false);
   /** Live import progress, so a thirty-second wait is not a blank screen. */
   const [importing, setImporting] = useState<Status['importProgress']>(null);
@@ -386,6 +411,11 @@ export function App() {
               title="Message your front office"
             >
               ✦ Ask
+            </button>
+          )}
+          {status.hasData && trail.length > 0 && (
+            <button className="gear" onClick={goBack} title={`Back to ${trail[trail.length - 1]}`}>
+              ←
             </button>
           )}
           {status.hasData && !isStaticSite() && (
