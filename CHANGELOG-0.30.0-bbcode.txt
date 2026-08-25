@@ -1,0 +1,6 @@
+[b][size=4]OOTP Front Office 0.30.0 — everything since 0.29.1[/size][/b]
+[list]
+[*][b]Fixed[/b] — The Development page compares against the right snapshot, and the menu is in date order. OOTP writes dates without padding, and they were being sorted as text: "2006-6-9" sorts after "2006-6-23" because nine beats two on the first character. So on a save with a single-digit day among double-digit ones, the page picked the wrong snapshot as your newest, measured everything against it, and listed the rest in an order with no meaning. One comparison caused all three. The dates are now ordered as dates, padded on screen so the order is legible, the menu runs newest first, and the label says plainly that the other end is your current export.
+[*][b]Fixed[/b] — Two more places were sorting OOTP's dates the same way. A player's injury history kept the twelve most recent by spelling rather than by date, and the league calendar picked the earliest draft day and pool date the same way — as text "2006-10-1" comes before "2006-6-9", so the board could have been counting down to neither.
+[*][b]New[/b] — A Back button, next to the settings gear. It walks back through the pages you have visited one at a time rather than flipping between the last two.
+[/list]
