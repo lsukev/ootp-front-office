@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
 import { LEVEL_NAMES, rosterHoles, seasonYear } from './valuation.js';
+import { DATE_KEY } from './dashboard.js';
 
 export const rosterOpsRoutes = Router();
 
@@ -426,9 +427,12 @@ function draftLeague(orgId: number): DraftLeague | null {
     if (!tableExists('league_events')) return null;
     const e = db
       .prepare(
+        // The earliest event of its kind, by date rather than by spelling. As
+        // text "2006-10-1" sorts before "2006-6-9", so the draft day the board
+        // counts down to could be the wrong one entirely
         `SELECT start_date FROM league_events
          WHERE league_id = ? AND type = ? AND deleted = 0
-         ORDER BY start_date LIMIT 1`
+         ORDER BY ${DATE_KEY('start_date')} LIMIT 1`
       )
       .get(row!.league_id, type) as { start_date: string } | undefined;
     return padDate(e?.start_date);

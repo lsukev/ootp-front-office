@@ -254,8 +254,11 @@ playerRoutes.get('/player/:id', (req, res) => {
     try {
       injuryHistory = db
         .prepare(
+          // Ordered on the date as a number: OOTP writes them unpadded, and as
+          // text the ninth of a month outranks the twenty-third, so the twelve
+          // kept here were not always the twelve most recent
           `SELECT date, length, day_to_day FROM players_injury_history
-           WHERE player_id = ? ORDER BY date DESC LIMIT 12`
+           WHERE player_id = ? ORDER BY ${DATE_KEY('date')} DESC LIMIT 12`
         )
         .all(id) as Array<Record<string, unknown>>;
     } catch { /* skip */ }

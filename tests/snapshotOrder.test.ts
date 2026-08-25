@@ -113,3 +113,29 @@ describe('a way back', () => {
     expect(app).toMatch(/t\.slice\(0, -1\)/);
   });
 });
+
+describe('everywhere else a date OOTP wrote is ordered', () => {
+  /*
+   * The third time this month. The recap picked the wrong day the same way,
+   * and the snapshots above were the same fault again — so the sweep is worth
+   * pinning rather than repeating.
+   */
+  const server = (rel: string) => read(path.join('server', rel));
+
+  it('sorts a man\'s injury history by date, not by spelling', () => {
+    // The twelve kept were not always the twelve most recent
+    expect(server('player.ts')).toMatch(/ORDER BY \$\{DATE_KEY\('date'\)\} DESC LIMIT 12/);
+  });
+
+  it('sorts the league calendar by date, not by spelling', () => {
+    // These are the draft day and pool date the board counts down to. As text
+    // "2006-10-1" sorts before "2006-6-9", so the earliest could be neither
+    expect(server('rosterops.ts')).toMatch(/ORDER BY \$\{DATE_KEY\('start_date'\)\} LIMIT 1/);
+  });
+
+  it('does not keep a second copy of the same expression', () => {
+    // history.ts had its own before this; one of these in the codebase is enough
+    expect(server('history.ts')).not.toMatch(/SNAPSHOT_KEY/);
+    expect(server('history.ts')).toMatch(/DATE_KEY\('game_date'\)/);
+  });
+});

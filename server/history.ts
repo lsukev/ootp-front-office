@@ -3,6 +3,7 @@ import { Router } from 'express';
 import path from 'node:path';
 import { db as leagueDb, tableExists } from './db.js';
 import { DATA_DIR, loadConfig } from './config.js';
+import { DATE_KEY } from './dashboard.js';
 
 /**
  * Persistent store that SURVIVES reimports (league.db is rebuilt on every
@@ -81,16 +82,6 @@ function leagueGameDate(): string | null {
     return null;
   }
 }
-
-/**
- * A date OOTP wrote as text, as a number that sorts. `2006-6-9` becomes
- * 20060609, so June the ninth stops outranking June the twenty-third.
- */
-const SNAPSHOT_KEY = `(
-  CAST(substr(game_date, 1, 4) AS INTEGER) * 10000 +
-  CAST(substr(game_date, 6, CASE WHEN substr(game_date, 7, 1) = '-' THEN 1 ELSE 2 END) AS INTEGER) * 100 +
-  CAST(substr(game_date, 6 + CASE WHEN substr(game_date, 7, 1) = '-' THEN 2 ELSE 3 END) AS INTEGER)
-)`;
 
 /** Capture a ratings snapshot of every rostered player. Idempotent per game date. */
 export function takeSnapshot(): { gameDate: string; players: number } | null {
@@ -173,7 +164,7 @@ export function snapshotDates(): string[] {
     historyDb
       .prepare(
         `SELECT DISTINCT game_date FROM rating_snapshots WHERE save_name = ?
-         ORDER BY ${SNAPSHOT_KEY}`
+         ORDER BY ${DATE_KEY('game_date')}`
       )
       .all(currentSaveName()) as Array<{ game_date: string }>
   ).map((r) => r.game_date);
