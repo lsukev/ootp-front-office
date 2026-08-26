@@ -73,6 +73,18 @@ const teams = db
   )
   .all() as Array<{ name: string; nickname: string; bg: string; fg: string; secondary: string; cap: string }>;
 
+/**
+ * What a table row is drawn on: `rgba(0, 0, 0, 0.12)` over the page, which is
+ * what `table` paints in styles.css. Anything measured against the bare
+ * background is measured against a surface the app never puts text on.
+ */
+function rowSurface(background: string): string {
+  const [r, g, b] = hslToRgb(background);
+  // Returned as hex because that is the other notation the parser above reads
+  const over = (c: number) => Math.round(c * 0.88).toString(16).padStart(2, '0');
+  return `#${over(r)}${over(g)}${over(b)}`;
+}
+
 const AA = 4.5;
 let failures = 0;
 // Both modes are generated from the same team colors, so both have to be
@@ -91,6 +103,19 @@ for (const t of teams) {
     plate: ratio(p['--team-fg'], p['--team']),
     good: ratio(p['--good'], p['--bg']),
     bad: ratio(p['--bad'], p['--bg']),
+    /*
+     * The verdict colours where they are actually drawn.
+     *
+     * Against the page background is not the test that matters: every one of
+     * these is used inside a table, and a table paints itself a shade darker
+     * than the page. This check reported 60/60 while the availability pills on
+     * the pitching page sat at 1.4 in light mode, because it had never looked
+     * at the surface they were on — or at the amber, which had no token and so
+     * could not be looked at.
+     */
+    goodRow: ratio(p['--good'], rowSurface(p['--bg'])),
+    warnRow: ratio(p['--warn'], rowSurface(p['--bg'])),
+    badRow: ratio(p['--bad'], rowSurface(p['--bg'])),
     // The stat columns, at the faintest mix the app will actually draw
     statGood: ratio(statMix(p['--good'], p['--text'], 45), p['--bg']),
     statBad: ratio(statMix(p['--bad'], p['--text'], 45), p['--bg']),

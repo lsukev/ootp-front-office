@@ -221,9 +221,22 @@ export function derivePalette(
   // Text sitting on the accent: dark ink in dark mode, near-white on the
   // darkened accent light mode produces
   set('--accent-ink', hsl({ h: accent.h, s: Math.min(60, accent.s), l: s.ink }));
-  // Good/bad need to flip too: pastel greens vanish on white
-  set('--good', mode === 'light' ? 'hsl(145, 55%, 28%)' : 'hsl(120, 40%, 64%)');
-  set('--bad', mode === 'light' ? 'hsl(2, 62%, 42%)' : 'hsl(5, 100%, 79%)');
+  /*
+   * Good/bad need to flip too: pastel greens vanish on white.
+   *
+   * Deep enough in light mode to clear AA on a TABLE ROW rather than on the
+   * page. A table paints itself a shade darker than the background, which is
+   * roughly a tenth of the contrast, and every one of these three is drawn
+   * inside one. The old values cleared the page at 5.6 and the row at 4.3.
+   */
+  set('--good', mode === 'light' ? 'hsl(145, 58%, 25%)' : 'hsl(120, 40%, 64%)');
+  set('--bad', mode === 'light' ? 'hsl(2, 65%, 39%)' : 'hsl(5, 100%, 79%)');
+  /*
+   * The middle verdict — not a problem, not clear either. It had no token at
+   * all, so the one place that needed it used a fixed amber picked for a dark
+   * background and measured 1.4 against a light one.
+   */
+  set('--warn', mode === 'light' ? 'hsl(30, 95%, 26%)' : 'hsl(42, 80%, 66%)');
   return out;
 }
 

@@ -17,6 +17,7 @@
   --stitch: #c2504a;      /* baseball-seam red, not themed */
   --good: #7fc97f;
   --bad: #ff9d94;
+  --warn: #e8c06a;
   --team: #1a4a2e;
   --team-fg: #f5ead6;
 
@@ -1251,11 +1252,22 @@ button.cta {
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 12px;
+  /* A shade heavier than the table around it: this is the column a reader
+     scans, and at twelve pixels the weight is worth as much as the colour */
+  font-weight: 500;
   white-space: nowrap;
 }
-.avail-ok { background: rgba(80, 190, 120, 0.14); color: #6fcf90; }
-.avail-warn { background: rgba(230, 180, 70, 0.16); color: #e2b552; }
-.avail-bad { background: rgba(220, 90, 90, 0.16); color: #e07b7b; }
+/*
+ * Drawn from the theme rather than from three colours chosen for a dark
+ * background. Those measured 1.4 against a light one — the text and its own
+ * tint were nearly the same brightness, which is exactly the "blurry" a reader
+ * described. No fill for the same reason the signal badges lost theirs: every
+ * tint tried cost contrast the colour could not spare, and the border carries
+ * the pill shape perfectly well without one.
+ */
+.avail-ok { color: var(--good); border: 1px solid currentColor; }
+.avail-warn { color: var(--warn); border: 1px solid currentColor; }
+.avail-bad { color: var(--bad); border: 1px solid currentColor; }
 .role-tag {
   display: inline-block;
   margin-right: 6px;
@@ -1271,8 +1283,10 @@ button.cta {
   margin-left: 8px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(220, 90, 90, 0.16);
-  color: #e07b7b;
+  /* Themed, for the same reason the availability pills are: a red chosen for a
+     dark background measured 2.0 against a light table row */
+  border: 1px solid currentColor;
+  color: var(--bad);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -1608,8 +1622,8 @@ button.cta {
   padding: 8px 12px;
   border-radius: 12px;
   font-size: 12px;
-  background: rgba(220, 90, 90, 0.14);
-  color: #e07b7b;
+  border: 1px solid currentColor;
+  color: var(--bad);
 }
 /* The model was swapped, not a failure — said plainly and without alarm */
 .imsg-notice {
