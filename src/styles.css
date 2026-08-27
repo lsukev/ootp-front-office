@@ -1944,3 +1944,21 @@ button.cta {
 .recap-notes h3 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
 .recap-notes ul { margin: 0; padding-left: 18px; }
 .recap-notes li { margin-bottom: 4px; line-height: 1.5; }
+
+/* The MLB / Minors filter on a player card's history tables. Sits in the
+   heading, so it is beside whichever table the reader is actually looking at. */
+.level-picker { display: inline-flex; gap: 2px; margin-left: 10px; vertical-align: middle; }
+.level-picker button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: 500 10px/1 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.level-picker button:hover { color: var(--text); border-color: var(--muted); }
+.level-picker button.active { color: var(--accent); border-color: var(--accent); }
+.empty-scope { margin: 6px 0 0; font-size: 12px; }

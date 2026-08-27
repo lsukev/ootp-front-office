@@ -311,6 +311,10 @@ playerRoutes.get('/player/:id', (req, res) => {
         const innings = f.innings ?? 0;
         return {
           year: f.year,
+          // Carried as well as named, so the card can filter on it. The other
+          // two history tables keep it by spreading the row; this one builds a
+          // fresh object and was dropping it.
+          level_id: f.level_id,
           levelName: LEVEL_NAMES[f.level_id] ?? '',
           positionName: POSITION_NAMES[f.position] ?? '?',
           g: f.g,

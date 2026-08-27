@@ -170,7 +170,72 @@ function WatchControls({ playerId, name }: { playerId: number; name: string }) {
   );
 }
 
+/**
+ * Which levels a career table shows.
+ *
+ * A reader asked to see a man's major-league line on its own, or his minor
+ * league one. The split is simply level one against everything under it, which
+ * is the question he asked and is also the only version of it that survives a
+ * league with levels this app has never seen — no list of what counts as the
+ * minors to fall out of date.
+ */
+export type LevelScope = 'all' | 'mlb' | 'minors';
+
+export const inScope = (levelId: unknown, scope: LevelScope): boolean => {
+  if (scope === 'all') return true;
+  const majors = Number(levelId) === 1;
+  return scope === 'mlb' ? majors : !majors;
+};
+
+/** How an emptied table names the levels it was asked for. */
+const scopeWord = (scope: LevelScope): string =>
+  scope === 'mlb' ? 'major-league' : scope === 'minors' ? 'minor-league' : '';
+
+const SCOPES: Array<{ key: LevelScope; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'mlb', label: 'MLB' },
+  { key: 'minors', label: 'Minors' },
+];
+
+/**
+ * Shown beside each history heading rather than once at the top, because these
+ * tables are spread down a scrolling card and a control you have to scroll back
+ * to is one you stop using. All three read the same state, so setting it
+ * anywhere sets it everywhere.
+ */
+function LevelPicker({ scope, onPick }: { scope: LevelScope; onPick: (s: LevelScope) => void }) {
+  return (
+    <span className="level-picker">
+      {SCOPES.map((s) => (
+        <button
+          key={s.key}
+          type="button"
+          className={s.key === scope ? 'active' : ''}
+          onClick={() => onPick(s.key)}
+        >
+          {s.label}
+        </button>
+      ))}
+    </span>
+  );
+}
+
 function Dossier({ d }: { d: PlayerDossier }) {
+  const [scope, setScope] = useState<LevelScope>('all');
+  const battingYears = d.battingYears.filter((y) => inScope(y.level_id, scope));
+  const pitchingYears = d.pitchingYears.filter((y) => inScope(y.level_id, scope));
+  const fieldingYears = (d.fieldingYears ?? []).filter((f) => inScope(f.level_id, scope));
+
+  /*
+   * Offered only where there is something to divide. A man who has never
+   * played anywhere but the majors gains nothing from being asked which levels
+   * he wants, and the card is long enough already.
+   */
+  const everyRow = [...d.battingYears, ...d.pitchingYears, ...(d.fieldingYears ?? [])];
+  const mixed =
+    everyRow.some((r) => Number(r.level_id) === 1) && everyRow.some((r) => Number(r.level_id) !== 1);
+  const picker = mixed ? <LevelPicker scope={scope} onPick={setScope} /> : null;
+
   const showBatting = !d.isPitcher || d.battingYears.length > 0;
   return (
     <div>
@@ -293,7 +358,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
 
       {showBatting && d.battingYears.length > 0 && (
         <section>
-          <h3>Batting History</h3>
+          <h3>Batting History {picker}</h3>
           <div className="history-scroll">
             <table className="mini">
               <thead>
@@ -303,7 +368,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
                 </tr>
               </thead>
               <tbody>
-                {d.battingYears.map((y, i) => (
+                {battingYears.map((y, i) => (
                   <tr key={i}>
                     <td>{y.year}</td>
                     <td>{y.team ?? '—'}</td>
@@ -320,6 +385,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
                 ))}
               </tbody>
             </table>
+            {battingYears.length === 0 && <p className="muted empty-scope">No {scopeWord(scope)} batting.</p>}
           </div>
         </section>
       )}
@@ -379,7 +445,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
 
       {(d.fieldingYears?.length ?? 0) > 0 && (
         <section>
-          <h3>Fielding</h3>
+          <h3>Fielding {picker}</h3>
           <table>
             <thead>
               <tr>
@@ -390,7 +456,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
               </tr>
             </thead>
             <tbody>
-              {(d.fieldingYears ?? []).slice(0, 14).map((f, i) => (
+              {fieldingYears.slice(0, 14).map((f, i) => (
                 <tr key={i}>
                   <td className="num">{f.year}</td>
                   <td><span className="lvl-badge">{f.levelName}</span></td>
@@ -407,6 +473,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
               ))}
             </tbody>
           </table>
+          {fieldingYears.length === 0 && <p className="muted empty-scope">No {scopeWord(scope)} fielding.</p>}
         </section>
       )}
 
@@ -550,7 +617,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
 
       {d.pitchingYears.length > 0 && (
         <section>
-          <h3>Pitching History</h3>
+          <h3>Pitching History {picker}</h3>
           <div className="history-scroll">
             <table className="mini">
               <thead>
@@ -560,7 +627,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
                 </tr>
               </thead>
               <tbody>
-                {d.pitchingYears.map((y, i) => (
+                {pitchingYears.map((y, i) => (
                   <tr key={i}>
                     <td>{y.year}</td>
                     <td>{y.team ?? '—'}</td>
@@ -579,6 +646,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
                 ))}
               </tbody>
             </table>
+            {pitchingYears.length === 0 && <p className="muted empty-scope">No {scopeWord(scope)} pitching.</p>}
           </div>
         </section>
       )}

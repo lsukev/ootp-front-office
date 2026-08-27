@@ -264,7 +264,7 @@ export interface PlayerDossier {
   currentInjury: { status: string; daysLeft: number | null } | null;
   awards?: Array<{ year: number; award: string; positionName: string | null; rank: number }>;
   fieldingYears?: Array<{
-    year: number; levelName: string; positionName: string;
+    year: number; level_id: number; levelName: string; positionName: string;
     g: number; gs: number; innings: number; po: number; a: number; e: number; dp: number;
     fpct: number | null; rf9: number | null;
   }>;
