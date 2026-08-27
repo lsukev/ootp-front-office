@@ -342,12 +342,60 @@ function correspondingMoves(orgId: number, players: OrgPlayer[]): Map<number, Co
   const out = new Map<number, CorrespondingMove>();
 
   /*
-   * The big club, and only men actually on a roster there. OOTP parks an
-   * unassigned signing on the parent club's team_id with no roster row, and a
-   * sixteen-year-old out of the international complex is not somebody a
-   * call-up displaces.
+   * The big club, and only the men genuinely holding a place on it.
+   *
+   * A reader was told to promote four Triple-A pitchers, every one of them
+   * measured against Chad Russell — a first-rounder from the draft just
+   * finished, signed the day before, sitting on the DFA list because he had
+   * not been assigned to a farm club yet, and who "hasn't thrown a single
+   * professional pitch". He is not somebody a call-up displaces. He is
+   * somebody already on his way out of the organisation.
+   *
+   * "On a roster somewhere" was too weak a test for that, and it did not even
+   * ask WHICH club's roster. The question is who is on the major-league active
+   * roster and staying there, so it asks for exactly that: this club's active
+   * list, active, and neither designated for assignment nor on waivers.
+   *
+   * Where the export has no roster-status table the old test is all there is,
+   * which is better than offering no verdict at all — but it is the weaker
+   * one, and this is the case it gets wrong.
    */
-  const majors = players.filter((p) => p.team_id === orgId && p.rostered);
+  const statuses = tableExists('players_roster_status')
+    ? new Map(
+        (
+          db
+            .prepare(
+              `SELECT player_id, is_active,
+                      COALESCE(designated_for_assignment, 0) AS dfa,
+                      COALESCE(is_on_waivers, 0) AS waivers
+               FROM players_roster_status`
+            )
+            .all() as Array<{ player_id: number; is_active: number; dfa: number; waivers: number }>
+        ).map((r) => [r.player_id, r])
+      )
+    : null;
+  const onTheActiveList = new Set(
+    (
+      db
+        .prepare(`SELECT player_id FROM team_roster WHERE team_id = ? AND list_id = 1`)
+        .all(orgId) as Array<{ player_id: number }>
+    ).map((r) => r.player_id)
+  );
+  const holdsAPlace = (p: OrgPlayer): boolean => {
+    if (p.team_id !== orgId) return false;
+    if (!onTheActiveList.has(p.player_id)) return false;
+    /*
+     * Being on the club's active list is the evidence; the status row can only
+     * overturn it. A man there with no row at all is counted, because the
+     * wrong way to be wrong here is to empty the roster and start recommending
+     * call-ups over men who are in fact standing on it.
+     */
+    const s = statuses?.get(p.player_id);
+    if (!s) return true;
+    return s.is_active === 1 && s.dfa === 0 && s.waivers === 0;
+  };
+
+  const majors = players.filter(holdsAPlace);
   const byPosition = new Map<number, Array<{ player_id: number; name: string; cur: number | null }>>();
   for (const m of majors) {
     const { cur } = composites(m);
