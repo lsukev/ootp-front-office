@@ -1,0 +1,7 @@
+OOTP Front Office 0.32.0 — everything since 0.31.1
+
+New — A Transactions page, under Front Office. Every deal in the league, newest first, as OOTP itself recorded it: trades with both sides named, free-agent signings, and waiver claims. Your own club's moves are marked and can be shown on their own, but the whole league is the default, because the waiver claim worth seeing is somebody else's — a reader asked for exactly that, to watch for a man who fits a hole he has turning up cheap. Every name in a summary opens that player's card.
+
+None of this needed inventing: the export has carried the trade history and the league's messages all along and nothing here was reading them. That matters for accuracy — the alternative would have been guessing at what happened by comparing one import against the next, where a player who changed level looks identical to one who was sold.
+
+Changed — The assistant can see transactions now, which is why it missed a Hall of Fame acquisition before: it had no way to look. It has a tool for them, and the daily recap is handed the day's deals, since a trade is the biggest thing that can happen on a quiet day.
