@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, tableExists } from './db.js';
-import { LEVEL_NAMES } from './valuation.js';
+import { LEVEL_NAMES, seasonYear } from './valuation.js';
 import { playoffPicture } from './playoffs.js';
 import { deadlineRead } from './posture.js';
 import { healthOf, HURT_SQL } from './health.js';
@@ -217,11 +217,34 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
              * a sixteen-year-old on a tear in the complex league is not news
              * from the major-league dashboard.
              */
+            /*
+             * Three things `has_ended = 0` does not tell you, all of which a
+             * reader met at once: "Ed Kaiser shows 17 games on-base active
+             * streak, but the game year is 2006 and the streak is from 2001
+             * when he played in the feeder prospect league."
+             *
+             * It is not one league. A man carries a row per competition he has
+             * played in, so a run in a feeder league arrives looking exactly
+             * like one in the majors. Filtered to the club's own league now.
+             *
+             * It is not this season. OOTP leaves last year's streaks open
+             * rather than closing them at the final out — on my own save 6,994
+             * of the rows flagged unfinished began in the season before this
+             * one. So the start has to fall in the current season as well.
+             *
+             * And it is not one row per man per kind. He had "26 game on-base
+             * streak · 17-game on-base streak" beside a single name, which is
+             * the same streak type from two different leagues printed as
+             * though the second were his other kind. The league filter settles
+             * that too, and the reduce below no longer assumes it away.
+             */
             `SELECT s.player_id, s.streak_id, s.value, s.started,
                     p.first_name || ' ' || p.last_name AS name, p.position
              FROM players_streak s
              JOIN players p ON p.player_id = s.player_id
              WHERE p.team_id = ? AND s.has_ended = 0
+               AND s.league_id = ?
+               AND CAST(substr(s.started, 1, 4) AS INTEGER) = ?
                AND s.streak_id IN (${STREAK_HITTING}, ${STREAK_ON_BASE})
                AND s.value >= 5
                AND p.player_id IN (
@@ -229,13 +252,21 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
                )
              ORDER BY s.value DESC`
           )
-          .all(orgId, orgId) as Array<Record<string, number | string>>
+          .all(orgId, team.league_id, seasonYear(team.league_id), orgId) as Array<Record<string, number | string>>
       ).reduce((out: Array<Record<string, unknown>>, r) => {
         const kind = r.streak_id === STREAK_HITTING ? 'hitting' : 'on-base';
         const existing = out.find((x) => x.player_id === r.player_id);
         if (existing) {
-          // The shorter of his two streaks, named beside the longer one
-          existing.also = `${r.value}-game ${kind} streak`;
+          /*
+           * The shorter of his two streaks, named beside the longer one — but
+           * only where it is the OTHER kind. A second row of the same kind is
+           * not a second streak, it is the same man's run in another
+           * competition, and printing it here produced "26 game on-base streak
+           * · 17-game on-base streak" against one name.
+           */
+          if (existing.kind !== `${kind} streak` && existing.also === null) {
+            existing.also = `${r.value}-game ${kind} streak`;
+          }
           return out;
         }
         if (out.length >= 6) return out;

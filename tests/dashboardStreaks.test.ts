@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import { db } from '../server/db.js';
 import request from './request.js';
-import { IDS } from './fixture.js';
+import { IDS, SEASON } from './fixture.js';
 
 /**
  * The streak strip should name six players, not three players twice.
@@ -33,8 +33,10 @@ beforeAll(() => {
     db.prepare(`INSERT INTO team_roster VALUES (?, ?, 1)`).run(IDS.mlbTeam, id);
   };
   const streak = db.prepare(
+    // Dated inside the current season, because a streak that began in an
+    // earlier one is no longer running whatever the ended flag says
     `INSERT INTO players_streak (player_id, streak_id, value, started, has_ended)
-     VALUES (?, ?, ?, '2026-7-20', 0)`
+     VALUES (?, ?, ?, '${SEASON}-7-20', 0)`
   );
 
   add(DOUBLE, 'Both');

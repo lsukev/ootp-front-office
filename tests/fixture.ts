@@ -241,8 +241,13 @@ export function buildFixture(): string {
     );
     -- OOTP's own tracked runs. streak_id 0 is a hitting streak and 9 an
     -- on-base one; a hot player is usually carrying both at once
+    -- league_id matters: a man carries a row per competition he has played in,
+    -- so a run in a feeder league is indistinguishable from one in the majors
+    -- until you filter on it. Defaulted to this league so a row that does not
+    -- name one is the ordinary case.
     CREATE TABLE players_streak (
-      player_id INTEGER, streak_id INTEGER, value INTEGER, started TEXT, has_ended INTEGER
+      player_id INTEGER, league_id INTEGER DEFAULT 100, streak_id INTEGER, value INTEGER,
+      started TEXT, has_ended INTEGER
     );
     CREATE TABLE projected_starting_pitchers (
       team_id INTEGER, starter_0 INTEGER, starter_1 INTEGER, starter_2 INTEGER, starter_3 INTEGER,

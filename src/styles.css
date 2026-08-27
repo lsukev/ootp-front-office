@@ -1962,3 +1962,8 @@ button.cta {
 .level-picker button:hover { color: var(--text); border-color: var(--muted); }
 .level-picker button.active { color: var(--accent); border-color: var(--accent); }
 .empty-scope { margin: 6px 0 0; font-size: 12px; }
+
+/* Tables here are nowrap by default, which is right for a column of numbers and
+   wrong for a cell holding two names. A pair of probables is the one that
+   overflowed, and it was running out past the edge of its panel. */
+td.wrap-cell { white-space: normal; }

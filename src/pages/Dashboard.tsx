@@ -168,7 +168,9 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
                 <tr key={i}>
                   <td>{g.date.slice(5)}</td>
                   <td>{g.isHome ? 'vs' : '@'} {g.opponent}</td>
-                  <td className="muted">
+                  {/* Two full names and a hand fit no fixed width, and the
+                      cell was running out past the edge of the panel */}
+                  <td className="muted wrap-cell">
                     {g.ourStarter && <PlayerLink id={g.ourStarter.player_id}>{g.ourStarter.name}</PlayerLink>}
                     {g.theirStarter && (
                       <>
