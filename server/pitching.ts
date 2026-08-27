@@ -3,7 +3,7 @@ import { db, tableExists } from './db.js';
 import { countsAsPitcherSql } from './twoway.js';
 import { healthOf, type Health } from './health.js';
 import { computePitching, leagueBaseline } from './stats.js';
-import { ON_ROSTER } from './valuation.js';
+import { ON_ROSTER, currentGameDate } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
 
 export const pitchingRoutes = Router();
@@ -34,13 +34,47 @@ const dayFromKey = (key: number): Date =>
 const daysBetween = (a: number, b: number): number =>
   Math.round((dayFromKey(a).getTime() - dayFromKey(b).getTime()) / 86_400_000);
 
+/**
+ * What day it is in the save — the league's own date, not the last one played.
+ *
+ * These are not the same day and the difference is the whole of a bug a reader
+ * caught. He exports after simming, so the newest games in the file are the
+ * ones just played and the league has already moved on to the next morning;
+ * this read the last played date and called it today, so a man who threw
+ * yesterday was reported as having thrown today, one who threw the day before
+ * as yesterday, and two days' rest as one. Every label on the page was a day
+ * stale — while the availability underneath them, worked out from the same
+ * pitch counts, was right. He said exactly that: the numbers are correct, the
+ * days are not.
+ *
+ * The page is headed "availability tonight", and tonight's game is the one
+ * that has not been played. Asking the games table when now is could only ever
+ * answer with the past.
+ *
+ * The last played date stays as the fallback for an export with no league date
+ * in it. It is a real day and it is close; it is simply not this one.
+ */
 function currentDateKey(leagueId: number): number | null {
+  const key = (raw: string | null): number | null => {
+    const m = raw && /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(raw.trim());
+    return m ? Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3]) : null;
+  };
+  const league = key(currentGameDate(leagueId));
+
   const row = db
     .prepare(
       `SELECT MAX(${DATE_KEY('date')}) AS k FROM games WHERE league_id = ? AND played = 1`
     )
     .get(leagueId) as { k: number | null } | undefined;
-  return row?.k ?? null;
+  const lastPlayed = row?.k ?? null;
+
+  if (league === null) return lastPlayed;
+  /*
+   * The later of the two. A league date behind the last game played is not
+   * something OOTP produces, but reading it would put appearances in the
+   * future and turn every count negative, and there is a sane answer to hand.
+   */
+  return lastPlayed === null ? league : Math.max(league, lastPlayed);
 }
 
 /**

@@ -329,6 +329,16 @@ th {
   position: sticky;
   top: 0;
   background: var(--bg-deep);
+  /*
+   * Sticky creates a stacking context whatever the z-index, and without one it
+   * sits at the same level as the positioned cells in the body — which come
+   * later in the document and therefore paint on top. A reader sent a
+   * screenshot of a column tooltip with the rating bars from the rows beneath
+   * showing straight through it and called it semi-transparent. It was not:
+   * it was underneath. The same omission let the bars slide over the header
+   * itself on a scrolled table.
+   */
+  z-index: 3;
 }
 th:hover { color: var(--text); }
 td.name { font-weight: 600; }
