@@ -1,0 +1,3 @@
+OOTP Front Office 0.31.0 — everything since 0.30.2
+
+New — The player card's history tables filter by level: All, MLB, or Minors. A man who came up through a system has his major-league line buried among a dozen years of it, and the usual question — what has he done in the majors — meant reading past everything else. Batting, pitching and fielding all follow one control, drawn beside each heading so it is beside whichever table you are looking at, and it appears only for players who have actually played at more than one level. The split is the majors against everything below them rather than a list of what counts as the minors, so a league with levels the app has never seen sorts correctly instead of losing rows.
