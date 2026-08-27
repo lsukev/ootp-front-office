@@ -1,0 +1,5 @@
+OOTP Front Office 0.31.1 — everything since 0.31.0
+
+Fixed — The streak strip on the dashboard was showing streaks that were not running, from leagues you are not managing. It trusted OOTP's "not ended" flag, which answers none of the three questions it was being asked. A man carries a streak row for every competition he has played in, so a run in a feeder or minor league arrived looking exactly like one in the majors — that is now filtered to your own league. OOTP also leaves last season's streaks open rather than closing them at the final out, so the start has to fall in the current season too; on my own save 6,994 rows flagged unfinished began the season before. And a name reading "26 game on-base streak · 17-game on-base streak" was one man's same streak in two leagues, printed as though the second were his other kind — that field pairs a hitting streak with an on-base one and now accepts nothing else.
+
+Fixed — The probable starters in Up Next wrap instead of running out past the edge of the panel. Tables here do not wrap by default, which is right for a column of numbers and wrong for a cell holding two full names and a throwing hand.
