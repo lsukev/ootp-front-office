@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db } from '../server/db.js';
 import request from './request.js';
-import { parseSummary, plainSummary, recentTransactions } from '../server/transactions.js';
+import { isTruncated, parseSummary, plainSummary, recentTransactions } from '../server/transactions.js';
 import { IDS, SEASON } from './fixture.js';
 
 /**
@@ -177,5 +177,135 @@ describe('what the AI can see', () => {
     const recap = read('server/recap.ts');
     expect(recap).toMatch(/recentTransactions\(orgId, 40\)/);
     expect(recap).toMatch(/Never invent a ` \+\s*`deal/s);
+  });
+});
+
+/**
+ * OOTP's summary column stops at 255 characters, mid-word and often mid-tag.
+ *
+ * "Only issue is it cuts off bigger deals." He was right, and it was not the
+ * page doing the cutting — 81 of the 232 summaries in my own save are exactly
+ * 255 characters long and 33 of those break inside a name's markup, which is
+ * why one of his rows ended at a bare `<Gary Gaetti`: half a tag, rendered as
+ * the text it looks like.
+ *
+ * A big trade is precisely the one worth reading, so the biggest being the one
+ * that arrives unreadable is the wrong way round. The columns carry every
+ * player on both sides whatever the prose did, so where the prose was cut the
+ * sentence is written from them instead.
+ */
+describe('a summary OOTP cut off', () => {
+  const LONG_TRADE = 700;
+
+  beforeAll(() => {
+    /*
+     * A six-player deal whose prose stops mid-name, exactly as the export
+     * delivers one. The last tag is deliberately left open.
+     */
+    db.prepare(
+      `INSERT INTO trade_history (date, summary, message_id, team_id_0, team_id_1,
+                                  player_id_0_0, player_id_0_1, player_id_1_0, player_id_1_1)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      `${SEASON}-7-1`,
+      `The <Test Nine:team#${IDS.mlbTeam}> trade <Reg Ular:player#${IDS.starter}> and ` +
+        `<Lefty Swinger:player#${IDS.lefty}> to the <Other Club:team#${OTHER_CLUB}> for ` +
+        `<Paid Off:player#${IDS.retainedGuy}> and <Gone Awa`,
+      LONG_TRADE, IDS.mlbTeam, OTHER_CLUB,
+      IDS.starter, IDS.lefty, IDS.retainedGuy, IDS.tradedAway
+    );
+  });
+
+  it('knows a summary has been cut', () => {
+    expect(isTruncated('x'.repeat(255))).toBe(true);
+    expect(isTruncated('The <Reds:team#7> trade <Half A Nam')).toBe(true);
+    expect(isTruncated('The <Reds:team#7> sign <Joe Bloggs:player#42>.')).toBe(false);
+  });
+
+  it('writes the sentence itself rather than printing half of one', async () => {
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Reg Ular'));
+    expect(t, 'the trade never appeared').toBeDefined();
+    // Every man in the deal, including the one whose name the export lost
+    for (const who of ['Reg Ular', 'Lefty Swinger', 'Paid Off', 'Gone Away']) {
+      expect(t!.plain, `${who} was dropped from the composed sentence`).toContain(who);
+    }
+    expect(t!.plain.trimEnd().endsWith('.'), 'the sentence does not finish').toBe(true);
+  });
+
+  it('never leaves half a markup tag on screen', async () => {
+    /*
+     * `<Gary Gaetti` with no closing bracket is what the reader actually saw.
+     * Nothing that reaches the page should contain the markup at all.
+     */
+    for (const t of (await feed()).transactions) {
+      expect(t.plain, `raw markup in: ${t.plain}`).not.toMatch(/[<>]/);
+    }
+  });
+
+  it('still links every name in a sentence it wrote', async () => {
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Reg Ular'))!;
+    const linked = t.summary.filter((seg) => seg.kind === 'player').map((seg) => seg.id);
+    expect(linked).toContain(IDS.starter);
+    expect(linked).toContain(IDS.tradedAway);
+  });
+
+  it('leaves an intact summary exactly as OOTP wrote it', async () => {
+    // Its wording is better than mine wherever it survived
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Locked Up'))!;
+    expect(t, 'the untouched trade went missing').toBeDefined();
+    expect(t.plain).toContain('30-year old RHP Gone Away');
+    expect(t.plain).toContain('26-year old LHP Locked Up');
+  });
+});
+
+/**
+ * "It also doesn't show that I claimed Rick Honeycutt off waivers and signed
+ * him to a 3 year extension."
+ *
+ * OOTP records a waiver claim with every id on the row set to zero — no club,
+ * no player, no league. The feed was asking for messages in the manager's own
+ * league, so the one row that was genuinely his was the one thrown away.
+ */
+describe('a waiver claim, which names nobody at all', () => {
+  const CLAIM = 701;
+  const ELSEWHERE = 702;
+
+  beforeAll(() => {
+    const message = db.prepare(
+      `INSERT INTO messages (message_id, subject, date, message_type, team_id_0, team_id_1,
+                             player_id_0, league_id_0, recipient_id)
+       VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?)`
+    );
+    // Every id zero, addressed to the manager: his claim
+    message.run(CLAIM, 'Rick Honeycutt waiver claim finished and executed successfully',
+                `${SEASON}-7-2`, 1, 1);
+    // Also in his post, also league-less, but plainly somebody else's business
+    message.run(ELSEWHERE, 'Some Body signs with Los Angeles', `${SEASON}-7-3`, 2, 1);
+  });
+
+  it('appears at all', async () => {
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Honeycutt'));
+    expect(t, 'the claim was filtered out by a league it does not name').toBeDefined();
+    expect(t!.kind).toBe('waiver');
+  });
+
+  it('is counted as the manager\'s own move', async () => {
+    /*
+     * Nothing on the row says whose it was except who OOTP sent it to, and a
+     * claim reported to the manager is his own business by construction.
+     */
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Honeycutt'))!;
+    expect(t.yours).toBe(true);
+  });
+
+  it('does not sweep in every signing that lands in his post', async () => {
+    /*
+     * The same reasoning is deliberately not extended to signings: those name
+     * a club, and "X signs with Los Angeles" arrives in his messages without
+     * being his.
+     */
+    const t = (await feed()).transactions.find((x) => x.plain.includes('signs with Los Angeles'))!;
+    expect(t, 'the signing vanished').toBeDefined();
+    expect(t.yours, 'somebody else\'s free-agent signing was called his').toBe(false);
   });
 });
