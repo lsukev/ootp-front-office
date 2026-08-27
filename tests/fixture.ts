@@ -249,6 +249,23 @@ export function buildFixture(): string {
       player_id INTEGER, league_id INTEGER DEFAULT 100, streak_id INTEGER, value INTEGER,
       started TEXT, has_ended INTEGER
     );
+    -- OOTP's own record of every deal, with the summary already written and
+    -- the names marked up as <Name:player#id> so they can be linked
+    CREATE TABLE trade_history (
+      date TEXT, summary TEXT, message_id INTEGER, team_id_0 INTEGER, team_id_1 INTEGER,
+      player_id_0_0 INTEGER, player_id_0_1 INTEGER, player_id_1_0 INTEGER, player_id_1_1 INTEGER
+    );
+    -- The league's news. Trades appear here as well and are excluded by the id
+    -- the trade table carries; what is left is the signings and waiver claims.
+    CREATE TABLE messages (
+      message_id INTEGER, subject TEXT, date TEXT, message_type INTEGER,
+      team_id_0 INTEGER, team_id_1 INTEGER, player_id_0 INTEGER,
+      league_id_0 INTEGER, deleted INTEGER DEFAULT 0,
+      -- The dashboard counts trade approaches from these: who sent it and to
+      -- whom. Present here because a table the app reads should be the shape
+      -- the app reads it in
+      recipient_id INTEGER DEFAULT 0, sender_type INTEGER DEFAULT 0
+    );
     CREATE TABLE projected_starting_pitchers (
       team_id INTEGER, starter_0 INTEGER, starter_1 INTEGER, starter_2 INTEGER, starter_3 INTEGER,
       starter_4 INTEGER, starter_5 INTEGER, starter_6 INTEGER, starter_7 INTEGER

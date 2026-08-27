@@ -9,6 +9,7 @@ import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, providerFor, type FallbackNotice } from './providers.js';
 import { rulesBriefing, seasonYear } from './valuation.js';
 import { jobStatus, startJob } from './jobs.js';
+import { recentTransactions } from './transactions.js';
 
 export const recapRoutes = Router();
 
@@ -159,6 +160,15 @@ export function assembleDay(orgId: number) {
     idleDivisions: [...standings.entries()]
       .filter(([, clubs]) => clubs.every((c) => !c.playedToday))
       .map(([name]) => name),
+    /*
+     * Anything the league did off the field on the day being written up. A
+     * reader traded for a Hall of Famer and found the writing had not noticed;
+     * a deal is the biggest thing that can happen on a quiet day and it was
+     * the one thing the recap could not see.
+     */
+    transactions: recentTransactions(orgId, 40)
+      .filter((t) => t.date === date)
+      .map((t) => ({ kind: t.kind, what: t.plain, involvesTheReadersClub: t.yours })),
     leaders: seasonLeaders(org.league_id),
     leagueRules: rulesBriefing(org.league_id, orgId),
   };
@@ -338,6 +348,9 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
       `exactly as they appear in the data. Cover every division that had a game. The divisions named ` +
       `in idleDivisions had none at all — leave those out entirely rather than writing that ` +
       `nothing happened in them.\n\n` +
+      `Where the transactions list is not empty, those are the day's deals — say what happened and ` +
+      `who it involves, and lead with one if it is the biggest thing that happened. Never invent a ` +
+      `deal that is not in that list.\n\n` +
       `Then a handful of one-sentence notes on the individual leaders — always with the figure, ` +
       `as in "Paul James hit his league-leading 30th home run". Every category carries ` +
       `sharedByCount: where it is above one, that many men are level at the top, and you must ` +

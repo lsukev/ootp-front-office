@@ -16,6 +16,7 @@ import { Schedule } from './pages/Schedule';
 import { Trends } from './pages/Trends';
 import { Storylines } from './pages/Storylines';
 import { LeagueRecap } from './pages/LeagueRecap';
+import { Transactions } from './pages/Transactions';
 import { PageBoundary } from './PageBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Development } from './pages/Development';
@@ -41,7 +42,7 @@ import { Chat } from './Chat';
 import { apiGet, apiPost } from './api';
 
 type Page =
-  | 'dashboard' | 'storylines' | 'recap' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
+  | 'dashboard' | 'storylines' | 'recap' | 'transactions' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
   | 'staff' | 'watchlist' | 'players' | 'standings' | 'pitching' | 'schedule' | 'payroll' | 'trends' | 'settings';
 
@@ -80,6 +81,7 @@ const NAV: Array<NavEntry<Page>> = [
       { page: 'contracts', label: 'Contracts', hint: 'Re-sign, extend, or walk' },
       { page: 'freeagents', label: 'Free Agents', hint: 'Now and after this season' },
       { page: 'trades', label: 'Trade Center', hint: 'Analyzer and league-wide fits' },
+      { page: 'transactions', label: 'Transactions', hint: 'Every deal in the league, yours marked' },
       { page: 'crunch', label: '40-Man Roster', hint: 'Options, Rule 5, DFA clocks' },
     ],
   },
@@ -460,6 +462,7 @@ export function App() {
                 {page === 'dashboard' && <Dashboard orgId={orgId} onNavigate={(p) => setPage(p as Page)} />}
                 {page === 'storylines' && <Storylines orgId={orgId} orgLabel={org.label} />}
                 {page === 'recap' && <LeagueRecap orgId={orgId} />}
+                {page === 'transactions' && <Transactions orgId={orgId} />}
                 {page === 'rosters' && <RosterPage orgId={orgId} />}
                 {page === 'depth' && <DepthChart orgId={orgId} />}
                 {page === 'prospects' && <Prospects orgId={orgId} />}

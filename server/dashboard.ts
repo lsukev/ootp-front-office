@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists } from './db.js';
+import { db, hasColumns, tableExists } from './db.js';
 import { LEVEL_NAMES, seasonYear } from './valuation.js';
 import { playoffPicture } from './playoffs.js';
 import { deadlineRead } from './posture.js';
@@ -339,7 +339,13 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
   const injuries = orgInjuries(orgId);
   // Distinct players your staff has raised as trade targets, so the chip counts
   // decisions to make rather than messages received
-  const tradeTalk = tableExists('messages')
+  /*
+   * Columns, not just the table. A table that exists with a different set of
+   * them passes an existence check and throws on the first query — which is
+   * exactly what happened here the moment a leaner `messages` turned up.
+   */
+  const tradeTalk = hasColumns('messages', 'player_id_0', 'recipient_id', 'sender_type',
+                               'deleted', 'team_id_0', 'team_id_1')
     ? (db
         .prepare(
           `SELECT COUNT(DISTINCT m.player_id_0) AS n FROM messages m

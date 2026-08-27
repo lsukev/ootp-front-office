@@ -1967,3 +1967,12 @@ button.cta {
    wrong for a cell holding two names. A pair of probables is the one that
    overflowed, and it was running out past the edge of its panel. */
 td.wrap-cell { white-space: normal; }
+
+/* Transactions. The kind badges follow the same no-fill rule as every other
+   badge here: colour and border, so they read in both themes. */
+.badge.txn-trade { background: none; color: var(--accent); border: 1px solid var(--accent); }
+.badge.txn-signing { background: none; color: var(--good); border: 1px solid var(--good); }
+.badge.txn-waiver { background: none; color: var(--warn); border: 1px solid var(--warn); }
+/* Your own club's moves, marked without shouting: a rule down the left rather
+   than a fill, which would fight the badges sitting in the same row. */
+tr.ours td:first-child { border-left: 3px solid var(--accent); }

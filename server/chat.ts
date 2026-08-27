@@ -262,6 +262,19 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_transactions',
+    description:
+      "Every deal the league has recorded, newest first: trades with both sides named, free-agent " +
+      "signings and waiver claims. Each carries whether the manager's own organisation was involved. " +
+      'Use it when asked what has happened lately, whether anybody worth having has changed hands or ' +
+      'been let go, or to account for a change in a roster.',
+    input_schema: {
+      type: 'object',
+      properties: { team_id: { type: 'number' } },
+      required: ['team_id'],
+    },
+  },
+  {
     name: 'get_leaderboards',
     description: 'League leaders across the main batting and pitching categories.',
     input_schema: {
@@ -432,6 +445,8 @@ export async function runTool(name: string, input: Record<string, unknown>): Pro
       return cap(await callOwnApi(`injuries/${Number(input.team_id)}`));
     case 'get_prospects':
       return cap(await callOwnApi(`prospects/${Number(input.team_id)}`));
+    case 'get_transactions':
+      return cap(await callOwnApi(`transactions/${Number(input.team_id)}`));
     case 'get_leaderboards':
       return cap(await callOwnApi(`leaderboards/${Number(input.team_id)}`));
     case 'get_teams':
