@@ -1,0 +1,4 @@
+[b][size=4]OOTP Front Office 0.32.1 — everything since 0.32.0[/size][/b]
+[list]
+[*][b]Fixed[/b] — Promotion recommendations no longer measure a prospect against somebody who is on his way out of the organisation. The corresponding move asks who the weakest man at a position is and takes beating him as the bar, which is fair against somebody holding a roster spot and nonsense against a player designated for assignment — and being the weakest is exactly what such a man will be, so he was not an unlucky pick but the inevitable one. A reader had four Triple-A pitchers all told to promote, every one of them measured against a first-rounder signed the day before, sitting on the DFA list, who had not thrown a professional pitch. The test was "on a roster somewhere", which asked neither whose roster nor whether he was staying on it. It now asks for the club's own active list, and for a roster status that does not say designated, on waivers, or inactive.
+[/list]
