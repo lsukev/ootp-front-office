@@ -14,6 +14,7 @@ import { lineupRoutes } from './lineup.js';
 import { storylineRoutes, startStorylineJob } from './storylines.js';
 import { recapRoutes, startRecapJob } from './recap.js';
 import { transactionRoutes } from './transactions.js';
+import { playerTrendRoutes } from './playertrend.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
@@ -64,6 +65,7 @@ api.use(lineupRoutes);
 api.use(storylineRoutes);
 api.use(recapRoutes);
 api.use(transactionRoutes);
+api.use(playerTrendRoutes);
 
 const META_PATH = path.join(DATA_DIR, 'last-import.json');
 

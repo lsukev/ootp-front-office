@@ -1976,3 +1976,14 @@ td.wrap-cell { white-space: normal; }
 /* Your own club's moves, marked without shouting: a rule down the left rather
    than a fill, which would fight the badges sitting in the same row. */
 tr.ours td:first-child { border-left: 3px solid var(--accent); }
+
+/* A player's season drawn as it moved */
+.trend-block { margin-top: 4px; }
+.trend-heading {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 6px;
+}

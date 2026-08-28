@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
+import { PlayerTrend } from './PlayerTrend';
 import { formatRatingPair, ratingFraction } from './ratingScale';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
@@ -355,6 +356,11 @@ function Dossier({ d }: { d: PlayerDossier }) {
           )}
         </section>
       </div>
+
+      <section>
+        <h3>This Season, Game by Game</h3>
+        <PlayerTrend playerId={d.player_id} />
+      </section>
 
       {showBatting && d.battingYears.length > 0 && (
         <section>

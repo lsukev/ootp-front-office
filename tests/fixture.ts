@@ -243,8 +243,22 @@ export function buildFixture(): string {
     );
     -- One row per outing. Rest and recent workload are read from these rather
     -- than from the season line, which is the whole point of the staff page
+    -- One row per outing. Rest and recent workload read the first few columns;
+    -- the season curve reads the rest, so both live here rather than in two
+    -- tables that would then have to agree with each other.
     CREATE TABLE players_game_pitching_stats (
-      player_id INTEGER, game_id INTEGER, pi INTEGER, outs INTEGER, gs INTEGER
+      player_id INTEGER, game_id INTEGER, pi INTEGER, outs INTEGER, gs INTEGER,
+      year INTEGER, team_id INTEGER, league_id INTEGER, level_id INTEGER DEFAULT 1,
+      split_id INTEGER DEFAULT 0, er INTEGER DEFAULT 0, ha INTEGER DEFAULT 0,
+      bb INTEGER DEFAULT 0, k INTEGER DEFAULT 0, g INTEGER DEFAULT 1
+    );
+    -- One row per player per game. Eighty thousand of them in a real save, and
+    -- the only source in the export for how a season actually unfolded.
+    CREATE TABLE players_game_batting (
+      player_id INTEGER, year INTEGER, team_id INTEGER, game_id INTEGER, league_id INTEGER,
+      level_id INTEGER, split_id INTEGER, position INTEGER,
+      ab INTEGER, h INTEGER, d INTEGER, t INTEGER, hr INTEGER,
+      bb INTEGER, hp INTEGER, sf INTEGER, pa INTEGER, g INTEGER
     );
     CREATE TABLE players_career_fielding_stats (
       player_id INTEGER, year INTEGER, level_id INTEGER, split_id INTEGER, position INTEGER,
