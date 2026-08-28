@@ -1,0 +1,7 @@
+[b][size=4]OOTP Front Office 0.34.0 — everything since 0.33.0[/size][/b]
+[list]
+[*][b]New[/b] — Every player card now draws his season as it happened. A season line is one number standing for six months: a .270 hitter who was at .190 in May and .330 since is not the same man as one who has been .270 throughout, and nothing here could tell them apart. OOTP writes a row per player per game — eighty thousand in my own save — and they were only ever being read for the last fortnight.
+Two readings of the same games, because they answer different questions. Season to date is the number that was on his card that night, and it settles as the year goes on, which is honest: one game in a hundred and forty does not move a season. The fifteen-game window is form, and never settles, which is the point — read the shape rather than the day. The chart says which one you are looking at. AVG, OBP, SLG and OPS for hitters; ERA, WHIP and K/9 for pitchers, with a year-over-year chart underneath.
+Two things it deliberately will not do. It draws only the level a man has played most at, because a line through a call-up is two seasons drawn as one — .320 in Double-A and .190 in the majors graphs as .250 and means neither. And spring training is left out, since a four-for-four in March is not the season anybody means.
+The team half of this was already there: Season Trends, under League, has run differential, win rate and scoring over the course of the year.
+[/list]
