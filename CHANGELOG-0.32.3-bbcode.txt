@@ -1,0 +1,4 @@
+[b][size=4]OOTP Front Office 0.32.3 — everything since 0.32.2[/size][/b]
+[list]
+[*][b]New[/b] — The Development page shows each player's position. It was already in the data — the ratings snapshot has carried it since the first one was ever taken — but the page was not printing it. A page about who is developing is one you read looking for a catcher or an arm.
+[/list]
