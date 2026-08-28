@@ -4,6 +4,7 @@ import path from 'node:path';
 import { db as leagueDb, tableExists } from './db.js';
 import { DATA_DIR, loadConfig } from './config.js';
 import { DATE_KEY } from './dashboard.js';
+import { POSITION_NAMES } from './valuation.js';
 
 /**
  * Persistent store that SURVIVES reimports (league.db is rebuilt on every
@@ -220,6 +221,9 @@ historyRoutes.get('/development/:orgId', (req, res) => {
         name: r.name,
         age: r.age,
         position: r.position,
+        // Named here rather than on the page, the way every other endpoint in
+        // the app hands one over
+        positionName: POSITION_NAMES[r.position as number] ?? '',
         level: r.level,
         cur: r.cur_to,
         pot: r.pot_to,

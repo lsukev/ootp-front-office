@@ -292,6 +292,17 @@ export const LEVEL_NAMES: Record<number, string> = {
 };
 
 /**
+ * The fielding positions, as OOTP numbers them.
+ *
+ * Ten files declare this privately and none of them has ever disagreed, so
+ * this is not a fix — it is somewhere for the eleventh to come from instead of
+ * being copied again.
+ */
+export const POSITION_NAMES: Record<number, string> = {
+  1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF', 10: 'DH',
+};
+
+/**
  * The scale OOTP is set to display ratings on.
  *
  * The setting is the user's, not the league's, and the export carries whatever

@@ -4,7 +4,7 @@ import { PlayerLink } from '../playerModal';
 import { Th } from '../Th';
 
 interface DevChange {
-  player_id: number; name: string; age: number; position: number; level: number;
+  player_id: number; name: string; age: number; position: number; positionName: string; level: number;
   cur: number | null; pot: number | null; curDelta: number; potDelta: number;
   details: Array<{ rating: string; from: number; to: number }>;
 }
@@ -102,7 +102,7 @@ function DevTable({ changes }: { changes: DevChange[] }) {
     <table>
       <thead>
         <tr>
-          <Th>Player</Th><Th>Age</Th><Th>Level</Th><Th>Cur Δ</Th><Th>Pot Δ</Th><Th>What changed</Th>
+          <Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>Level</Th><Th>Cur Δ</Th><Th>Pot Δ</Th><Th>What changed</Th>
         </tr>
       </thead>
       <tbody>
@@ -110,6 +110,7 @@ function DevTable({ changes }: { changes: DevChange[] }) {
           <tr key={c.player_id}>
             <td className="name"><PlayerLink id={c.player_id}>{c.name}</PlayerLink></td>
             <td>{c.age}</td>
+            <td>{c.positionName}</td>
             <td><span className="level-tag">{LEVEL_NAMES[c.level] ?? 'R'}</span></td>
             <td className={`num ${c.curDelta > 0 ? 'good-text' : c.curDelta < 0 ? 'bad-text' : ''}`}>
               {c.curDelta > 0 ? '+' : ''}{c.curDelta || '—'}

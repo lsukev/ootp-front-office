@@ -139,3 +139,41 @@ describe('everywhere else a date OOTP wrote is ordered', () => {
     expect(server('history.ts')).toMatch(/DATE_KEY\('game_date'\)/);
   });
 });
+
+/**
+ * "I think the Development screen should show positions." — Karen
+ *
+ * The snapshot has carried the position since the day it was first taken; the
+ * endpoint was handing back the raw number and the page was not printing it at
+ * all. So this is a column, not a calculation.
+ */
+describe('the development page', () => {
+  it('names the position rather than handing over a number', () => {
+    /*
+     * Named on the server, the way every other endpoint in the app hands one
+     * over, rather than leaving the page to keep its own copy of the map. This
+     * file's snapshots carry no ratings, so the wiring is read from the source
+     * rather than from a response that would be empty either way.
+     */
+    const history = read('server/history.ts');
+    expect(history).toMatch(/positionName: POSITION_NAMES\[r\.position as number\]/);
+  });
+
+  it('shows it', () => {
+    const dev = read('src/pages/Development.tsx');
+    expect(dev).toMatch(/<Th>Pos<\/Th>/);
+    expect(dev).toMatch(/\{c\.positionName\}/);
+  });
+});
+
+describe('the position names', () => {
+  it('come from one place now, not an eleventh copy', () => {
+    /*
+     * Ten files declare this privately and none has ever disagreed, so this is
+     * not a fix — it is somewhere for the next one to come from. The date key
+     * was copied the same way and the copies did drift.
+     */
+    expect(read('server/valuation.ts')).toMatch(/export const POSITION_NAMES/);
+    expect(read('server/history.ts')).toMatch(/import \{ POSITION_NAMES \} from '\.\/valuation\.js'/);
+  });
+});
