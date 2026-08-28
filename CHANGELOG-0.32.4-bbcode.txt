@@ -1,0 +1,5 @@
+[b][size=4]OOTP Front Office 0.32.4 — everything since 0.32.3[/size][/b]
+[list]
+[*][b]Fixed[/b] — Sixteen- and seventeen-year-olds out of the international complex are no longer labelled MLB on the Development page. OOTP parks a signing nobody has assigned yet on the parent club, so reading the level off that club gave them the major-league one — and the ratings snapshot had recorded it that way since the first one was ever taken. On my own save forty-three men in a single organisation were on record at MLB with no roster spot anywhere. They show as ORG now, meaning on the books but at no club, and they are still shown rather than hidden: they are real prospects and every organisation carries some. Snapshots taken from now on record it correctly; the page corrects the ones already stored by checking the roster as it stands, so this fixes your existing history rather than only your next import.
+[*][b]Fixed[/b] — An unrecognised level says what it is instead of being called Rookie ball. That fallback would have hidden the fault above behind a plausible-looking answer.
+[/list]
