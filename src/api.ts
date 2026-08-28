@@ -186,6 +186,13 @@ export const getRoster = (teamId: number) => json<RosterResponse>(`/api/roster/$
 export interface Org {
   team_id: number;
   label: string;
+  /**
+   * Set only where the picker holds clubs from more than one level, which
+   * happens in a save whose lower leagues are not affiliated to the top one.
+   * Null on an ordinary save, where saying "MLB" against all thirty says
+   * nothing.
+   */
+  levelName: string | null;
   isHuman: boolean;
   colors: { bg: string | null; fg: string | null; secondary: string | null; cap: string | null };
 }

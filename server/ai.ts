@@ -79,7 +79,7 @@ function briefingContext(orgId: number) {
     .prepare(
       `SELECT t.name || ' ' || t.nickname AS team, r.w, r.l, r.pos, r.gb, r.streak
        FROM teams t JOIN team_record r ON r.team_id = t.team_id
-       WHERE t.league_id = ? AND t.sub_league_id = ? AND t.division_id = ? AND t.level = 1 AND t.allstar_team = 0
+       WHERE t.league_id = ? AND t.sub_league_id = ? AND t.division_id = ? AND t.allstar_team = 0
        ORDER BY r.pos`
     )
     .all(team.league_id, team.sub_league_id, team.division_id);

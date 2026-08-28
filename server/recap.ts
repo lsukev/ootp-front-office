@@ -123,7 +123,7 @@ export function assembleDay(orgId: number) {
        LEFT JOIN divisions d ON d.league_id = t.league_id
                             AND d.sub_league_id = t.sub_league_id
                             AND d.division_id = t.division_id
-       WHERE t.league_id = ? AND t.level = 1 AND t.allstar_team = 0
+       WHERE t.league_id = ? AND t.allstar_team = 0
        ORDER BY s.name, d.name, r.pos`
     )
     .all(org.league_id) as Array<Record<string, unknown>>;

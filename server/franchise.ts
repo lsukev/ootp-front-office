@@ -123,7 +123,7 @@ franchiseRoutes.get('/org-comparison/:orgId', (req, res) => {
   const clubs = db
     .prepare(
       `SELECT team_id, CASE WHEN name = nickname THEN name ELSE name || ' ' || nickname END AS label
-       FROM teams WHERE level = 1 AND allstar_team = 0 AND league_id = ?`
+       FROM teams WHERE allstar_team = 0 AND league_id = ?`
     )
     .all(org.league_id) as Array<{ team_id: number; label: string }>;
 

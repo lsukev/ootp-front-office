@@ -17,8 +17,6 @@ import { IDS, SEASON } from './fixture.js';
 const OTHER_DIVISION = 1;
 
 beforeAll(() => {
-  db.exec(`CREATE TABLE divisions (league_id INTEGER, sub_league_id INTEGER,
-                                   division_id INTEGER, name TEXT, gender INTEGER)`);
   db.prepare(`INSERT INTO divisions VALUES (?, 0, 1, 'East Division', 0)`).run(IDS.league);
   db.prepare(`INSERT INTO divisions VALUES (?, 0, 2, 'West Division', 0)`).run(IDS.league);
 

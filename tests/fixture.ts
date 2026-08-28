@@ -85,7 +85,9 @@ export function buildFixture(): string {
       draft_date TEXT, rules_amateur_draft_rounds INTEGER,
       -- Quoted deliberately: SQLite's own CURRENT_DATE keyword shadows a
       -- column of that name, so an unquoted read returns the real-world date
-      trade_deadline_date TEXT
+      trade_deadline_date TEXT,
+      -- How long a season is: standings reads it to work out games remaining
+      rules_schedule_games_per_team INTEGER DEFAULT 162
     );
     -- Runs for and against, which the buy/hold/sell read takes talent from.
     -- On the pitching side the runs-allowed column is r, not ra
@@ -107,12 +109,21 @@ export function buildFixture(): string {
       runs0 INTEGER DEFAULT 0, runs1 INTEGER DEFAULT 0, innings INTEGER DEFAULT 9
     );
     CREATE TABLE sub_leagues (league_id INTEGER, sub_league_id INTEGER, name TEXT, designated_hitter INTEGER);
+    -- Standings, the recap and the dashboard all read this; the fixture never
+    -- had it, so every one of them was being exercised down its no-divisions
+    -- path and the standings endpoint failed outright when a test asked for it
+    CREATE TABLE divisions (
+      league_id INTEGER, sub_league_id INTEGER, division_id INTEGER, name TEXT, gender INTEGER
+    );
     CREATE TABLE teams (
       team_id INTEGER, name TEXT, nickname TEXT, abbr TEXT, level INTEGER, league_id INTEGER,
       sub_league_id INTEGER, division_id INTEGER, parent_team_id INTEGER, allstar_team INTEGER,
       -- Which club the save is being played as. Several endpoints fall back to
       -- it when no team is named, and it was missing here entirely
-      human_team INTEGER DEFAULT 0, human_id INTEGER DEFAULT 0
+      human_team INTEGER DEFAULT 0, human_id INTEGER DEFAULT 0,
+      -- The club picker reads these for the team colours it themes the app with
+      background_color_id TEXT, text_color_id TEXT,
+      jersey_secondary_color_id TEXT, ballcaps_main_color_id TEXT
     );
     -- This season's standing. The wild-card race is worked out from it, since
     -- the export carries only the division gb and OOTP's magic number
@@ -278,7 +289,15 @@ export function buildFixture(): string {
   `);
 
   db.prepare(
-    `INSERT INTO leagues VALUES (?, 'Test League', 'TL', 0, 1, ?, '2030-06-01', 6, 3, 700000, 1, 1, 1, '2030-07-10', 20, '2030-07-31')`
+    // Columns named rather than positional: adding one to the table above used
+    // to break this insert and with it every test in the suite
+    `INSERT INTO leagues
+       (league_id, name, abbr, parent_league_id, league_level, season_year, "current_date",
+        rules_fa_minimum_years, rules_salary_arbitration_minimum_years, rules_minimum_salary,
+        financial_coefficient, rules_amateur_draft, show_draft_pool, draft_date,
+        rules_amateur_draft_rounds, trade_deadline_date, rules_schedule_games_per_team)
+     VALUES (?, 'Test League', 'TL', 0, 1, ?, '2030-06-01', 6, 3, 700000, 1, 1, 1,
+             '2030-07-10', 20, '2030-07-31', 162)`
   ).run(IDS.league, SEASON);
   db.prepare(`INSERT INTO sub_leagues VALUES (?, 0, 'Only', 1)`).run(IDS.league);
 

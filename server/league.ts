@@ -57,7 +57,7 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
        LEFT JOIN sub_leagues sl ON sl.league_id = t.league_id AND sl.sub_league_id = t.sub_league_id
        LEFT JOIN divisions d ON d.league_id = t.league_id
             AND d.sub_league_id = t.sub_league_id AND d.division_id = t.division_id
-       WHERE t.league_id = ? AND t.level = 1 AND t.allstar_team = 0
+       WHERE t.league_id = ? AND t.allstar_team = 0
        ORDER BY t.sub_league_id, t.division_id, r.pos`
     )
     .all(org.league_id) as Array<Record<string, number | string | null>>;

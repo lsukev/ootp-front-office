@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists, tableColumns } from './db.js';
+import { db, hasColumns, tableExists, tableColumns } from './db.js';
 import { LEVEL_NAMES } from './valuation.js';
 
 export const orgRoutes = Router();
@@ -14,21 +14,59 @@ const avg = (vals: Array<number | null | undefined>): number | null => {
 /** MLB parent clubs, with the human-controlled org flagged and team colors. */
 orgRoutes.get('/orgs', (_req, res) => {
   if (!tableExists('teams')) return res.json([]);
+  /*
+   * A club you can manage is one with nothing above it.
+   *
+   * "I have a save where the MLB and all the minor League are not affiliated
+   * so I can't access those the same way as the MLB." He could not: this asked
+   * for level 1, and in a universe where the lower leagues stand on their own
+   * their clubs are level 2, 3, 4 — so the picker never offered them and every
+   * page behind it was unreachable.
+   *
+   * Being top of your own tree is what actually makes a club an organisation:
+   * no parent club above it, and no parent league above its league. On an
+   * ordinary affiliated save that is the same thirty clubs to the man — the
+   * affiliates are excluded by their parent, and the Arizona Fall League by
+   * having no league row at all — so nothing changes for anybody else.
+   */
+  /*
+   * The colours are optional. This endpoint is the way into everything else in
+   * the app, so a save that does not carry them should lose its team colours
+   * and nothing more — not every club in the picker.
+   */
+  const colours = hasColumns(
+    'teams', 'background_color_id', 'text_color_id',
+    'jersey_secondary_color_id', 'ballcaps_main_color_id'
+  );
   const rows = db
     .prepare(
-      `SELECT team_id, name, nickname, human_team,
-              background_color_id AS bg, text_color_id AS fg,
-              jersey_secondary_color_id AS secondary, ballcaps_main_color_id AS cap
-       FROM teams WHERE level = 1 AND allstar_team = 0 ORDER BY name`
+      `SELECT t.team_id, t.name, t.nickname, t.human_team, t.level,
+              ${colours
+                ? `t.background_color_id AS bg, t.text_color_id AS fg,
+                   t.jersey_secondary_color_id AS secondary, t.ballcaps_main_color_id AS cap`
+                : `NULL AS bg, NULL AS fg, NULL AS secondary, NULL AS cap`}
+       FROM teams t
+       JOIN leagues l ON l.league_id = t.league_id
+       WHERE t.allstar_team = 0
+         AND COALESCE(t.parent_team_id, 0) = 0
+         AND COALESCE(l.parent_league_id, 0) = 0
+       ORDER BY t.level, t.name`
     )
     .all() as Array<{
-    team_id: number; name: string; nickname: string; human_team: number;
+    team_id: number; name: string; nickname: string; human_team: number; level: number;
     bg: string | null; fg: string | null; secondary: string | null; cap: string | null;
   }>;
+  /*
+   * Say the level where it is not the top one. On an affiliated save nobody
+   * ever sees this; on an unaffiliated one it is the only thing telling a
+   * Double-A club apart from the major-league club it is not attached to.
+   */
+  const mixed = new Set(rows.map((r) => r.level)).size > 1;
   res.json(
     rows.map((r) => ({
       team_id: r.team_id,
       label: r.name === r.nickname ? r.name : `${r.name} ${r.nickname}`,
+      levelName: mixed ? LEVEL_NAMES[r.level] ?? `L${r.level}` : null,
       isHuman: r.human_team === 1,
       colors: { bg: r.bg, fg: r.fg, secondary: r.secondary, cap: r.cap },
     }))

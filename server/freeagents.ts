@@ -65,7 +65,7 @@ freeAgentRoutes.get('/free-agents/:orgId', (req, res) => {
        FROM players p
        JOIN teams t ON t.team_id = p.team_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
-       WHERE t.level = 1 AND t.allstar_team = 0 AND t.league_id = ?
+       WHERE t.allstar_team = 0 AND t.league_id = ?
          AND p.team_id != ? AND p.retired = 0`
     )
     .all(org.league_id, orgId) as Array<{

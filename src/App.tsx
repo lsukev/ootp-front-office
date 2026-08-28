@@ -342,6 +342,7 @@ export function App() {
               {orgs.map((o) => (
                 <option key={o.team_id} value={o.team_id}>
                   {o.isHuman ? '★ ' : ''}{o.label}
+                  {o.levelName ? ` · ${o.levelName}` : ''}
                 </option>
               ))}
             </select>
