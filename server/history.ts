@@ -93,8 +93,26 @@ export function takeSnapshot(): { gameDate: string; players: number } | null {
 
   const rows = leagueDb
     .prepare(
+      /*
+       * A man on no roster is not at his club's level.
+       *
+       * OOTP parks a signing nobody has assigned yet on the parent club's
+       * team_id, so joining teams for the level hands a sixteen-year-old out
+       * of the international complex the major-league one. A reader saw
+       * exactly that: "16-17 y.o. International Complex players are labeled MLB
+       * level." On my own save there are teenagers recorded at MLB in every
+       * snapshot ever taken.
+       *
+       * Zero is the level for a man who is on no club at all. The depth chart
+       * had the same problem and gives them a column of their own rather than
+       * hiding them, because they are real prospects and every one of the
+       * thirty clubs carries some.
+       */
       `SELECT p.player_id, p.first_name || ' ' || p.last_name AS name, p.team_id,
-              p.organization_id AS org_id, t.level, p.position, p.age,
+              p.organization_id AS org_id,
+              CASE WHEN EXISTS (SELECT 1 FROM team_roster r WHERE r.player_id = p.player_id)
+                   THEN t.level ELSE 0 END AS level,
+              p.position, p.age,
               b.batting_ratings_overall_contact AS con, b.batting_ratings_overall_gap AS gap,
               b.batting_ratings_overall_power AS pow, b.batting_ratings_overall_eye AS eye,
               b.batting_ratings_overall_strikeouts AS avk, b.running_ratings_speed AS spd,
@@ -234,6 +252,30 @@ historyRoutes.get('/development/:orgId', (req, res) => {
     })
     .filter((c) => c.details.length > 0)
     .sort((a, b) => Math.abs(b.curDelta) + Math.abs(b.potDelta) - (Math.abs(a.curDelta) + Math.abs(a.potDelta)));
+
+  /*
+   * Snapshots already taken carry the old reading, and there is no rewriting
+   * somebody's history to fix a label. The level shown is the one from the
+   * newer of the two snapshots — which for the usual comparison is this very
+   * export — so it can be checked against the roster as it stands now. A man
+   * on no club is shown as such whatever was recorded at the time.
+   */
+  const unassigned = tableExists('team_roster')
+    ? new Set(
+        (
+          leagueDb
+            .prepare(
+              `SELECT p.player_id FROM players p
+               WHERE p.retired = 0
+                 AND NOT EXISTS (SELECT 1 FROM team_roster r WHERE r.player_id = p.player_id)`
+            )
+            .all() as Array<{ player_id: number }>
+        ).map((r) => r.player_id)
+      )
+    : new Set<number>();
+  for (const c of changes) {
+    if (unassigned.has(c.player_id as number)) c.level = 0;
+  }
 
   res.json({ snapshots: dates.length, dates, from, to, changes });
 });

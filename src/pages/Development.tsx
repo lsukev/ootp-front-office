@@ -10,7 +10,21 @@ interface DevChange {
 }
 interface DevData { snapshots: number; dates: string[]; from?: string; to?: string; changes: DevChange[] | null }
 
-const LEVEL_NAMES: Record<number, string> = { 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R' };
+/**
+ * Zero is a man on no club at all — an international signing nobody has
+ * assigned yet, who sits on the parent club's team_id in the export and was
+ * therefore being called a major leaguer at sixteen.
+ */
+const LEVEL_NAMES: Record<number, string> = {
+  0: 'ORG', 1: 'MLB', 2: 'AAA', 3: 'AA', 4: 'A', 5: 'A', 6: 'R',
+};
+
+/*
+ * An unknown level says so rather than quietly becoming Rookie ball. The old
+ * fallback did exactly that, which would have hidden this very fault behind a
+ * plausible-looking answer if the level had come through as anything but one.
+ */
+const levelName = (level: number): string => LEVEL_NAMES[level] ?? `L${level}`;
 
 /**
  * A snapshot date, padded for reading.
@@ -111,7 +125,7 @@ function DevTable({ changes }: { changes: DevChange[] }) {
             <td className="name"><PlayerLink id={c.player_id}>{c.name}</PlayerLink></td>
             <td>{c.age}</td>
             <td>{c.positionName}</td>
-            <td><span className="level-tag">{LEVEL_NAMES[c.level] ?? 'R'}</span></td>
+            <td><span className="level-tag">{levelName(c.level)}</span></td>
             <td className={`num ${c.curDelta > 0 ? 'good-text' : c.curDelta < 0 ? 'bad-text' : ''}`}>
               {c.curDelta > 0 ? '+' : ''}{c.curDelta || '—'}
             </td>
