@@ -55,6 +55,7 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
           <Th>Signal</Th>
           <Th>Player</Th>
           <Th>Age</Th>
+          <Th>Pos</Th>
           <Th>Team</Th>
           {kind === 'batter' ? (
             <>
@@ -82,6 +83,7 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
             <td>{p.signal && <span className={`badge ${p.signal}`}>{p.signal}</span>}</td>
             <td className="name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
             <td>{p.age}</td>
+            <td>{p.positionName}</td>
             <td>
               <span className="level-tag">{p.levelName}</span> {p.team}
             </td>

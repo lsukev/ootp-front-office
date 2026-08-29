@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
-import { Th } from '../Th';
+import { Th, SortableTh } from '../Th';
 
 interface DevChange {
   player_id: number; name: string; age: number; position: number; positionName: string; level: number;
@@ -111,16 +111,68 @@ export function Development({ orgId }: { orgId: number }) {
   );
 }
 
+/**
+ * The columns worth ordering by. "What changed" is prose and sorts to nothing
+ * useful, so it is left out rather than offered and disappointing.
+ */
+const SORTS: Array<{ key: string; label: string; of: (c: DevChange) => number | string }> = [
+  { key: 'name', label: 'Player', of: (c) => c.name },
+  { key: 'age', label: 'Age', of: (c) => c.age },
+  { key: 'pos', label: 'Pos', of: (c) => c.positionName },
+  { key: 'level', label: 'Level', of: (c) => c.level },
+  { key: 'cur', label: 'Cur Δ', of: (c) => c.curDelta },
+  { key: 'pot', label: 'Pot Δ', of: (c) => c.potDelta },
+];
+
 function DevTable({ changes }: { changes: DevChange[] }) {
+  /*
+   * Each table sorts on its own. Stock Up and Stock Down are two questions, and
+   * ordering one by potential should not reorder the other under the reader.
+   */
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [dir, setDir] = useState<1 | -1>(-1);
+
+  const sortBy = (key: string) => {
+    if (key === sortKey) setDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortKey(key);
+      // A name or a position reads best alphabetically; a number reads best
+      // biggest-first, which is what somebody sorting by it came for
+      setDir(key === 'name' || key === 'pos' ? 1 : -1);
+    }
+  };
+
+  const rows = useMemo(() => {
+    if (!sortKey) return changes;
+    const of = SORTS.find((s) => s.key === sortKey)!.of;
+    return [...changes].sort((a, b) => {
+      const x = of(a);
+      const y = of(b);
+      return typeof x === 'string' || typeof y === 'string'
+        ? dir * String(x).localeCompare(String(y))
+        : dir * (x - y);
+    });
+  }, [changes, sortKey, dir]);
+
   return (
     <table>
       <thead>
         <tr>
-          <Th>Player</Th><Th>Age</Th><Th>Pos</Th><Th>Level</Th><Th>Cur Δ</Th><Th>Pot Δ</Th><Th>What changed</Th>
+          {SORTS.map((s) => (
+            <SortableTh
+              key={s.key}
+              active={sortKey === s.key}
+              dir={dir}
+              onSort={() => sortBy(s.key)}
+            >
+              {s.label}
+            </SortableTh>
+          ))}
+          <Th>What changed</Th>
         </tr>
       </thead>
       <tbody>
-        {changes.map((c) => (
+        {rows.map((c) => (
           <tr key={c.player_id}>
             <td className="name"><PlayerLink id={c.player_id}>{c.name}</PlayerLink></td>
             <td>{c.age}</td>

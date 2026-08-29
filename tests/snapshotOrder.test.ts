@@ -160,8 +160,12 @@ describe('the development page', () => {
   });
 
   it('shows it', () => {
+    /*
+     * The column is drawn from the sort list now rather than written out, so
+     * this asks whether the position is offered and printed, not how.
+     */
     const dev = read('src/pages/Development.tsx');
-    expect(dev).toMatch(/<Th>Pos<\/Th>/);
+    expect(dev).toMatch(/label: 'Pos'/);
     expect(dev).toMatch(/\{c\.positionName\}/);
   });
 });

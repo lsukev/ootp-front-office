@@ -331,6 +331,7 @@ export interface Prospect {
   ageDiff: number | null;
   score: number;
   reasons: string[];
+  positionName: string;
   signal: 'promote' | 'blocked' | 'watch' | 'demote' | null;
   /** Who he would displace on the big club, and whether that is an upgrade. */
   move: {
