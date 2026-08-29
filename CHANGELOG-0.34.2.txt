@@ -1,0 +1,5 @@
+OOTP Front Office 0.34.2 — everything since 0.34.1
+
+New — The Development table sorts. Current and potential change were what a reader asked for, and player, age, position and level came along with them since the machinery was already there. Ratings sort biggest-first, names and positions alphabetically. Stock Up and Stock Down keep their own order, so sorting one does not quietly reorder the other.
+
+New — The Prospects page shows each player's primary position, the way the Development page now does. It had the position all along and was the one page that knew it and did not print it.
