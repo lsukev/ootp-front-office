@@ -1,0 +1,7 @@
+OOTP Front Office 0.34.1 — everything since 0.34.0
+
+Fixed — Contract extensions that OOTP never wrote a news story about now appear on the Transactions page. A reader signed four men and saw two, and worked out why himself: the game generates news for some signings and not others, favouring the bigger name. He was right, and the part he could not know is that the news is the only account of a signing the CSV carries — the transaction log you can see in the game is not exported at all, so two of his four were unreachable by any reading of the file. They are recovered now by noticing a man's deal changed between one import and the next. What that cannot recover is the day, so those rows say the window they happened in and are marked Contract rather than Signing, instead of being dressed up to match rows that earned their dates. A deal the news did report is left to the news, which said it better.
+
+Two limits, and the page now says both: this needs two imports before it can see anything, and it can never recover a signing from before you started importing.
+
+Changed — The Transactions page says where each kind of date comes from. Trades and waiver claims are the game's own records and are exact; signings come from the news and are not complete; contract changes are inferred from your own imports and know a window rather than a day.
