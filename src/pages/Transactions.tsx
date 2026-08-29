@@ -5,7 +5,8 @@ import { PlayerLink } from '../playerModal';
 interface Segment { text: string; kind?: 'player' | 'team'; id?: number }
 interface Transaction {
   date: string | null;
-  kind: 'trade' | 'signing' | 'waiver';
+  kind: 'trade' | 'signing' | 'waiver' | 'contract';
+  seenBetween?: { from: string | null; to: string | null };
   summary: Segment[];
   plain: string;
   yours: boolean;
@@ -16,6 +17,7 @@ const KIND_LABEL: Record<Transaction['kind'], string> = {
   trade: 'Trade',
   signing: 'Signing',
   waiver: 'Waivers',
+  contract: 'Contract',
 };
 
 /**
@@ -87,6 +89,15 @@ export function Transactions({ orgId }: { orgId: number }) {
         rest is the one a reader put better than I would: watching for a man who fits a hole you have
         turning up on waivers or changing hands cheaply.
       </p>
+      <p className="muted hint-line">
+        Where the dates come from, since it matters. Trades and waiver claims are the game's own
+        records and are exact. <strong>Signings</strong> come from the league's news, and OOTP does
+        not write a story for every one — it favours the bigger name, so a quiet extension can go
+        unreported. Those turn up as <strong>Contract</strong> instead: the app noticed the deal
+        changed between two of your exports, so it knows what happened but only the window it
+        happened in, not the day. That needs two imports to see anything, and it can never recover a
+        signing from before you started importing.
+      </p>
 
       <div className="toolbar">
         <span className="level-picker">
@@ -128,7 +139,14 @@ export function Transactions({ orgId }: { orgId: number }) {
           <tbody>
             {shown.map((t, i) => (
               <tr key={i} className={t.yours ? 'ours' : undefined}>
-                <td className="num">{t.date ?? ''}</td>
+                <td className="num">
+                  {t.date ?? ''}
+                  {t.seenBetween && (
+                    <div className="muted seen-between">
+                      since {t.seenBetween.from}
+                    </div>
+                  )}
+                </td>
                 <td>
                   <span className={`badge txn-${t.kind}`}>{KIND_LABEL[t.kind]}</span>
                 </td>

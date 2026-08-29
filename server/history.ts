@@ -31,6 +31,34 @@ historyDb.exec(`
     PRIMARY KEY (save_name, game_date, player_id)
   );
   CREATE INDEX IF NOT EXISTS idx_snap_player ON rating_snapshots (save_name, player_id, game_date);
+
+  /*
+   * Contracts, snapshotted the same way and for a reason the ratings are not.
+   *
+   * A reader signed four men to extensions and the transactions page showed
+   * two. He was right about why, and right that it was not his imagination:
+   * OOTP writes a news story for some signings and not others, and the news is
+   * the only account of a signing the CSV export contains. There is no
+   * transaction log in it — seventy-two tables and the only dated events are
+   * trades, news and injuries.
+   *
+   * So a signing is recovered by noticing a man's deal changed between one
+   * import and the next. That is an inference, which this app avoids for
+   * roster moves because a call-up and a sale look identical — but a contract
+   * is not ambiguous. Years and money either changed or they did not.
+   */
+  CREATE TABLE IF NOT EXISTS contract_snapshots (
+    save_name TEXT NOT NULL,
+    game_date TEXT NOT NULL,
+    player_id INTEGER NOT NULL,
+    name TEXT,
+    team_id INTEGER,
+    org_id INTEGER,
+    years INTEGER,
+    total INTEGER,
+    salary0 INTEGER,
+    PRIMARY KEY (save_name, game_date, player_id)
+  );
   CREATE TABLE IF NOT EXISTS watchlist (
     save_name TEXT NOT NULL,
     player_id INTEGER NOT NULL,
@@ -157,6 +185,31 @@ export function takeSnapshot(): { gameDate: string; players: number } | null {
     }
   });
   insertAll();
+  if (tableExists('players_contract')) {
+    const deals = leagueDb
+      .prepare(
+        `SELECT c.player_id, p.first_name || ' ' || p.last_name AS name,
+                p.team_id, p.organization_id AS org_id, c.years, c.salary0,
+                COALESCE(c.salary0,0) + COALESCE(c.salary1,0) + COALESCE(c.salary2,0) +
+                COALESCE(c.salary3,0) + COALESCE(c.salary4,0) AS total
+         FROM players_contract c
+         JOIN players p ON p.player_id = c.player_id
+         WHERE p.retired = 0`
+      )
+      .all() as Array<Record<string, number | string | null>>;
+    const putDeal = historyDb.prepare(
+      `INSERT OR REPLACE INTO contract_snapshots
+         (save_name, game_date, player_id, name, team_id, org_id, years, total, salary0)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    historyDb.transaction(() => {
+      for (const d of deals) {
+        putDeal.run(saveName, gameDate, d.player_id, d.name, d.team_id, d.org_id,
+                    d.years, d.total, d.salary0);
+      }
+    })();
+  }
+
   console.log(`[history] snapshot ${gameDate}: ${rows.length} players`);
   return { gameDate, players: rows.length };
 }
@@ -178,6 +231,61 @@ export function takeSnapshot(): { gameDate: string; players: number } | null {
  * rewriting them to be tidy would be a migration of somebody's history to fix
  * a sort. The padding is done for display, where it belongs.
  */
+/** The days a contract snapshot was taken, oldest first. */
+export function contractSnapshotDates(): string[] {
+  return (
+    historyDb
+      .prepare(
+        `SELECT DISTINCT game_date FROM contract_snapshots WHERE save_name = ?
+         ORDER BY ${DATE_KEY('game_date')}`
+      )
+      .all(currentSaveName()) as Array<{ game_date: string }>
+  ).map((r) => r.game_date);
+}
+
+/**
+ * Deals that changed between the last two snapshots.
+ *
+ * Reported as a range rather than a day, because that is genuinely all this
+ * knows: it is the difference between two exports, not an event with a
+ * timestamp. Saying "on the seventh" would be inventing precision.
+ */
+export function contractChanges(orgId: number): Array<{
+  player_id: number; name: string; years: number; was: number | null;
+  from: string; to: string; yours: boolean;
+}> {
+  const dates = contractSnapshotDates();
+  if (dates.length < 2) return [];
+  const [from, to] = [dates[dates.length - 2], dates[dates.length - 1]];
+  const save = currentSaveName();
+  const rows = historyDb
+    .prepare(
+      `SELECT b.player_id, b.name, b.team_id, b.org_id, b.years, b.total,
+              a.years AS was_years, a.total AS was_total
+       FROM contract_snapshots b
+       LEFT JOIN contract_snapshots a
+         ON a.save_name = b.save_name AND a.player_id = b.player_id AND a.game_date = ?
+       WHERE b.save_name = ? AND b.game_date = ?`
+    )
+    .all(from, save, to) as Array<Record<string, number | string | null>>;
+
+  return rows
+    .filter((r) => {
+      // A man with no earlier row is new to the save, not newly signed
+      if (r.was_years === null) return false;
+      return r.years !== r.was_years || r.total !== r.was_total;
+    })
+    .map((r) => ({
+      player_id: Number(r.player_id),
+      name: String(r.name ?? ''),
+      years: Number(r.years ?? 0),
+      was: r.was_years === null ? null : Number(r.was_years),
+      from,
+      to,
+      yours: Number(r.org_id ?? 0) === orgId,
+    }));
+}
+
 export function snapshotDates(): string[] {
   return (
     historyDb

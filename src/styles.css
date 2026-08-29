@@ -1987,3 +1987,7 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
   color: var(--muted);
   margin: 16px 0 6px;
 }
+
+/* A deal recovered by comparing exports knows its window, not its day */
+.badge.txn-contract { background: none; color: var(--muted); border: 1px solid var(--muted); }
+.seen-between { font-size: 10px; font-weight: 400; }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db, hasColumns, tableExists } from './db.js';
 import { DATE_KEY } from './dashboard.js';
 import { padDate } from './rosterops.js';
+import { contractChanges } from './history.js';
 
 export const transactionRoutes = Router();
 
@@ -181,13 +182,18 @@ function composeTrade(
 interface Transaction {
   date: string | null;
   dateKey: number;
-  kind: 'trade' | 'signing' | 'waiver';
+  kind: 'trade' | 'signing' | 'waiver' | 'contract';
   summary: Segment[];
   plain: string;
   teams: number[];
   players: number[];
   /** True where the reader's own organisation is on either side of it. */
   yours: boolean;
+  /**
+   * Set only on a deal recovered by comparing two exports. It is the window it
+   * happened in, not the day, and the page says so rather than pretending.
+   */
+  seenBetween?: { from: string | null; to: string | null };
 }
 
 /** Every player id column OOTP spreads a trade across: ten a side, both sides. */
@@ -299,6 +305,45 @@ export function recentTransactions(orgId: number, limit = 200): Transaction[] {
         yours: teams.some((t) => ours.has(t)) || (claim && Number(r.recipient_id ?? 0) === 1),
       });
     }
+  }
+
+  /*
+   * Deals that changed since the last export.
+   *
+   * "Transactions page shows only two of four contract extension signings...
+   * My guess is that application picks up established star players, skipping
+   * over those, who are perceived to be of a lesser caliber."
+   *
+   * His guess was right about the cause and wrong about whose fault it is:
+   * there is no filter here, and never was. OOTP writes a news story for some
+   * signings and not others, and the news is the only account of a signing the
+   * export carries — the in-game transaction log he can see is not in the CSV
+   * at all. So the rest are recovered by noticing that a man's deal changed
+   * between one import and the next.
+   *
+   * They are dated as a range, because a range is genuinely all this knows.
+   * Putting a day on it would be inventing precision to match the rows above,
+   * and those rows earned their dates.
+   */
+  for (const c of contractChanges(orgId)) {
+    // Already reported by name in the news, and the news said it better
+    if (out.some((t) => t.kind === 'signing' && t.players.includes(c.player_id))) continue;
+    if (out.some((t) => t.kind === 'signing' && t.plain.includes(c.name))) continue;
+    const raw =
+      c.was !== null && c.years > c.was
+        ? `<${c.name}:player#${c.player_id}> signed for ${c.years} year${c.years === 1 ? '' : 's'}.`
+        : `<${c.name}:player#${c.player_id}> agreed new terms.`;
+    out.push({
+      date: padDate(c.to),
+      dateKey: dateKey(c.to),
+      kind: 'contract',
+      summary: parseSummary(raw),
+      plain: plainSummary(raw),
+      teams: [],
+      players: [c.player_id],
+      yours: c.yours,
+      seenBetween: { from: padDate(c.from), to: padDate(c.to) },
+    });
   }
 
   // Newest first, on the date read as a number — OOTP writes them unpadded
