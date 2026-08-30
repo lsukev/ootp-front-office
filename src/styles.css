@@ -1991,3 +1991,6 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
 /* A deal recovered by comparing exports knows its window, not its day */
 .badge.txn-contract { background: none; color: var(--muted); border: 1px solid var(--muted); }
 .seen-between { font-size: 10px; font-weight: 400; }
+
+/* The lineup page confirming it is already built for tonight's starter */
+.built-for { font-size: 12px; color: var(--good); white-space: nowrap; }

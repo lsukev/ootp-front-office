@@ -103,6 +103,16 @@ dashboardRoutes.get('/next-game/:teamId', (req, res) => {
   if (!game) return res.json(null);
   const isHome = game.home_team === teamId;
   const oppId = isHome ? game.away_team : game.home_team;
+  /*
+   * Slot zero, and it is not an approximation.
+   *
+   * `projected_starting_pitchers` is the rotation as it stands on the export's
+   * own date, so starter_0 is whoever pitches next — which for the next game
+   * is by definition the man. The schedule's Plan panel counts along the array
+   * because it is asked about games several days out; there is nothing to
+   * count here, and I briefly "fixed" this by importing that reckoning before
+   * working out it can only ever return zero for the next unplayed game.
+   */
   res.json({
     date: game.date,
     isHome,

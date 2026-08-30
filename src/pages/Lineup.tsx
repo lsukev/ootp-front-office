@@ -82,11 +82,23 @@ export function Lineup({ teamId }: { teamId: number }) {
               </>
             )}
           </span>
-          {next.theirStarter && vs !== (next.theirStarter.throws === 'L' ? 'l' : 'r') && (
-            <button onClick={() => setVs(next.theirStarter!.throws === 'L' ? 'l' : 'r')}>
-              Build vs {next.theirStarter.name}
-            </button>
-          )}
+          {/*
+            The card is already built for tonight's man by default, and said so
+            nowhere — a reader asked for a lineup against the probable starter
+            without realising he was looking at one. It says which of the two
+            it is now, rather than only offering the button when he has wandered
+            off.
+          */}
+          {next.theirStarter &&
+            (vs === (next.theirStarter.throws === 'L' ? 'l' : 'r') ? (
+              <span className="built-for">
+                ✓ Card built for {next.theirStarter.name}
+              </span>
+            ) : (
+              <button onClick={() => setVs(next.theirStarter!.throws === 'L' ? 'l' : 'r')}>
+                Build vs {next.theirStarter.name}
+              </button>
+            ))}
         </div>
       )}
       <div className="toolbar">
