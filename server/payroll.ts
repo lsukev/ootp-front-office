@@ -33,6 +33,37 @@ interface ExtensionRow extends Record<string, number> {
  * walks one index further — the same indexing valuation.ts established and
  * verified against real deals.
  */
+/**
+ * The share of a contract this club is actually paying.
+ *
+ * `retained` is a percentage, and nothing was reading it as one. A reader
+ * acquired a man in a trade whose former club retained all of his salary, and
+ * the payroll page listed the full figure as money that would come off the
+ * books when he left — money this club was never paying in the first place. My
+ * own save has it the other way round and worse: the Yankees retained fifteen
+ * per cent of Carlos Rodón and were charged the whole $27.8m of him, an
+ * overstatement of twenty-three and a half million.
+ *
+ * `contract_team_id` is the club of record, which is the one that did the
+ * retaining. So it pays its retained share of a man who has gone, and a club
+ * holding somebody else's retained player pays the rest. Where nothing was
+ * retained this comes to the whole salary either way, which is why a club of
+ * record left behind on a man who simply moved — the case the note above
+ * describes — still reads correctly.
+ */
+function payingShare(c: ContractRow & { current_org: number | null; retained: number | null },
+                     orgId: number): number {
+  const retained = c.retained ?? 0;
+  if (retained <= 0) return 1;
+  const clubOfRecord = c.contract_team_id === orgId;
+  if (clubOfRecord) {
+    // He has gone and we kept a share of him; on our own roster we pay it all
+    return c.current_org === orgId ? 1 : retained / 100;
+  }
+  // Somebody else kept a share of a man now on our books, so we pay the rest
+  return Math.max(0, 1 - retained / 100);
+}
+
 function salaryForYear(
   c: ContractRow,
   thisSeason: number,
@@ -133,7 +164,15 @@ payrollRoutes.get('/payroll/:orgId', (req, res) => {
   const players = rows
     .map((c) => {
       const extension = extensions.get(c.player_id);
-      const byYear = years.map((y) => salaryForYear(c, thisSeason, y, extension));
+      /*
+       * Scaled to what this club pays. A retained share is the difference
+       * between a payroll figure and a number somebody else is settling.
+       */
+      const share = payingShare(c, orgId);
+      const byYear = years.map((y) => {
+        const full = salaryForYear(c, thisSeason, y, extension);
+        return full === null ? null : Math.round(full * share);
+      });
       const completed = c.current_year ?? 0;
       const contractEnd = (c.season_year ?? thisSeason) + (c.years ?? 0) - 1;
       // An extension keeps him on the books, so he is neither expiring nor

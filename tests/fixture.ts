@@ -516,8 +516,13 @@ export function buildFixture(): string {
   contract(db, { player: IDS.optioned, team: IDS.aaaTeam, contractTeam: IDS.mlbTeam, years: 2, done: 0, salary: 1_000_000 });
   // Traded away with nothing retained: contract_team_id still points at us
   contract(db, { player: IDS.tradedAway, team: IDS.otherMlbTeam, contractTeam: IDS.mlbTeam, years: 4, done: 2, salary: 20_000_000, retained: 0 });
-  // Released with money retained: genuinely still owed
-  contract(db, { player: IDS.retainedGuy, team: IDS.otherMlbTeam, contractTeam: IDS.mlbTeam, years: 3, done: 1, salary: 5_000_000, retained: 1 });
+  /*
+   * Released with all of his money retained: genuinely still owed. A hundred,
+   * not one — `retained` is a percentage, which the real exports make plain
+   * (15, 30, 45 and so on) and which this said as `1` back when the field was
+   * being read as a yes-or-no flag.
+   */
+  contract(db, { player: IDS.retainedGuy, team: IDS.otherMlbTeam, contractTeam: IDS.mlbTeam, years: 3, done: 1, salary: 5_000_000, retained: 100 });
   // Final year of the old deal, with an extension waiting
   contract(db, { player: IDS.extended, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam, years: 1, done: 0, salary: 8_000_000 });
   contract(db, { player: IDS.unrostered, team: IDS.mlbTeam, contractTeam: IDS.mlbTeam, years: 1, done: 0, salary: 700_000 });
