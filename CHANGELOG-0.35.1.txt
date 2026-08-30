@@ -1,0 +1,5 @@
+OOTP Front Office 0.35.1 — everything since 0.35.0
+
+Fixed — Trades on a player card are no longer cut off mid-sentence. OOTP stops its own summary at 255 characters, and the rebuild that repairs one from the underlying columns had gone into the league transactions page two releases ago; the player card, written afterwards, read the raw column and so showed the same half-sentences that fix was for. There is one reading of a trade now and both places use it.
+
+Fixed — A player name too long for the depth chart can be read by hovering it. The grid needs one line per man so the name is still cut, but the whole of it is on the tooltip rather than lost.
