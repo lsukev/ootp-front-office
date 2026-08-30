@@ -61,8 +61,14 @@ export function DepthChart({ orgId }: { orgId: number }) {
               <td className="pos-label">{row.label}</td>
               {row.cells.map((cell, i) => (
                 <td key={i} className="depth-cell">
+                  {/*
+                    A name is capped at 130px and ellipsised, because the grid
+                    needs one line per man — and this save has men called
+                    Christian Encarnacion-Strand. The title carries the whole of
+                    it, so a cut name can still be read.
+                  */}
                   {cell.map((p) => (
-                    <div key={p.player_id} className="depth-player" title={`age ${p.age}`}>
+                    <div key={p.player_id} className="depth-player" title={`${p.name} · age ${p.age}`}>
                       <span className="depth-name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></span>
                       <span className="depth-meta">
                         {p.age} · {formatRatingPair(p.cur, p.pot)}

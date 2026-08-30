@@ -309,3 +309,59 @@ describe('a waiver claim, which names nobody at all', () => {
     expect(t.yours, 'somebody else\'s free-agent signing was called his').toBe(false);
   });
 });
+
+/**
+ * The same table, read twice.
+ *
+ * "There are a few places (including here) where the text gets truncated."
+ *
+ * He was looking at a player card, where a trade ended "to the <New Yo". The
+ * composition that rebuilds a cut summary went in two releases before the
+ * player card did, and the card read the raw column instead — the very fault
+ * the composition exists to prevent, reintroduced by reading the same table
+ * from a second place rather than reusing the first.
+ */
+describe('a cut summary, wherever it is read', () => {
+  const CUT_TRADE = 800;
+  const TRADED_MAN = IDS.starter;
+
+  beforeAll(() => {
+    db.prepare(
+      `INSERT INTO trade_history (date, summary, message_id, team_id_0, team_id_1,
+                                  player_id_0_0, player_id_0_1, player_id_1_0)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      `${SEASON}-8-8`,
+      // Ends inside a name's markup, exactly as OOTP delivers one
+      `The <Test Nine:team#${IDS.mlbTeam}> trade <Reg Ular:player#${TRADED_MAN}> and ` +
+        `<Lefty Swinger:player#${IDS.lefty}> to the <Other Cl`,
+      CUT_TRADE, IDS.mlbTeam, OTHER_CLUB, TRADED_MAN, IDS.lefty, IDS.retainedGuy
+    );
+  });
+
+  it('is rebuilt on the league page', async () => {
+    const t = (await feed()).transactions.find((x) => x.plain.includes('Reg Ular'));
+    expect(t!.plain.trimEnd().endsWith('.')).toBe(true);
+    expect(t!.plain).not.toMatch(/[<>]/);
+  });
+
+  it('is rebuilt on the player card too', async () => {
+    /*
+     * The half that was missed. Same row, same fault, a different reader.
+     */
+    const d = await request(`/api/player/${TRADED_MAN}`);
+    const t = (d.transactions as Array<{ plain: string }>).find((x) => x.plain.includes('Reg Ular'));
+    expect(t, 'the trade never reached the card').toBeDefined();
+    expect(t!.plain, 'the card is still showing half a sentence').not.toMatch(/[<>]/);
+    expect(t!.plain.trimEnd().endsWith('.')).toBe(true);
+  });
+
+  it('reads the same on both, because there is one reading of it', async () => {
+    const onPage = (await feed()).transactions.find((x) => x.plain.includes('Reg Ular'))!.plain;
+    const d = await request(`/api/player/${TRADED_MAN}`);
+    const onCard = (d.transactions as Array<{ plain: string }>).find((x) =>
+      x.plain.includes('Reg Ular')
+    )!.plain;
+    expect(onCard).toBe(onPage);
+  });
+});

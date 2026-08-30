@@ -1,7 +1,7 @@
 import { db, hasColumns, tableExists } from './db.js';
 import { DATE_KEY } from './dashboard.js';
 import { padDate } from './rosterops.js';
-import { parseSummary, plainSummary, type Segment } from './transactions.js';
+import { parseSummary, plainSummary, tradeSummary, type Segment } from './transactions.js';
 
 /**
  * The two things a player card was missing, and one it had but barely said.
@@ -249,15 +249,20 @@ export function playerTransactions(playerId: number, limit = 12): PlayerTransact
       .flat()
       .filter((c) => hasColumns('trade_history', c));
     if (columns.length === 0) return out;
+    /*
+     * The whole row, not just the summary: where OOTP cut its own prose at 255
+     * characters the sentence is rebuilt from these columns, and selecting two
+     * of them left nothing to rebuild it from.
+     */
     const rows = db
       .prepare(
-        `SELECT date, summary FROM trade_history
+        `SELECT * FROM trade_history
          WHERE ${columns.map((c) => `${c} = ?`).join(' OR ')}
          ORDER BY ${DATE_KEY('date')} DESC LIMIT ?`
       )
-      .all(...columns.map(() => playerId), limit) as Array<{ date: string; summary: string }>;
+      .all(...columns.map(() => playerId), limit) as Array<Record<string, unknown>>;
     for (const r of rows) {
-      const raw = String(r.summary ?? '');
+      const raw = tradeSummary(r);
       out.push({
         date: padDate(r.date),
         kind: 'trade',

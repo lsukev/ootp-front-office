@@ -179,6 +179,29 @@ function composeTrade(
     : `The ${teamA} trade ${join(gave)} to the ${teamB}.`;
 }
 
+/**
+ * A trade as a sentence, whole.
+ *
+ * OOTP's own summary where it survived, composed from the columns where it did
+ * not. Exported because there are two places that read this table and only one
+ * of them was doing it properly: the league page composed the cut ones and the
+ * player card, written two releases later, read the raw column and put a
+ * reader's trade on screen ending "to the <New Yo". The same fault the
+ * composition exists to prevent, reintroduced by reading the same table twice.
+ */
+export function tradeSummary(row: Record<string, unknown>): string {
+  const exported = String(row.summary ?? '');
+  const side = (which: 0 | 1) =>
+    Array.from({ length: 10 }, (_, i) => Number(row[`player_id_${which}_${i}`] ?? 0)).filter(
+      (n) => n > 0
+    );
+  const sideA = side(0);
+  const sideB = side(1);
+  return isTruncated(exported) && (sideA.length > 0 || sideB.length > 0)
+    ? composeTrade(row, sideA, sideB)
+    : exported;
+}
+
 interface Transaction {
   date: string | null;
   dateKey: number;
@@ -231,13 +254,7 @@ export function recentTransactions(orgId: number, limit = 200): Transaction[] {
     for (const r of rows) {
       const players = TRADE_PLAYER_COLUMNS.map((c) => Number(r[c] ?? 0)).filter((n) => n > 0);
       const teams = [Number(r.team_id_0 ?? 0), Number(r.team_id_1 ?? 0)].filter((n) => n > 0);
-      const exported = String(r.summary ?? '');
-      const sideA = Array.from({ length: 10 }, (_, i) => Number(r[`player_id_0_${i}`] ?? 0)).filter((n) => n > 0);
-      const sideB = Array.from({ length: 10 }, (_, i) => Number(r[`player_id_1_${i}`] ?? 0)).filter((n) => n > 0);
-      const raw =
-        isTruncated(exported) && (sideA.length > 0 || sideB.length > 0)
-          ? composeTrade(r, sideA, sideB)
-          : exported;
+      const raw = tradeSummary(r);
       out.push({
         date: padDate(r.date),
         dateKey: dateKey(r.date),
