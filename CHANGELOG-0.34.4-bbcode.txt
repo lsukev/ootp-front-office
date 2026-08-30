@@ -1,0 +1,4 @@
+[b][size=4]OOTP Front Office 0.34.4 — everything since 0.34.3[/size][/b]
+[list]
+[*][b]Fixed[/b] — Retained salary is read as the percentage it is. A reader acquired a player in a trade whose former club retained all of his salary, and the Payroll page charged him the full figure and then promised it as money that would come off the books when the player left — money he was never paying. The column was being treated as a yes-or-no rather than a share, so the whole salary was charged either way, in both directions. My own save had the mirror of it and worse: fifteen per cent retained on a $27.8m contract, charged in full, for twenty-three and a half million of obligation that did not exist. A club now pays the share it kept of a player who has gone, and the rest of a player it acquired with money retained; where nothing was retained both come to the whole salary, so ordinary contracts are unaffected.
+[/list]
