@@ -1,0 +1,5 @@
+[b][size=4]OOTP Front Office 0.35.0 — everything since 0.34.4[/size][/b]
+[list]
+[*][b]New[/b] — Player cards carry a scouting report. OOTP exports no written scouting at all, so this is composed from a player's own ratings, ranked against the men he is actually up against — his level, and his side of the ball. Only the tools that stand out either way are listed, and a player with nothing remarkable about him gets no report rather than five lines saying he is average. The makeup ratings the game keeps and nothing here has ever shown — work ethic, leadership, greed, loyalty — are reported the same way. The card says who the ranks are against, because a percentile means nothing until you know what it is a percentile of.
+[*][b]New[/b] — Player cards list the transactions a player was part of: the trades, signings and waiver claims that brought him here, with every name still openable.
+[/list]
