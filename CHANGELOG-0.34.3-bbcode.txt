@@ -1,0 +1,4 @@
+[b][size=4]OOTP Front Office 0.34.3 — everything since 0.34.2[/size][/b]
+[list]
+[*][b]Changed[/b] — The Lineup page says when the card is already built for tonight's opposing starter. It has read the probable starter and defaulted the platoon side to his hand for a long time, but the only sign of it was a "Build vs him" button — which by its nature appears only when you have switched away, and so never appears when it is working. A reader asked for a lineup built against the probable starter without realising he was looking at one. It now confirms it instead of staying quiet.
+[/list]
