@@ -270,6 +270,19 @@ export interface PlayerDossier {
   injuryHistory: Array<Record<string, number | string | null>>;
   currentInjury: { status: string; daysLeft: number | null } | null;
   awards?: Array<{ year: number; award: string; positionName: string | null; rank: number }>;
+  /** Composed from his own ratings — the export carries no scouting prose. */
+  scouting?: {
+    tools: Array<{ label: string; rank: number; grade: number; good: boolean }>;
+    makeup: string[];
+    peers: string | null;
+    empty: boolean;
+  };
+  transactions?: Array<{
+    date: string | null;
+    kind: 'trade' | 'signing' | 'waiver';
+    summary: Array<{ text: string; kind?: 'player' | 'team'; id?: number }>;
+    plain: string;
+  }>;
   fieldingYears?: Array<{
     year: number; level_id: number; levelName: string; positionName: string;
     g: number; gs: number; innings: number; po: number; a: number; e: number; dp: number;

@@ -1994,3 +1994,8 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
 
 /* The lineup page confirming it is already built for tonight's starter */
 .built-for { font-size: 12px; color: var(--good); white-space: nowrap; }
+
+/* The composed scouting lines on a player card */
+.scout-list { margin: 0 0 8px; padding-left: 18px; }
+.scout-list li { margin-bottom: 2px; }
+.scout-makeup { margin: 0 0 6px; font-size: 12px; }

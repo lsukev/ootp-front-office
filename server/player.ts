@@ -4,6 +4,7 @@ import { gloves } from './gloves.js';
 import { contactLeague, contactProfiles, situationalSplits } from './battedball.js';
 import { contractsByPlayer, leagueRules, mlbPercentiler, seasonYear, valuesByPlayer } from './valuation.js';
 import { controlAfterThisSeason, serviceRemainingThisSeason } from './contracts.js';
+import { playerTransactions, scoutingReport } from './playerfile.js';
 import { DATE_KEY } from './dashboard.js';
 
 export const playerRoutes = Router();
@@ -389,6 +390,13 @@ playerRoutes.get('/player/:id', (req, res) => {
     player_id: id,
     contact,
     careerEarnings: earnings?.total ?? null,
+    /*
+     * Composed from his own ratings rather than quoted: the export carries no
+     * scouting prose at all, and every line here shows the rank behind it.
+     */
+    scouting: scoutingReport(id, isPitcher),
+    /** How he got here, from the same records the transactions page reads. */
+    transactions: playerTransactions(id),
     contactLeague: contact ? contactLeague() : null,
     splits,
     name: `${p.first_name} ${p.last_name}`,

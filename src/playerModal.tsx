@@ -357,6 +357,60 @@ function Dossier({ d }: { d: PlayerDossier }) {
         </section>
       </div>
 
+      {d.scouting && !d.scouting.empty && (
+        <section>
+          <h3>Scouting</h3>
+          {d.scouting.tools.length > 0 && (
+            <ul className="scout-list">
+              {d.scouting.tools.map((t) => (
+                <li key={t.label} className={t.good ? 'good-text' : 'bad-text'}>
+                  {t.label} <span className="muted">{t.grade} · {t.rank}th percentile</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {d.scouting.makeup.length > 0 && (
+            <p className="muted scout-makeup">{d.scouting.makeup.join(' · ')}</p>
+          )}
+          {/*
+            Said out loud because a percentile means nothing until you know what
+            it is a percentile of, and the first version of this ranked him
+            against every player in the universe — which made an ordinary
+            major-league bat look like one of the best in the world.
+          */}
+          <p className="muted hint-line">
+            OOTP exports no written scouting, so this is his own ratings ranked against{' '}
+            {d.scouting.peers ?? 'his peers'} — only the tools that stand out either way.
+          </p>
+        </section>
+      )}
+
+      {d.transactions && d.transactions.length > 0 && (
+        <section>
+          <h3>Transactions</h3>
+          <table className="mini">
+            <tbody>
+              {d.transactions.map((t, i) => (
+                <tr key={i}>
+                  <td className="num">{t.date ?? ''}</td>
+                  <td className="wrap-cell">
+                    {t.summary.map((seg, j) =>
+                      seg.kind === 'player' && seg.id ? (
+                        <PlayerLink key={j} id={seg.id}>{seg.text}</PlayerLink>
+                      ) : seg.kind === 'team' ? (
+                        <strong key={j}>{seg.text}</strong>
+                      ) : (
+                        <span key={j}>{seg.text}</span>
+                      )
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       <section>
         <h3>This Season, Game by Game</h3>
         <PlayerTrend playerId={d.player_id} />

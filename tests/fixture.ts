@@ -157,6 +157,11 @@ export function buildFixture(): string {
       hsc_status INTEGER DEFAULT 0, injury_career_ending INTEGER DEFAULT 0,
       injury_is_injured INTEGER DEFAULT 0, injury_dtd_injury INTEGER DEFAULT 0,
       injury_left INTEGER DEFAULT 0,
+      -- Makeup. OOTP keeps these on an index around a hundred and no screen
+      -- here showed them until the scouting report went in
+      personality_work_ethic INTEGER DEFAULT 100, personality_leader INTEGER DEFAULT 100,
+      personality_intelligence INTEGER DEFAULT 100, personality_greed INTEGER DEFAULT 100,
+      personality_loyalty INTEGER DEFAULT 100,
       -- Player Search reads this to offer free agents, and had no coverage at
       -- all until the search filters were tested
       free_agent INTEGER DEFAULT 0
