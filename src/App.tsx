@@ -14,7 +14,7 @@ import { Lineup } from './pages/Lineup';
 import { Pitching } from './pages/Pitching';
 import { Schedule } from './pages/Schedule';
 import { Trends } from './pages/Trends';
-import { Storylines } from './pages/Storylines';
+import { Newspaper } from './pages/Newspaper';
 import { LeagueRecap } from './pages/LeagueRecap';
 import { Transactions } from './pages/Transactions';
 import { PageBoundary } from './PageBoundary';
@@ -42,7 +42,7 @@ import { Chat } from './Chat';
 import { apiGet, apiPost } from './api';
 
 type Page =
-  | 'dashboard' | 'storylines' | 'recap' | 'transactions' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
+  | 'dashboard' | 'newspaper' | 'recap' | 'transactions' | 'rosters' | 'depth' | 'prospects' | 'development' | 'draft' | 'franchise' | 'orgcompare'
   | 'contracts' | 'crunch' | 'injuries' | 'freeagents' | 'trades' | 'lineup' | 'leaders'
   | 'staff' | 'watchlist' | 'players' | 'standings' | 'pitching' | 'schedule' | 'payroll' | 'trends' | 'settings';
 
@@ -54,7 +54,7 @@ type Page =
  */
 const NAV: Array<NavEntry<Page>> = [
   { kind: 'link', page: 'dashboard', label: 'Dashboard', hint: '🏟' },
-  { kind: 'link', page: 'storylines', label: 'Storylines', hint: '📰' },
+  { kind: 'link', page: 'newspaper', label: 'The Paper', hint: '📰' },
   {
     kind: 'group', label: 'Clubhouse', icon: '⚾',
     items: [
@@ -461,7 +461,7 @@ export function App() {
                */
               <PageBoundary key={page} onLeave={() => setPage('dashboard')}>
                 {page === 'dashboard' && <Dashboard orgId={orgId} onNavigate={(p) => setPage(p as Page)} />}
-                {page === 'storylines' && <Storylines orgId={orgId} orgLabel={org.label} />}
+                {page === 'newspaper' && <Newspaper orgId={orgId} />}
                 {page === 'recap' && <LeagueRecap orgId={orgId} />}
                 {page === 'transactions' && <Transactions orgId={orgId} />}
                 {page === 'rosters' && <RosterPage orgId={orgId} />}

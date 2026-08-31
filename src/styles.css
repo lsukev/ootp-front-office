@@ -1999,3 +1999,87 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
 .scout-list { margin: 0 0 8px; padding-left: 18px; }
 .scout-list li { margin-bottom: 2px; }
 .scout-makeup { margin: 0 0 6px; font-size: 12px; }
+
+/* ── The paper ────────────────────────────────────────────── */
+
+/* A lead set wide and the rest in columns, which is what makes a page of
+   stories read as an issue rather than a list of them. */
+.lead-story {
+  border-top: 3px solid var(--text);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0 16px;
+  margin-bottom: 18px;
+}
+.lead-story h1 {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.lead-story .standfirst {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 0 0 12px;
+  max-width: 62ch;
+}
+.lead-body {
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  line-height: 1.62;
+  margin: 0 0 10px;
+  max-width: 74ch;
+}
+/* The opening paragraph of a lead gets the drop, as a paper sets it */
+.lead-open::first-letter {
+  float: left;
+  font-family: var(--font-display);
+  font-size: 46px;
+  line-height: 0.82;
+  padding: 4px 8px 0 0;
+  color: var(--accent);
+}
+
+.paper-columns { columns: 2; column-gap: 32px; }
+@media (max-width: 900px) { .paper-columns { columns: 1; } }
+
+.paper-section {
+  break-inside: avoid-column;
+  margin-bottom: 20px;
+}
+.section-rule {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin: 0 0 10px;
+}
+.paper-story { margin-bottom: 14px; break-inside: avoid-column; }
+.paper-story h4 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.2;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.paper-story p {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0;
+  color: var(--muted);
+}
+.paper-briefs { margin: 0; padding-left: 16px; }
+.paper-briefs li {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+  color: var(--muted);
+}

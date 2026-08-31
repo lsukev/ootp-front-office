@@ -292,6 +292,21 @@ export interface PlayerDossier {
 }
 
 export const getPlayer = (id: number) => json<PlayerDossier>(`/api/player/${id}`);
+export interface IssueCache {
+  generatedAt?: string;
+  gameDate?: string | null;
+  leagueName?: string;
+  /** Null before an edition has been set for this club. */
+  issue: {
+    masthead: string;
+    lead: { headline: string; standfirst?: string; body: string };
+    sections: Array<{ title: string; stories: Array<{ headline: string; body: string }> }>;
+    briefs: string[];
+  } | null;
+  notice?: { message: string; from: string; to: string; provider: string } | null;
+  job?: { state: 'idle' | 'running' | 'done' | 'error'; startedAt: string | null; finishedAt: string | null; error: string | null };
+}
+
 export interface RecapCache {
   generatedAt?: string;
   /** The day the recap covers — the last one the league played, not the save's today. */

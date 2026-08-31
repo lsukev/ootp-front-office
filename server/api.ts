@@ -11,10 +11,11 @@ import { orgRoutes } from './org.js';
 import { contractRoutes } from './contracts.js';
 import { freeAgentRoutes } from './freeagents.js';
 import { lineupRoutes } from './lineup.js';
-import { storylineRoutes, startStorylineJob } from './storylines.js';
-import { recapRoutes, startRecapJob } from './recap.js';
+import { storylineRoutes } from './storylines.js';
+import { recapRoutes } from './recap.js';
 import { transactionRoutes } from './transactions.js';
 import { playerTrendRoutes } from './playertrend.js';
+import { newspaperRoutes, startNewspaperJob } from './newspaper.js';
 import { playerRoutes } from './player.js';
 import { historyRoutes, takeSnapshot } from './history.js';
 import { clearStatCaches, computeBatting, computePitching, leagueBaseline } from './stats.js';
@@ -66,6 +67,7 @@ api.use(storylineRoutes);
 api.use(recapRoutes);
 api.use(transactionRoutes);
 api.use(playerTrendRoutes);
+api.use(newspaperRoutes);
 
 const META_PATH = path.join(DATA_DIR, 'last-import.json');
 
@@ -100,12 +102,18 @@ function autoGenerate(): void {
     if (!settings.autoGenerateAfterImport || !getApiKey()) return;
     const orgId = settings.defaultOrgId ?? humanOrgId();
     if (!orgId) return;
-    console.log('[import] starting storylines, briefing and recap for org', orgId);
-    startStorylineJob(orgId);
+    /*
+     * The paper replaced the storylines page, so its job is not started here
+     * any more — it would be an AI call an hour for a page nobody can reach.
+     * The recap keeps its page but loses its automatic run for the same
+     * reason: the paper's races section covers the same ground, and two calls
+     * writing up one day is one too many.
+     */
+    console.log('[import] starting the paper and the briefing for org', orgId);
     startBriefingJob(orgId);
     // The recap is of yesterday's games, so a fresh import is exactly when it
     // is worth writing — that is the whole point of it being a daily thing
-    startRecapJob(orgId);
+    startNewspaperJob(orgId);
   } catch (err) {
     // A failure here must never take the import down with it
     console.error('[import] could not start the generations:', err);
