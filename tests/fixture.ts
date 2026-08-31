@@ -255,7 +255,10 @@ export function buildFixture(): string {
       player_id INTEGER, game_id INTEGER, pi INTEGER, outs INTEGER, gs INTEGER,
       year INTEGER, team_id INTEGER, league_id INTEGER, level_id INTEGER DEFAULT 1,
       split_id INTEGER DEFAULT 0, er INTEGER DEFAULT 0, ha INTEGER DEFAULT 0,
-      bb INTEGER DEFAULT 0, k INTEGER DEFAULT 0, g INTEGER DEFAULT 1
+      bb INTEGER DEFAULT 0, k INTEGER DEFAULT 0, g INTEGER DEFAULT 1,
+      -- What he allowed, which is how a pitcher joins the hot/cold list: the
+      -- same OPS the hitters are ranked on, read from the other side
+      ab INTEGER DEFAULT 0, tb INTEGER DEFAULT 0, hp INTEGER DEFAULT 0, sf INTEGER DEFAULT 0
     );
     -- One row per player per game. Eighty thousand of them in a real save, and
     -- the only source in the export for how a season actually unfolded.

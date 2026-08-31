@@ -30,6 +30,18 @@ interface DeadlineRead {
   deadlinePassed: boolean;
 }
 
+interface FormRow {
+  player_id: number;
+  name: string;
+  positionName: string;
+  pitcher?: boolean;
+  pa?: number;
+  ip?: number;
+  avg?: number;
+  ops: number;
+  hr?: number;
+}
+
 interface DashboardData {
   streaks?: Array<{
     player_id: number; name: string; positionName: string; games: number; kind: string;
@@ -47,8 +59,12 @@ interface DashboardData {
     ourStarter: { player_id: number; name: string; throws: string } | null;
     theirStarter: { player_id: number; name: string; throws: string } | null;
   }>;
-  hot: Array<{ player_id: number; name: string; positionName: string; pa: number; avg: number; ops: number; hr: number }>;
-  cold: Array<{ player_id: number; name: string; positionName: string; pa: number; avg: number; ops: number }>;
+  /**
+   * Hitters and pitchers together. A pitcher's `ops` is the one he has ALLOWED,
+   * so the same number means the opposite thing and the row has to say which.
+   */
+  hot: FormRow[];
+  cold: FormRow[];
   injuries: Array<{ player_id: number; name: string; positionName: string; levelName: string; status: string; daysLeft: number | null }>;
   pending: {
     expiring: number; extensionCandidates: number; promoteSignals: number;
@@ -188,20 +204,24 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
           <h3>🔥 Hot / 🧊 Cold (last 7 games)</h3>
           <table className="mini">
             <tbody>
-              {data.hot.map((p) => (
-                <tr key={p.player_id}>
-                  <td>🔥 <PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
-                  <td className="muted">{p.positionName}</td>
-                  <td className="num">{fmt3(p.avg)} avg · {fmt3(p.ops)} OPS{p.hr > 0 ? ` · ${p.hr} HR` : ''}</td>
-                </tr>
-              ))}
-              {data.cold.map((p) => (
-                <tr key={p.player_id}>
-                  <td>🧊 <PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
-                  <td className="muted">{p.positionName}</td>
-                  <td className="num">{fmt3(p.avg)} avg · {fmt3(p.ops)} OPS</td>
-                </tr>
-              ))}
+              {[...data.hot.map((p) => ({ p, mark: '🔥' })), ...data.cold.map((p) => ({ p, mark: '🧊' }))].map(
+                ({ p, mark }) => (
+                  <tr key={`${mark}${p.player_id}`}>
+                    <td>{mark} <PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
+                    <td className="muted">{p.positionName}</td>
+                    {/*
+                      A pitcher's number is what he ALLOWED, so it is labelled
+                      rather than left to look like a batting line — .200 is a
+                      fine week for him and a dreadful one for a hitter.
+                    */}
+                    <td className="num">
+                      {p.pitcher
+                        ? `${p.ip} IP · ${fmt3(p.ops)} OPS against`
+                        : `${fmt3(p.avg ?? 0)} avg · ${fmt3(p.ops)} OPS${(p.hr ?? 0) > 0 ? ` · ${p.hr} HR` : ''}`}
+                    </td>
+                  </tr>
+                )
+              )}
               {data.hot.length + data.cold.length === 0 && (
                 <tr><td className="muted">Not enough recent games yet.</td></tr>
               )}

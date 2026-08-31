@@ -293,8 +293,34 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
       }, [])
     : [];
 
+  /*
+   * Hot and cold, hitters and pitchers in one list.
+   *
+   * "The absence of pitchers on Hot/Cold in Front Office is very obvious, and
+   * similarly OOTP list is almost void of positional players." Both halves
+   * true: this read the batting logs and nothing else, so a staff could be
+   * throwing the ball through a wall and the panel would not know.
+   *
+   * They are put on one scale rather than two columns, because a table where
+   * half the rows mean the opposite of the other half is not one table. A
+   * hitter is his OPS; a pitcher is the OPS he has allowed — the same
+   * arithmetic from the other side of it, and both are in the game logs.
+   *
+   * Deliberately not ERA. Over a week a reliever throws three innings and one
+   * bad one owns the number: on this roster Clarke Schmidt sits at a 9.00
+   * earned run average having allowed .375, and Janson Junk at 7.36 having
+   * allowed .267. What a pitcher gave up is form; what crossed the plate in
+   * three innings is mostly luck.
+   */
   let hot: unknown[] = [];
   let cold: unknown[] = [];
+  /** Past these a man is worth naming; between them he is having a normal week. */
+  const HOT_OPS = 0.8;
+  const COLD_OPS = 0.6;
+  /** A hitter needs a fortnight of turns; a reliever's whole week is three innings. */
+  const MIN_PA = 12;
+  const MIN_OUTS = 9;
+
   if (recentGameIds.length >= 3 && tableExists('players_game_batting')) {
     const placeholders = recentGameIds.map(() => '?').join(',');
     const form = (
@@ -306,7 +332,7 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
            FROM players_game_batting b
            JOIN players p ON p.player_id = b.player_id
            WHERE b.game_id IN (${placeholders}) AND b.team_id = ?
-           GROUP BY b.player_id HAVING SUM(b.pa) >= 12`
+           GROUP BY b.player_id HAVING SUM(b.pa) >= ${MIN_PA}`
         )
         .all(...recentGameIds, orgId) as Array<Record<string, number | string>>
     ).map((r) => {
@@ -326,9 +352,61 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
         hr: r.hr,
       };
     });
-    form.sort((a, b) => b.ops - a.ops);
-    hot = form.slice(0, 3).filter((f) => f.ops >= 0.8);
-    cold = form.slice(-3).filter((f) => f.ops < 0.6).reverse();
+    /*
+     * The same window and the same measure, read from the other side. `tb` and
+     * `ab` are on the pitching log, so the OPS a man allowed is arithmetic
+     * rather than an estimate.
+     */
+    const arms =
+      tableExists('players_game_pitching_stats') &&
+      hasColumns('players_game_pitching_stats', 'ab', 'tb', 'ha', 'bb', 'hp', 'sf', 'outs')
+        ? (
+            db
+              .prepare(
+                `SELECT s.player_id, p.first_name || ' ' || p.last_name AS name, p.position,
+                        SUM(s.outs) AS outs, SUM(s.ab) AS ab, SUM(s.ha) AS ha, SUM(s.tb) AS tb,
+                        SUM(s.bb) AS bb, SUM(s.hp) AS hp, SUM(s.sf) AS sf
+                 FROM players_game_pitching_stats s
+                 JOIN players p ON p.player_id = s.player_id
+                 WHERE s.game_id IN (${placeholders}) AND s.team_id = ?
+                 GROUP BY s.player_id HAVING SUM(s.outs) >= ${MIN_OUTS}`
+              )
+              .all(...recentGameIds, orgId) as Array<Record<string, number | string>>
+          ).map((r) => {
+            const ab = r.ab as number;
+            const obpDen = ab + (r.bb as number) + (r.hp as number) + (r.sf as number);
+            const obp = obpDen ? ((r.ha as number) + (r.bb as number) + (r.hp as number)) / obpDen : 0;
+            const slg = ab ? (r.tb as number) / ab : 0;
+            return {
+              player_id: r.player_id,
+              name: r.name,
+              positionName: POSITION_NAMES[r.position as number] ?? 'P',
+              pitcher: true,
+              /** Innings, for a reader to discount a small week by. */
+              ip: Math.round(((r.outs as number) / 3) * 10) / 10,
+              ops: obp + slg,
+            };
+          })
+        : [];
+
+    /*
+     * How far past the line he is, so a hitter and a pitcher can be ranked
+     * against each other without pretending their numbers mean the same thing.
+     */
+    const heat = (f: { ops: number; pitcher?: boolean }) =>
+      f.pitcher ? COLD_OPS - f.ops : f.ops - HOT_OPS;
+    const chill = (f: { ops: number; pitcher?: boolean }) =>
+      f.pitcher ? f.ops - HOT_OPS : COLD_OPS - f.ops;
+
+    const everybody = [...form.map((f) => ({ ...f, pitcher: false })), ...arms];
+    hot = everybody
+      .filter((f) => heat(f) > 0)
+      .sort((a, b) => heat(b) - heat(a))
+      .slice(0, 4);
+    cold = everybody
+      .filter((f) => chill(f) > 0)
+      .sort((a, b) => chill(b) - chill(a))
+      .slice(0, 4);
   }
 
   // Pending decisions
