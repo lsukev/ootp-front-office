@@ -1,0 +1,7 @@
+OOTP Front Office 0.36.0 — everything since 0.35.1
+
+New — Pitchers are in the Hot / Cold panel. It read the batting logs and nothing else, so a staff could be throwing the ball through a wall and the dashboard would not know. Hitters and pitchers now share one list rather than sitting in two columns: a hitter is his OPS over the club's last seven games, a pitcher is the OPS he allowed over the same seven, which is the same arithmetic from the other side of it. Every row says which kind it is, since .200 is a fine week for one and a dreadful one for the other.
+
+Not earned run average, on purpose. Over a week a reliever throws three innings and one bad one owns the number — on my own roster that is a man sitting at a 9.00 ERA having allowed .375, and another at 7.36 having allowed .267. What a pitcher gave up is form; what crossed the plate in three innings is mostly luck.
+
+On why this and OOTP's own hot and cold list have never agreed: they are not measuring the same thing. This is the last seven club games with a twelve plate-appearance minimum, ranked on OPS. OOTP's is its own reckoning over its own window. Neither is wrong; they are answering different questions, and now at least this one answers it about the whole roster.
