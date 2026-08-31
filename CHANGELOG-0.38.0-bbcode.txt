@@ -1,0 +1,6 @@
+[b][size=4]OOTP Front Office 0.38.0 — everything since 0.37.0[/size][/b]
+[list]
+[*][b]New[/b] — [b]Release notes are in the app.[/b] Settings has a What's New section with the notes for every version, including the one you are running, and you no longer have to open a browser to find out what changed. They ship inside the build, so the whole history reads with the network off — and the notes you see are exactly the ones written for the version you have.
+[*][b]Changed[/b] — [b]The Paper is set as a paper.[/b] A masthead over a rule, the league and the date on a folio line beneath it, a centred front-page headline with an italic deck, and the story in columns with hairlines between them, justified and hyphenated. Section heads are centred small caps, the shorts are boxed on darker stock, and the whole sheet is black ink on off-white whichever club you manage and whichever mode you run the app in. A newspaper stops looking like one the moment it takes your team's colours.
+The buttons moved off the sheet, since a front page does not have any on it. Names stay clickable but are set as ink with a dotted rule rather than as blue links. There is a print stylesheet now too, so printing an edition gives you the edition and not the app around it.
+[/list]
