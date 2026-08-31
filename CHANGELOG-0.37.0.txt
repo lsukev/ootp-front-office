@@ -1,0 +1,11 @@
+OOTP Front Office 0.37.0 — everything since 0.36.0
+
+New — The Paper. The Storylines page is gone and in its place the app puts out a newspaper for your league: a masthead it names itself, a front page lead with a standfirst, sections in two columns, and a column of one-line shorts. One issue, one AI call, from the games, the standings, the leaders, the wire and the farm all at once.
+
+The lead is the editor's choice, not yours. It is whatever the data says is worth the front page — a race that turned, a deal that changed a contender, a man doing something historic — and it does not have to be about your club. A paper that leads on your club every day is a fanzine. The first edition I generated led on the Giants going fourteen innings in Phoenix while I was managing the Yankees, which is exactly what I wanted to see.
+
+It invents nothing. No quotations, no words in anybody's mouth, no injuries that are not in your export, no games that were not played. Every claim carries the figure it rests on. Where a section has nothing behind it the section is dropped and the issue runs shorter, the way a real desk runs four pages on a quiet Tuesday.
+
+It also cannot disagree with the rest of the app: it reads the same data the Daily Recap and the Transactions page read, rather than going and asking for its own.
+
+Changed — The Daily Recap keeps its page but no longer generates by itself on import, since the paper's races section covers the same ground. That is one fewer AI call per import, and with Storylines retired, two fewer.
