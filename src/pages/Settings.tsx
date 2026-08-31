@@ -476,9 +476,9 @@ export function Settings({
 
         <div className="settings-row">
           <div>
-            <strong>Write storylines and the briefing after each import</strong>
+            <strong>Set the paper and the briefing after each import</strong>
             <div className="muted">
-              Both are generated in the background as soon as new data is read, so they are already
+              Both are written in the background as soon as new data is read, so they are already
               waiting when you open the app. Off by default: each one costs money on your own API
               key, and nothing should spend it without being asked. Does nothing until a key is set.
             </div>

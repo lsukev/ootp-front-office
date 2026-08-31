@@ -111,8 +111,8 @@ function autoGenerate(): void {
      */
     console.log('[import] starting the paper and the briefing for org', orgId);
     startBriefingJob(orgId);
-    // The recap is of yesterday's games, so a fresh import is exactly when it
-    // is worth writing — that is the whole point of it being a daily thing
+    // An edition is of yesterday's games, so a fresh import is exactly when it
+    // is worth setting — that is the whole point of it being a daily thing
     startNewspaperJob(orgId);
   } catch (err) {
     // A failure here must never take the import down with it
