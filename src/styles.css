@@ -1256,6 +1256,84 @@ button.cta {
   overflow-y: auto;
 }
 
+/* ── What's new: the release notes, in the app ─────────────── */
+
+.settings-lede { margin: -4px 0 12px; font-size: 13px; }
+
+.release-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.release-entry { border-bottom: 1px solid var(--border); }
+.release-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+.release-head:hover { background: var(--panel-raised); }
+.release-caret { color: var(--muted); font-size: 11px; width: 10px; }
+.release-version { font-weight: 600; }
+.release-current {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.release-since {
+  font-family: var(--font-body);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.release-body {
+  padding: 2px 4px 14px 24px;
+  max-width: 78ch;
+}
+.release-item { margin-bottom: 12px; }
+.release-item p {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+/* The label sits inline ahead of the first line, the way the notes were
+   written — "New — the paper", not a heading over a paragraph */
+/* Kept shorter than a line of the text beside it. A float taller than the
+   line box indents the second line as well, which reads as a mistake because
+   there is nothing next to that line for it to be clearing */
+.release-label {
+  float: left;
+  margin: 1px 8px 0 0;
+  line-height: 1.2;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.release-label.new { color: var(--good); border-color: var(--good); }
+.release-label.fixed { color: var(--warn); border-color: var(--warn); }
+.release-label.changed, .release-label.better { color: var(--accent); border-color: var(--accent); }
+
 /* Pitching staff */
 .avail {
   display: inline-block;

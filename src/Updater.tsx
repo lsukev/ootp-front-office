@@ -86,7 +86,9 @@ export function UpdatePanel() {
               {state.status === 'checking' ? 'Checking…' : 'Check now'}
             </button>
           )}
-          <button onClick={openReleases}>Release notes</button>
+          {/* The notes themselves are in the app now, below this panel. This
+              is the download page, which is what it was always actually for */}
+          <button onClick={openReleases}>Downloads on GitHub</button>
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import {
 } from '../api';
 import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
+import { ReleaseNotes } from '../ReleaseNotes';
 
 export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode';
 
@@ -550,6 +551,7 @@ export function Settings({
       </section>
 
       <UpdatePanel />
+      <ReleaseNotes />
     </div>
   );
 }
