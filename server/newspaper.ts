@@ -100,6 +100,8 @@ export function assembleIssue(orgId: number) {
     readersClub: day.readersClub,
     /** Yesterday's scores and the tables they moved. */
     results: day.games,
+    /** The bracket, once October arrives. Null for the rest of the year. */
+    postseason: day.postseason,
     standings: day.standings,
     idleDivisions: day.idleDivisions,
     leaders: day.leaders,
@@ -281,6 +283,11 @@ async function generateIssue(orgId: number): Promise<IssueCache> {
       `then a column of shorts. Write like a sports desk: plain, quick, specific. Every claim ` +
       `carries the figure it rests on — a race is so many games, a run is so many starts, a deal ` +
       `is who for whom.\n\n` +
+      (context.postseason
+        ? `THE REGULAR SEASON IS OVER and the postseason is being played. The postseason block is ` +
+          `the bracket — the rounds, the series and where each one stands. That is the paper now. ` +
+          `The standings and the races are settled history and belong in a line at most.\n\n`
+        : '') +
       `Choose the lead yourself. It is whatever the data says is most worth the front page: a ` +
       `race that turned, a deal that changed a contender, a man doing something historic. It ` +
       `does NOT have to be about ${context.readersClub}, and a paper that leads on the reader's ` +

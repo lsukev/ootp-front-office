@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { competitiveGamesSql } from './postseason.js';
 import { db, hasColumns, tableExists } from './db.js';
 import { DATE_KEY } from './dashboard.js';
 
@@ -54,6 +55,9 @@ scheduleRoutes.get('/schedule/:teamId', (req, res) => {
   // The named starters are not in every version of games.csv, and asking for a
   // column that is not there costs the whole schedule rather than the probables
   const named = hasColumns('games', 'starter0', 'starter1');
+  // What counts as a game depends on when this league's regular season ends
+  const leagueId = (db.prepare(`SELECT league_id FROM teams WHERE team_id = ?`).get(teamId) as
+    { league_id: number } | undefined)?.league_id ?? 0;
   const rows = db
     .prepare(
       `SELECT g.game_id, g.date, ${DATE_KEY('g.date')} AS dateKey, g.time,
@@ -63,7 +67,8 @@ scheduleRoutes.get('/schedule/:teamId', (req, res) => {
        FROM games g
        JOIN teams ht ON ht.team_id = g.home_team
        JOIN teams at2 ON at2.team_id = g.away_team
-       WHERE (g.home_team = ? OR g.away_team = ?) AND g.game_type = 0
+       WHERE (g.home_team = ? OR g.away_team = ?)
+         AND ${competitiveGamesSql('g', leagueId)}
        ORDER BY ${DATE_KEY('g.date')}, g.time`
     )
     .all(teamId, teamId) as GameRow[];

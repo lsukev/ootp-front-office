@@ -44,3 +44,16 @@ export function locateColumn(candidates: Array<[table: string, column: string]>)
   }
   return null;
 }
+
+/**
+ * OOTP writes dates unpadded — "2027-9-3" as readily as "2027-09-03" — so a
+ * text sort puts the ninth of a month after the twenty-third. This turns a
+ * date column into a sortable number and is the shared fix for a fault that
+ * has appeared on the schedule, on snapshots, on the transaction wire and in
+ * the recap's idea of which day was yesterday.
+ */
+export const DATE_KEY = (col: string) => `(
+  CAST(substr(${col}, 1, 4) AS INTEGER) * 10000 +
+  CAST(substr(${col}, 6, CASE WHEN substr(${col}, 7, 1) = '-' THEN 1 ELSE 2 END) AS INTEGER) * 100 +
+  CAST(substr(${col}, 6 + CASE WHEN substr(${col}, 7, 1) = '-' THEN 2 ELSE 3 END) AS INTEGER)
+)`;

@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { db, hasColumns, tableExists } from './db.js';
+import { db, DATE_KEY, hasColumns, tableExists } from './db.js';
 import { LEVEL_NAMES, seasonYear } from './valuation.js';
 import { playoffPicture } from './playoffs.js';
+import { competitiveGamesSql, postseason } from './postseason.js';
 import { deadlineRead } from './posture.js';
 import { healthOf, HURT_SQL, NO_TIMETABLE } from './health.js';
 import { computeContracts } from './contracts.js';
@@ -17,11 +18,7 @@ const HAND: Record<number, string> = { 1: 'R', 2: 'L', 3: 'S' };
 const teamLabel = `CASE WHEN t.name = t.nickname THEN t.name ELSE t.name || ' ' || t.nickname END`;
 
 /** OOTP dates are unpadded (2026-4-9), so lexicographic ORDER BY is wrong. */
-export const DATE_KEY = (col: string) => `(
-  CAST(substr(${col}, 1, 4) AS INTEGER) * 10000 +
-  CAST(substr(${col}, 6, CASE WHEN substr(${col}, 7, 1) = '-' THEN 1 ELSE 2 END) AS INTEGER) * 100 +
-  CAST(substr(${col}, 6 + CASE WHEN substr(${col}, 7, 1) = '-' THEN 2 ELSE 3 END) AS INTEGER)
-)`;
+export { DATE_KEY } from './db.js';
 
 function playerName(id: number | null): { player_id: number; name: string; throws: string } | null {
   if (!id) return null;
@@ -41,6 +38,14 @@ function probableStarter(teamId: number, gameIndex: number) {
 }
 
 export function nextGames(teamId: number, limit: number) {
+  /*
+   * The league is needed before the schedule can be, because what counts as a
+   * game depends on when this league's regular season ends. Filtered on
+   * game_type alone, this table emptied itself the day the season did — which
+   * is the day a coach most wants to know who is on tonight.
+   */
+  const league = (db.prepare(`SELECT league_id FROM teams WHERE team_id = ?`).get(teamId) as
+    { league_id: number } | undefined)?.league_id ?? 0;
   return db
     .prepare(
       `SELECT g.game_id, g.date, g.home_team, g.away_team,
@@ -49,7 +54,8 @@ export function nextGames(teamId: number, limit: number) {
        FROM games g
        JOIN teams ht ON ht.team_id = g.home_team
        JOIN teams at2 ON at2.team_id = g.away_team
-       WHERE g.played = 0 AND (g.home_team = ? OR g.away_team = ?) AND g.game_type = 0
+       WHERE g.played = 0 AND (g.home_team = ? OR g.away_team = ?)
+         AND ${competitiveGamesSql('g', league)}
        ORDER BY ${DATE_KEY('g.date')}, g.time LIMIT ?`
     )
     .all(teamId, teamId, limit) as Array<{
@@ -464,6 +470,12 @@ dashboardRoutes.get('/dashboard/:orgId', (req, res) => {
     // Where the club actually stands for a place, which for most of the league
     // most of the time is not the division race the table above shows
     playoffs: playoffPicture(orgId),
+    /*
+     * The bracket, once there is one. Null for most of the year, which is why
+     * the section only appears in October — and why the app had nothing to say
+     * about the wild card round at all until now.
+     */
+    postseason: postseason(team.league_id as number),
     // Buy, hold or sell, with the arithmetic that produced it
     deadline: deadlineRead(orgId),
     recent,

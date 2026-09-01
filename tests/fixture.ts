@@ -132,7 +132,24 @@ export function buildFixture(): string {
       pct REAL, gb REAL, streak INTEGER, magic_number INTEGER
     );
     CREATE TABLE league_playoffs (
-      league_id INTEGER, num_wild_cards INTEGER
+      league_id INTEGER, num_wild_cards INTEGER,
+      -- The round names and lengths OOTP exports, which is where the app now
+      -- gets "Wildcard Series" and "Division Series" from rather than guessing
+      round INTEGER DEFAULT 0, max_round INTEGER DEFAULT 4,
+      best_of0 INTEGER DEFAULT 3, best_of1 INTEGER DEFAULT 5,
+      best_of2 INTEGER DEFAULT 7, best_of3 INTEGER DEFAULT 7,
+      round_names0 TEXT DEFAULT 'Wildcard Series',
+      round_names1 TEXT DEFAULT 'Division Series',
+      round_names2 TEXT DEFAULT 'League Championship Series',
+      round_names3 TEXT DEFAULT 'World Series',
+      winner INTEGER DEFAULT 0
+    );
+    -- The bracket itself: empty for most of a season, and the whole story once
+    -- it is not
+    CREATE TABLE league_playoff_fixtures (
+      league_id INTEGER, team_id0 INTEGER, team_id1 INTEGER, winner INTEGER,
+      finished INTEGER, best_of INTEGER, played INTEGER, round INTEGER,
+      result0 INTEGER, result1 INTEGER
     );
     -- The club's past, which the Franchise page reads and the staff can now be
     -- asked about

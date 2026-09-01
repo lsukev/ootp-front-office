@@ -2354,3 +2354,55 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
   }
   .masthead, .btn-feature, .banner, .generating { display: none !important; }
 }
+
+/* ── The postseason bracket ────────────────────────────────── */
+
+.postseason {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.postseason-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.postseason-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+/* One column per round, so the bracket reads left to right the way it is played */
+.postseason-rounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 14px;
+}
+.postseason-round h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.series {
+  padding: 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.series:last-child { border-bottom: none; }
+.series-teams { display: block; font-size: 13px; }
+.series-line { display: block; font-size: 12px; color: var(--accent); }
+/* A finished series is history — it stays legible but stops competing with
+   the round being played */
+.series.done .series-teams { color: var(--muted); }
+.series.done .series-line { color: var(--muted); }

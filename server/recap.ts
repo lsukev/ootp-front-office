@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { competitiveGamesSql, postseason } from './postseason.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { db, hasColumns, tableExists } from './db.js';
@@ -58,9 +59,11 @@ const teamLabel = (alias: string) =>
 export function lastPlayedDate(leagueId: number): string | null {
   const row = db
     .prepare(
-      `SELECT date FROM games
-       WHERE league_id = ? AND played = 1 AND game_type = 0
-       ORDER BY ${DATE_KEY('date')} DESC LIMIT 1`
+      // Postseason days count: this is what stopped the recap dead on the
+      // last day of the regular season and left it there
+      `SELECT date FROM games g
+       WHERE g.league_id = ? AND g.played = 1 AND ${competitiveGamesSql('g', leagueId)}
+       ORDER BY ${DATE_KEY('g.date')} DESC LIMIT 1`
     )
     .get(leagueId) as { date: string } | undefined;
   return padDate(row?.date) ?? null;
@@ -99,7 +102,8 @@ export function assembleDay(orgId: number) {
        FROM games g
        JOIN teams ht ON ht.team_id = g.home_team
        JOIN teams at2 ON at2.team_id = g.away_team
-       WHERE g.league_id = ? AND g.played = 1 AND g.game_type = 0
+       WHERE g.league_id = ? AND g.played = 1
+         AND ${competitiveGamesSql('g', org.league_id as number)}
          AND ${DATE_KEY('g.date')} = ?`
     )
     // padDate has already normalised the date, so the same key the SQL builds
@@ -170,6 +174,12 @@ export function assembleDay(orgId: number) {
       .filter((t) => t.date === date)
       .map((t) => ({ kind: t.kind, what: t.plain, involvesTheReadersClub: t.yours })),
     leaders: seasonLeaders(org.league_id),
+    /*
+     * The bracket, once there is one. Null all season, and in October it is
+     * the story — a recap that led on a division race while the Division
+     * Series was being played would be reading the wrong month.
+     */
+    postseason: postseason(org.league_id),
     leagueRules: rulesBriefing(org.league_id, orgId),
   };
 }
@@ -348,6 +358,14 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
       `exactly as they appear in the data. Cover every division that had a game. The divisions named ` +
       `in idleDivisions had none at all — leave those out entirely rather than writing that ` +
       `nothing happened in them.\n\n` +
+      // October changes what the piece is about, and a model handed a bracket
+      // without being told what it means will still write up the division races
+      (context.postseason
+        ? `THE REGULAR SEASON IS OVER. The postseason block carries the bracket: who is playing ` +
+          `whom, in which round, and where each series stands. Write about that — the races and ` +
+          `the standings are settled history now, and a recap that leads on them in October is ` +
+          `reading the wrong month. Name the round as the data names it.\n\n`
+        : '') +
       `Where the transactions list is not empty, those are the day's deals — say what happened and ` +
       `who it involves, and lead with one if it is the biggest thing that happened. Never invent a ` +
       `deal that is not in that list.\n\n` +

@@ -49,6 +49,26 @@ interface FormRow {
   hr?: number;
 }
 
+/** The bracket, once the save reaches October. See server/postseason.ts. */
+interface Postseason {
+  active: boolean;
+  currentRound: string | null;
+  rounds: Array<{
+    round: number;
+    name: string;
+    bestOf: number | null;
+    series: Array<{
+      home: { team_id: number; name: string; wins: number };
+      away: { team_id: number; name: string; wins: number };
+      bestOf: number;
+      finished: boolean;
+      winner: number | null;
+      summary: string;
+    }>;
+  }>;
+  champion: { team_id: number; name: string } | null;
+}
+
 interface DashboardData {
   streaks?: Array<{
     player_id: number; name: string; positionName: string; games: number; kind: string;
@@ -59,6 +79,8 @@ interface DashboardData {
   standings: Array<{ team_id: number; team: string; w: number; l: number; gb: number; streak: number }>;
   /** Absent on a save imported before this existed. */
   playoffs?: Playoffs | null;
+  /** Absent all season, and the whole story once it is not. */
+  postseason?: Postseason | null;
   deadline?: DeadlineRead | null;
   recent: Array<{ date: string; opponent: string; isHome: boolean; score: string; won: boolean; innings: number }>;
   upcoming: Array<{
@@ -131,6 +153,39 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
           </ul>
         </section>
       )}
+      {/* October. Above the decisions, because in October it is the only thing
+          on the page anybody is reading. */}
+      {data.postseason && (
+        <section className="postseason">
+          <div className="postseason-head">
+            <h2>
+              {data.postseason.champion
+                ? `${data.postseason.champion.name} — champions`
+                : (data.postseason.currentRound ?? 'Postseason')}
+            </h2>
+            {data.postseason.active && <span className="muted">now playing</span>}
+          </div>
+          <div className="postseason-rounds">
+            {data.postseason.rounds.map((round) => (
+              <div key={round.round} className="postseason-round">
+                <h3>
+                  {round.name}
+                  {round.bestOf ? <span className="muted"> · best of {round.bestOf}</span> : null}
+                </h3>
+                {round.series.map((s, i) => (
+                  <div key={i} className={s.finished ? 'series done' : 'series'}>
+                    <span className="series-teams">
+                      {s.away.name} at {s.home.name}
+                    </span>
+                    <span className="series-line">{s.summary}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="dash-decisions">
         <DecisionChip label="Expiring contracts" count={data.pending.expiring} onClick={() => onNavigate('contracts')} />
         <DecisionChip label="Extension candidates" count={data.pending.extensionCandidates} onClick={() => onNavigate('contracts')} />
