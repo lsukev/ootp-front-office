@@ -1124,7 +1124,12 @@ table.mini th, table.mini td { padding: 3px 8px; font-size: 12.5px; }
 /* League: standings + player search */
 .standings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  /* 550px is what this table needs for its whole line — W L PCT GB RS RA DIFF
+     STRK PACE MAGIC — with the tighter cells below. Sized to the content
+     rather than guessed at: the old 430 was narrower than the table could
+     ever be, so every card's table drew straight through its own border.
+     min() keeps the track from overflowing a narrow window. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 550px), 1fr));
   gap: 18px;
   margin-bottom: 26px;
 }
@@ -1132,7 +1137,9 @@ table.mini th, table.mini td { padding: 3px 8px; font-size: 12.5px; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 12px 14px 4px;
+  /* Narrow gutters for the same reason the cells have them: this table is
+     eleven columns wide and every pixel spent here is one it cannot use. */
+  padding: 12px 10px 4px;
 }
 .standings-card h3 {
   margin: 0 0 6px;
@@ -1141,7 +1148,28 @@ table.mini th, table.mini td { padding: 3px 8px; font-size: 12.5px; }
   text-transform: uppercase;
   color: var(--muted);
 }
+/* The table is wider than the card at the narrower grid sizes, and with
+   overflow visible it drew straight through the card's border — which is what
+   made the highlighted row look like it had escaped the table. It scrolls
+   inside its own border now, and the cards are wide enough that it rarely
+   has to. */
+.standings-card { overflow-x: auto; }
 .standings-card table { margin: 0; }
+/* Ten numeric columns and a club name. The narrower gutter is what lets the
+   whole line fit inside the card at three cards across. */
+.standings-card td, .standings-card th { padding-left: 5px; padding-right: 5px; }
+
+/* The x and e a standings page prints beside a club */
+.clinch {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.02em;
+}
+.clinch-x { background: var(--good); color: var(--bg-deep); }
+.clinch-e { background: color-mix(in srgb, var(--muted) 30%, transparent); color: var(--muted); }
 .standings-team {
   display: flex;
   align-items: center;

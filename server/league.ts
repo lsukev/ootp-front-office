@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { displayMagicNumber, gamesLeftByTeam, raceMarks, type RaceMark } from './playoffs.js';
 import { db, tableExists } from './db.js';
 import { LEVEL_NAMES } from './valuation.js';
 import { computeBatting, computePitching, leagueBaseline } from './stats.js';
@@ -49,7 +50,7 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
 
   const rows = db
     .prepare(
-      `SELECT t.team_id, ${teamLabel} AS team, t.abbr, t.sub_league_id, t.division_id,
+      `SELECT t.team_id, ${teamLabel} AS team, t.abbr, t.sub_league_id, t.division_id, t.level,
               sl.name AS sub_league, d.name AS division,
               r.g, r.w, r.l, r.pct, r.pos, r.gb, r.streak, r.magic_number
        FROM teams t
@@ -61,6 +62,40 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
        ORDER BY t.sub_league_id, t.division_id, r.pos`
     )
     .all(org.league_id) as Array<Record<string, number | string | null>>;
+
+  /*
+   * The x beside a club that has reached the postseason, and the e beside one
+   * that cannot. Worked out per conference, because a wild-card race is
+   * contested within one and a club in the other is not in it.
+   */
+  const left = gamesLeftByTeam(org.league_id);
+  const wildcards = tableExists('league_playoffs')
+    ? Number(
+        (db
+          .prepare(`SELECT num_wild_cards FROM league_playoffs WHERE league_id = ?`)
+          .get(org.league_id) as { num_wild_cards?: number } | undefined)?.num_wild_cards ?? 0
+      )
+    : 0;
+  const marks = new Map<number, RaceMark>();
+  if (left) {
+    const conferences = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const key = `${r.sub_league_id}:${r.level}`;
+      if (!conferences.has(key)) conferences.set(key, []);
+      conferences.get(key)!.push(r);
+    }
+    for (const clubs of conferences.values()) {
+      const conference = clubs.map((r) => ({
+        team_id: r.team_id as number,
+        division_id: r.division_id as number,
+        pos: r.pos as number,
+        w: r.w as number,
+        l: r.l as number,
+        gamesLeft: left.get(r.team_id as number) ?? 0,
+      }));
+      for (const [id, mark] of raceMarks(conference, wildcards)) marks.set(id, mark);
+    }
+  }
 
   // Group into sub-league → division, the shape a standings page reads in
   const groups = new Map<string, { subLeague: string; divisions: Map<string, unknown[]> }>();
@@ -82,7 +117,11 @@ leagueRoutes.get('/standings/:orgId', (req, res) => {
       gb: r.gb,
       g: r.g,
       streak: streakLabel(r.streak as number | null),
-      magicNumber: r.magic_number === 1000 ? null : r.magic_number,
+      // Through the shared rule: OOTP counts a magic number down past zero
+      // once the race is settled, and the page was printing "-1" and "0"
+      magicNumber: displayMagicNumber(r.magic_number as number | null),
+      /** 'x' reached the postseason, 'e' out of it, null undecided. */
+      mark: marks.get(r.team_id as number) ?? null,
       rs,
       ra,
       diff: rs !== null && ra !== null ? rs - ra : null,

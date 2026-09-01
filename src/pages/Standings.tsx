@@ -15,6 +15,8 @@ interface StandingsTeam {
   g: number;
   streak: string;
   magicNumber: number | null;
+  /** 'x' reached the postseason, 'e' out of it — the notation OOTP prints. */
+  mark?: 'x' | 'e' | null;
   rs: number | null;
   ra: number | null;
   diff: number | null;
@@ -77,6 +79,18 @@ export function Standings({ orgId }: { orgId: number }) {
                         <td className="standings-team">
                           <TeamLogo teamId={t.team_id} size={40} className="logo-sm" />
                           {t.team}
+                          {t.mark && (
+                            <span
+                              className={`clinch clinch-${t.mark}`}
+                              title={
+                                t.mark === 'x'
+                                  ? 'Reached the postseason'
+                                  : 'Out of the postseason race'
+                              }
+                            >
+                              {t.mark}
+                            </span>
+                          )}
                         </td>
                         <td className="num">{t.w}</td>
                         <td className="num">{t.l}</td>

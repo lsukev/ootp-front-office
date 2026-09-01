@@ -73,6 +73,56 @@ export function configuredSeasonLength(leagueId: number): number | null {
   return n > 0 ? n : null;
 }
 
+/**
+ * Regular-season games left, for every club in a league.
+ *
+ * One query and one rule, because three screens now need this number and the
+ * first two disagreed: the dashboard counted the exhibition slate as games
+ * still to play, and the standings page did not count anything at all.
+ *
+ * The schedule is preferred and only trusted when it accounts for the games
+ * already played — a partial one would otherwise read as a finished season.
+ * Failing that, the length OOTP was configured with for the league stands in,
+ * which is 162 in the majors and 150, 138, 132 or 55 further down. Failing
+ * both, nothing is returned and every caller says nothing rather than guessing.
+ */
+export function gamesLeftByTeam(leagueId: number): Map<number, number> | null {
+  if (!tableExists('teams') || !tableExists('team_record')) return null;
+
+  const readable = tableExists('games') &&
+    hasColumns('games', 'game_type', 'played', 'home_team', 'away_team');
+  const rows = db
+    .prepare(
+      `SELECT t.team_id, r.w + r.l AS played,
+              ${readable ? `(SELECT COUNT(*) FROM games g
+                 WHERE (g.home_team = t.team_id OR g.away_team = t.team_id)
+                   AND g.game_type = 0)` : '0'} AS total,
+              ${readable ? `(SELECT COUNT(*) FROM games g
+                 WHERE (g.home_team = t.team_id OR g.away_team = t.team_id)
+                   AND g.game_type = 0 AND COALESCE(g.played, 0) = 0)` : '0'} AS unplayed
+       FROM teams t JOIN team_record r ON r.team_id = t.team_id
+       WHERE t.league_id = ? AND t.allstar_team = 0`
+    )
+    .all(leagueId) as Array<{ team_id: number; played: number; total: number; unplayed: number }>;
+  if (rows.length === 0) return null;
+
+  const scheduleUsable =
+    readable && rows.some((r) => r.total > 0) && rows.every((r) => r.total >= r.played);
+  if (scheduleUsable) {
+    return new Map(rows.map((r) => [r.team_id, r.unplayed]));
+  }
+
+  const configured = configuredSeasonLength(leagueId);
+  if (configured === null) return null;
+  return new Map(rows.map((r) => [r.team_id, Math.max(0, configured - r.played)]));
+}
+
+/** OOTP writes 1000 for "not applicable" and counts a real one down past zero
+ *  once the race is settled. Only a positive number is a magic number. */
+export function displayMagicNumber(raw: number | null | undefined): number | null {
+  return raw !== null && raw !== undefined && raw > 0 && raw !== 1000 ? raw : null;
+}
+
 export function regularSeasonSchedule(teamId: number): ScheduleRead | null {
   if (!tableExists('games') || !hasColumns('games', 'game_type', 'played', 'home_team', 'away_team')) {
     return null;
@@ -135,43 +185,80 @@ interface Row {
   l: number;
   gb: number;
   magic_number: number | null;
-  /** Regular-season games this club has left, for the clinch arithmetic. */
-  games_left: number;
-  /** Its whole regular-season schedule, for checking that against the record. */
-  games_scheduled: number;
 }
 
+/** A club's line, as much of it as the race arithmetic needs. */
+export interface RaceRow {
+  team_id: number;
+  division_id: number;
+  /** OOTP's own division rank, so its tiebreakers are respected rather than redone. */
+  pos: number;
+  w: number;
+  l: number;
+  gamesLeft: number;
+}
+
+/** What a standings page prints beside a club: in, out, or nothing yet. */
+export type RaceMark = 'x' | 'e' | null;
+
 /**
- * Whether the race is already decided, by counting wins nobody can take back.
+ * Who is in and who is out, for a whole conference at once.
  *
- * Both readings are exact rather than probabilistic, and both are one line:
+ * "OOTP puts an x for every team that reached postseason, worth replicating.
+ * Negative magic numbers or zero in League Standings page at the end of
+ * regular season remain."
  *
- *  - A club is OUT when every berth is held by a club whose wins already beat
- *    the most this club can finish with. Those clubs can only add to their
- *    totals, and anybody who displaces one of them must finish above them, so
- *    the berths are gone whatever happens from here.
- *  - A club is IN when fewer clubs than there are berths can still reach its
- *    current win total. It can only add to that total, so the count is a floor.
+ * Both readings are exact, and both are conservative in the same direction: a
+ * mark is only printed where the arithmetic leaves no room for the season to
+ * disagree with it. Saying a club is out when it is not would be worse than
+ * saying nothing.
  *
- * Ties are treated as not settled — a tie is decided by a rule or a game this
- * app cannot see, and claiming a place on one would be claiming to know more
- * than the export says.
+ *  - IN by winning the division: no club in it can still reach this one's win
+ *    total. Or in by wild card: fewer clubs than there are wild cards can
+ *    reach that total. Counting against the wild cards rather than against
+ *    every place is deliberate — a division winner from elsewhere takes a
+ *    place without taking a wild card, and counting them would claim a place
+ *    that a weak division can still take away.
+ *  - OUT when this club can no longer win its own division AND at least as
+ *    many clubs as there are places have already won more games than it can
+ *    finish with. Those totals cannot fall, so the places are gone.
+ *
+ * Once the season has been played out the question is not arithmetic any more,
+ * and the marks are simply who finished in a place.
  */
-function decide(rows: Row[], mine: Row, spots: number): { clinched: boolean; eliminated: boolean } {
+export function raceMarks(rows: RaceRow[], spots: number): Map<number, RaceMark> {
+  const marks = new Map<number, RaceMark>(rows.map((r) => [r.team_id, null]));
   const divisions = new Set(rows.map((r) => r.division_id)).size;
   const berths = divisions + Math.max(0, spots);
-  const others = rows.filter((r) => r.team_id !== mine.team_id);
-  if (berths <= 0 || others.length < berths) return { clinched: false, eliminated: false };
+  if (rows.length < 2 || berths <= 0) return marks;
 
-  const myMax = mine.w + mine.games_left;
-  // The clubs currently holding berths, weakest first
-  const holders = [...others].sort((a, b) => b.w - a.w).slice(0, berths);
-  const eliminated = holders.length === berths && holders.every((h) => h.w > myMax);
+  const seasonOver = rows.every((r) => r.gamesLeft === 0);
+  if (seasonOver) {
+    const queue = rows
+      .filter((r) => r.pos !== 1)
+      .sort((a, b) => b.w / Math.max(1, b.w + b.l) - a.w / Math.max(1, a.w + a.l));
+    for (const r of rows) if (r.pos === 1) marks.set(r.team_id, 'x');
+    for (const r of queue.slice(0, Math.max(0, spots))) marks.set(r.team_id, 'x');
+    return marks;
+  }
 
-  const canReachMe = others.filter((r) => r.w + r.games_left >= mine.w).length;
-  const clinched = canReachMe < berths;
+  for (const mine of rows) {
+    const others = rows.filter((r) => r.team_id !== mine.team_id);
+    const myMax = mine.w + mine.gamesLeft;
+    const inDivision = others.filter((r) => r.division_id === mine.division_id);
 
-  return { clinched, eliminated: eliminated && !clinched };
+    const wonDivision = inDivision.length > 0 && inDivision.every((r) => r.w + r.gamesLeft < mine.w);
+    const wonWildcard = spots > 0 && others.filter((r) => r.w + r.gamesLeft >= mine.w).length < spots;
+    if (wonDivision || wonWildcard) {
+      marks.set(mine.team_id, 'x');
+      continue;
+    }
+
+    const cannotWinDivision = inDivision.some((r) => r.w > myMax);
+    const aheadForGood = others.filter((r) => r.w > myMax).length;
+    if (cannotWinDivision && aheadForGood >= berths) marks.set(mine.team_id, 'e');
+  }
+  return marks;
 }
 
 /** The standard half-game formula, from the club ahead to the club behind. */
@@ -210,20 +297,11 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
    * gets zero, which makes the clinch arithmetic say nothing rather than
    * claim everything is already settled.
    */
-  const scheduleReadable = hasColumns('games', 'game_type', 'played', 'home_team', 'away_team');
-  const perTeam = (predicate: string) =>
-    scheduleReadable
-      ? `(SELECT COUNT(*) FROM games g
-          WHERE (g.home_team = t.team_id OR g.away_team = t.team_id)
-            AND g.game_type = 0${predicate})`
-      : '0';
-  const leftColumn = perTeam(' AND COALESCE(g.played, 0) = 0');
-  const totalColumn = perTeam('');
+  const left = gamesLeftByTeam(me.league_id);
 
   const rows = db
     .prepare(
-      `SELECT t.team_id, t.division_id, r.pos, r.w, r.l, r.gb, r.magic_number,
-              ${leftColumn} AS games_left, ${totalColumn} AS games_scheduled
+      `SELECT t.team_id, t.division_id, r.pos, r.w, r.l, r.gb, r.magic_number
        FROM teams t JOIN team_record r ON r.team_id = t.team_id
        WHERE t.league_id = ? AND t.sub_league_id = ? AND t.level = ? AND t.allstar_team = 0
        ORDER BY r.w * 1.0 / MAX(r.w + r.l, 1) DESC, r.w DESC`
@@ -239,37 +317,24 @@ export function playoffPicture(teamId: number): PlayoffPicture | null {
    * division read "magic number -1", because a negative number is a truthy
    * one and the line was printed whenever the field was set.
    */
-  const magicNumber =
-    mine.magic_number !== null && mine.magic_number > 0 && mine.magic_number !== 1000
-      ? mine.magic_number
-      : null;
+  const magicNumber = displayMagicNumber(mine.magic_number);
 
-  /*
-   * The schedule is only trusted when it accounts for the games already played.
-   * An export carrying a partial one would otherwise report nought games left
-   * and be read as a finished season — which is a worse answer than admitting
-   * the schedule cannot be read.
-   */
-  const fromSchedule =
-    scheduleReadable && rows.every((r) => r.games_scheduled >= r.w + r.l) &&
-    rows.some((r) => r.games_scheduled > 0);
-
-  /*
-   * Where the export carries no schedule for this league, the length OOTP was
-   * configured with stands in — every club's played total is known, so the
-   * remainder is arithmetic. Without either, nothing is claimed.
-   */
-  const configured = fromSchedule ? null : configuredSeasonLength(me.league_id);
-  const scheduleKnown = fromSchedule || configured !== null;
-  if (configured !== null) {
-    for (const r of rows) r.games_left = Math.max(0, configured - (r.w + r.l));
-  }
-  const gamesLeft = scheduleKnown ? mine.games_left : null;
-  const seasonOver = scheduleKnown && mine.games_left === 0;
-  const { clinched, eliminated } = scheduleKnown
-    ? decide(rows, mine, spots)
-    : { clinched: false, eliminated: false };
+  const scheduleKnown = left !== null;
+  const gamesLeft = left?.get(teamId) ?? null;
+  const seasonOver = gamesLeft === 0;
+  const marks = scheduleKnown
+    ? raceMarks(
+        rows.map((r) => ({
+          team_id: r.team_id, division_id: r.division_id, pos: r.pos,
+          w: r.w, l: r.l, gamesLeft: left!.get(r.team_id) ?? 0,
+        })),
+        spots
+      )
+    : new Map<number, RaceMark>();
+  const clinched = marks.get(teamId) === 'x' && !seasonOver;
+  const eliminated = marks.get(teamId) === 'e';
   const settled = { clinched, eliminated, gamesLeft, seasonOver };
+
   const divisionGb = mine.gb ?? 0;
   // OOTP's own first place, so its tiebreakers are respected rather than redone
   const leadsDivision = mine.pos === 1;
