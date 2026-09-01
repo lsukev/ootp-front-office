@@ -1,0 +1,7 @@
+OOTP Front Office 0.38.1 — everything since 0.38.0
+
+Fixed — A player whose injury has no length in the export is no longer reported as out for a thousand days. OOTP writes 1000 in the days-remaining column when it has no duration to write, and the app was printing it: "~1000 days" against men who were in the lineup that week. In my own save the real injuries run from 1 day to 597 and then stop — nobody at all between 598 and 999 — and then thirty-nine players sit on exactly 1000, none of them flagged career-ending, and one of them had played fifty-eight games that season.
+
+Those men now read "No timetable" on the injury report, "Out — no return date given" on the pitching staff, and nothing at all where a number would have gone on the roster and the player card. The dashboard's injury list also sorts them after the genuine absences instead of above them, since forty placeholders had been holding the top of the list and pushing the real news off it. Thanks to the reader who spotted it.
+
+Nothing about availability changed: a day-to-day man is still day-to-day and still available. Only the number is different, and only because it was never a number.
