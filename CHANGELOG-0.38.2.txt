@@ -1,0 +1,11 @@
+OOTP Front Office 0.38.2 — everything since 0.38.1
+
+Fixed — The dashboard's buy/sell card no longer offers to buy a season that has already been played. With every game of the year in the books it still read "buy 99% to reach the postseason", counted 28 games left, and reported a magic number of -1. All three are fixed, and the middle one had been wrong all season for everybody.
+
+Games left came from counting every row in the games table for your club and subtracting the games played — and the exhibition slate is in that table. A club with 28 spring games in March was told it had 28 games left in September. The card now counts unplayed regular-season games from the schedule, so every odds figure it gives is worked out with the right number of games in it for the first time.
+
+Magic numbers count down past zero once a race is settled, and the card was printing the negative. Only a real one is shown now.
+
+New — The card states a result when there is one. A season that has been played out reads "IN — reached the postseason" or "OUT — missed the postseason" rather than odds on a question already answered, and a club that clinches or is mathematically eliminated is told so during the season. Both are worked out exactly: you are out when every playoff place is held by a club whose wins already beat the most you can finish with, and in when fewer clubs than there are places can still reach your total.
+
+Also — leagues that play something other than 162 games are read properly. Where the export carries no schedule for a league, the season length OOTP was configured with is used, which is 150, 138 or 132 down the affiliate ladder and 55 in the complex league. Where even that is missing, the card no longer prints a games-left figure it would have had to invent. Thanks to the reader who caught it.
