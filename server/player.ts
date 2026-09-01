@@ -6,6 +6,7 @@ import { contractsByPlayer, leagueRules, mlbPercentiler, seasonYear, valuesByPla
 import { controlAfterThisSeason, serviceRemainingThisSeason } from './contracts.js';
 import { playerTransactions, scoutingReport } from './playerfile.js';
 import { DATE_KEY } from './dashboard.js';
+import { NO_TIMETABLE } from './health.js';
 
 export const playerRoutes = Router();
 
@@ -264,11 +265,15 @@ playerRoutes.get('/player/:id', (req, res) => {
         .all(id) as Array<Record<string, unknown>>;
     } catch { /* skip */ }
   }
+  const injuryDays = p.injury_left as number | null;
   const currentInjury =
     p.injury_is_injured === 1 || p.injury_dtd_injury === 1
       ? {
           status: p.injury_dtd_injury === 1 && p.injury_is_injured !== 1 ? 'Day-to-day' : 'Injured',
-          daysLeft: (p.injury_left as number) ?? null,
+          // Through the same rule the rest of the app reads: a placeholder
+          // shown here said a man playing every night was out for three years
+          daysLeft: injuryDays !== null && injuryDays > 0 && injuryDays < NO_TIMETABLE ? injuryDays : null,
+          durationUnknown: injuryDays !== null && injuryDays >= NO_TIMETABLE,
         }
       : null;
 

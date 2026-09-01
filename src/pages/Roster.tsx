@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getRoster, getTeams, type RosterPlayer, type RosterResponse, type Team } from '../api';
 import { PlayerLink, Tip, TIP_OA } from '../playerModal';
+import { daysLong, daysShort } from '../injury';
 import { ColumnPicker } from '../ColumnPicker';
 import { formatRatingPair } from '../ratingScale';
 import {
@@ -162,13 +163,13 @@ function RosterTable({
                   <span
                     className={`roster-standing ${p.standing.available ? '' : 'out'}`}
                     title={
-                      p.standing.daysLeft
-                        ? `${p.standing.label} — ${p.standing.daysLeft} days left`
+                      daysLong(p.standing)
+                        ? `${p.standing.label} — ${daysLong(p.standing)}`
                         : p.standing.label
                     }
                   >
                     {p.standing.label}
-                    {p.standing.daysLeft ? ` ${p.standing.daysLeft}d` : ''}
+                    {daysShort(p.standing) && ` ${daysShort(p.standing)}`}
                   </span>
                 )}
               </td>

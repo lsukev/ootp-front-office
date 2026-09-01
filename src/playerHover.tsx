@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getPlayer, type PlayerDossier } from './api';
 import { formatRating } from './ratingScale';
+import { daysShort } from './injury';
 
 /**
  * The card that appears when you rest on a player's name, the way OOTP shows a
@@ -148,7 +149,7 @@ function Card({ id, anchor }: { id: number; anchor: DOMRect }) {
           {data.currentInjury && (
             <div className="phover-injury">
               {data.currentInjury.status}
-              {data.currentInjury.daysLeft ? ` · ~${data.currentInjury.daysLeft}d` : ''}
+              {daysShort(data.currentInjury) && ` · ${daysShort(data.currentInjury)}`}
             </div>
           )}
 

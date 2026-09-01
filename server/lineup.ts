@@ -324,6 +324,7 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
       positionName: POSITION_NAMES[p.position] ?? '?',
       status: out.status,
       daysLeft: out.daysLeft,
+      durationUnknown: out.durationUnknown,
     }));
   const sidelined = new Set(unavailable.map((u) => u.player_id));
 

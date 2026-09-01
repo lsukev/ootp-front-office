@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink } from '../playerModal';
+import { daysCell } from '../injury';
 import { Th } from '../Th';
 
 interface Injury {
   player_id: number; name: string; age: number; positionName: string; levelName: string;
-  team: string; status: string; daysLeft: number | null; dlDaysThisYear: number | null;
+  team: string; status: string; daysLeft: number | null; durationUnknown: boolean;
+  dlDaysThisYear: number | null;
 }
 
 export function Injuries({ orgId }: { orgId: number }) {
@@ -40,7 +42,7 @@ export function Injuries({ orgId }: { orgId: number }) {
               <td>
                 <span className={`flag ${p.status !== 'Day-to-day' ? 'flag-hot' : ''}`}>{p.status}</span>
               </td>
-              <td className="num">{p.daysLeft ? `~${p.daysLeft} days` : '—'}</td>
+              <td className="num">{daysCell(p)}</td>
               <td className="num">{p.dlDaysThisYear ?? '—'}</td>
             </tr>
           ))}

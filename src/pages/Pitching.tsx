@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
+import { daysLong, daysShort } from '../injury';
 import { findStat, formatStat, plusColor as statPlusColor } from '../stats';
 import { Th } from '../Th';
 
@@ -46,7 +47,7 @@ interface Arm {
   daysRest: number | null;
   lastOuting: { date: string; pitches: number; outs: number } | null;
   /** `playable` is false only for the injured list; day-to-day men can pitch. */
-  injury: { status: string; daysLeft: number | null; playable: boolean } | null;
+  injury: { status: string; daysLeft: number | null; durationUnknown: boolean; playable: boolean } | null;
   stats: Stats | null;
 }
 interface Starter extends Arm {
@@ -76,9 +77,9 @@ const num = (v: number | null | undefined) => (v === null || v === undefined ? '
 function InjuryTag({ injury }: { injury: Arm['injury'] }) {
   if (!injury) return null;
   return (
-    <span className="injury-tag" title={injury.daysLeft ? `About ${injury.daysLeft} days remaining` : undefined}>
+    <span className="injury-tag" title={daysLong(injury) || undefined}>
       {injury.status}
-      {injury.daysLeft ? ` ~${injury.daysLeft}d` : ''}
+      {daysShort(injury) && ` ${daysShort(injury)}`}
     </span>
   );
 }
@@ -273,7 +274,7 @@ export function Pitching({ teamId }: { teamId: number }) {
                     {p.injury ? (
                       <span className="avail avail-bad">
                         {p.injury.status}
-                        {p.injury.daysLeft ? ` · about ${p.injury.daysLeft} days left` : ''}
+                        {daysLong(p.injury) && ` · ${daysLong(p.injury)}`}
                       </span>
                     ) : (
                       <span className="avail avail-ok">Healthy</span>

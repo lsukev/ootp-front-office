@@ -3,6 +3,7 @@ import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api
 import { PlayerHover } from './playerHover';
 import { PlayerTrend } from './PlayerTrend';
 import { formatRatingPair, ratingFraction } from './ratingScale';
+import { daysLong } from './injury';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
 type Listener = (id: number | null) => void;
@@ -254,7 +255,7 @@ function Dossier({ d }: { d: PlayerDossier }) {
           {d.currentInjury && (
             <div className="injury-note">
               🩹 {d.currentInjury.status}
-              {d.currentInjury.daysLeft ? ` — ~${d.currentInjury.daysLeft} days remaining` : ''}
+              {daysLong(d.currentInjury) && ` — ${daysLong(d.currentInjury)}`}
             </div>
           )}
           <WatchControls playerId={d.player_id} name={d.name} />

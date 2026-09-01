@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiGet, getLineup, type LineupResponse } from '../api';
 import { PlayerLink, Tip } from '../playerModal';
+import { daysShort } from '../injury';
 import { findStat, plusColor as statPlusColor } from '../stats';
 import { Th } from '../Th';
 
@@ -262,7 +263,7 @@ export function Lineup({ teamId }: { teamId: number }) {
                 .map(
                   (u) =>
                     `${u.name} (${u.positionName} · ${u.status}${
-                      u.daysLeft ? `, ${u.daysLeft}d` : ''
+                      daysShort(u) ? `, ${daysShort(u)}` : ''
                     })`
                 )
                 .join(', ')}

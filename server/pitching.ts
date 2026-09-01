@@ -97,7 +97,13 @@ function bullpenStatus(
    */
   if (injury && !injury.playable) {
     return {
-      label: injury.daysLeft ? `Out about ${injury.daysLeft} more days` : 'Out — on the injured list',
+      label: injury.daysLeft
+        ? `Out about ${injury.daysLeft} more days`
+        // Hurt with nothing in the export saying for how long. It used to read
+        // "Out about 1000 more days", which is a placeholder, not a diagnosis
+        : injury.durationUnknown
+          ? 'Out — no return date given'
+          : 'Out — on the injured list',
       tone: 'bad',
     };
   }

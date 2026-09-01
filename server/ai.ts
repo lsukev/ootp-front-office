@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, tableExists } from './db.js';
 import { jobStatus, startJob } from './jobs.js';
-import { HURT_SQL } from './health.js';
+import { daysLeftSql, HURT_SQL } from './health.js';
 import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { PROVIDERS, describeError, providerFor, toolLoop, type FallbackNotice } from './providers.js';
@@ -91,7 +91,12 @@ function briefingContext(orgId: number) {
   } catch { /* no contract data */ }
   const injuries = db
     .prepare(
-      `SELECT p.first_name || ' ' || p.last_name AS name, p.age, p.injury_left AS days_left, t.level
+      /*
+       * Through the placeholder rule: handed the raw column, the model wrote
+       * that men who are playing this week are out for a thousand days.
+       */
+      `SELECT p.first_name || ' ' || p.last_name AS name, p.age,
+              ${daysLeftSql('p.injury_left')} AS days_left, t.level
        FROM players p JOIN teams t ON t.team_id = p.team_id
        LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
        WHERE p.organization_id = ? AND ${HURT_SQL}`

@@ -4,6 +4,7 @@ import { useJob, type JobStatus } from '../useJob';
 import { FallbackNotice, type FallbackNoticeData } from '../FallbackNotice';
 import { PlayerLink } from '../playerModal';
 import { TeamLogo } from '../TeamLogo';
+import { daysShort } from '../injury';
 import { Th } from '../Th';
 import { PlayerNames } from '../PlayerNames';
 
@@ -65,7 +66,7 @@ interface DashboardData {
    */
   hot: FormRow[];
   cold: FormRow[];
-  injuries: Array<{ player_id: number; name: string; positionName: string; levelName: string; status: string; daysLeft: number | null }>;
+  injuries: Array<{ player_id: number; name: string; positionName: string; levelName: string; status: string; daysLeft: number | null; durationUnknown: boolean }>;
   pending: {
     expiring: number; extensionCandidates: number; promoteSignals: number;
     injuredCount: number; crunchIssues: number;
@@ -254,7 +255,7 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
                 <tr key={p.player_id}>
                   <td><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
                   <td><span className="level-tag">{p.levelName}</span> {p.positionName}</td>
-                  <td className="num">{p.status}{p.daysLeft ? ` · ~${p.daysLeft}d` : ''}</td>
+                  <td className="num">{p.status}{daysShort(p) && ` · ${daysShort(p)}`}</td>
                 </tr>
               ))}
               {data.injuries.length === 0 && <tr><td className="muted">Fully healthy. Knock on wood.</td></tr>}

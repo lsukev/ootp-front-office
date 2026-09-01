@@ -72,7 +72,7 @@ export interface RosterPlayer {
   /** Batted-ball quality. Null for pitchers and anyone yet to put one in play. */
   contact: Record<string, number | null> | null;
   /** DFA, waivers, injured list or plain active — and whether he can be used. */
-  standing: { label: string; daysLeft: number | null; available: boolean } | null;
+  standing: { label: string; daysLeft: number | null; durationUnknown: boolean; available: boolean } | null;
 }
 
 export interface RosterResponse {
@@ -268,7 +268,7 @@ export interface PlayerDossier {
   splits: Array<{ label: string; pa: number; ba: number | null; ops: number | null }>;
   careerEarnings: number | null;
   injuryHistory: Array<Record<string, number | string | null>>;
-  currentInjury: { status: string; daysLeft: number | null } | null;
+  currentInjury: { status: string; daysLeft: number | null; durationUnknown: boolean } | null;
   awards?: Array<{ year: number; award: string; positionName: string | null; rank: number }>;
   /** Composed from his own ratings — the export carries no scouting prose. */
   scouting?: {
@@ -484,6 +484,7 @@ export interface LineupResponse {
     positionName: string;
     status: string;
     daysLeft: number | null;
+    durationUnknown: boolean;
   }>;
 }
 

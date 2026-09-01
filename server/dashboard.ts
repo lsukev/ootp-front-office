@@ -3,7 +3,7 @@ import { db, hasColumns, tableExists } from './db.js';
 import { LEVEL_NAMES, seasonYear } from './valuation.js';
 import { playoffPicture } from './playoffs.js';
 import { deadlineRead } from './posture.js';
-import { healthOf, HURT_SQL } from './health.js';
+import { healthOf, HURT_SQL, NO_TIMETABLE } from './health.js';
 import { computeContracts } from './contracts.js';
 import { computeProspects } from './org.js';
 
@@ -71,7 +71,12 @@ export function orgInjuries(orgId: number) {
          LEFT JOIN players_roster_status rs ON rs.player_id = p.player_id
          WHERE p.organization_id = ? AND p.retired = 0
            AND ${HURT_SQL}
-         ORDER BY t.level, p.injury_left DESC`
+         -- Longest known absence first, and the men with no date on it after
+         -- them rather than above them: sorted on the raw column, forty
+         -- placeholders held the top of the list and the real news sat below
+         ORDER BY t.level,
+                  CASE WHEN p.injury_left >= ${NO_TIMETABLE} THEN 1 ELSE 0 END,
+                  p.injury_left DESC`
       )
       .all(orgId) as Array<Record<string, number | string | null>>
   )
@@ -87,6 +92,7 @@ export function orgInjuries(orgId: number) {
     team: r.team_label,
     status: health!.status,
     daysLeft: health!.daysLeft,
+    durationUnknown: health!.durationUnknown,
     dlDaysThisYear: r.dl_days_this_year ?? null,
   }));
 }
