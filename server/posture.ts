@@ -1,5 +1,5 @@
 import { db, tableExists } from './db.js';
-import { playoffPicture } from './playoffs.js';
+import { configuredSeasonLength, playoffPicture, regularSeasonSchedule } from './playoffs.js';
 import { currentGameDate } from './valuation.js';
 
 /**
@@ -25,8 +25,19 @@ export type Posture = 'buy' | 'lean-buy' | 'hold' | 'lean-sell' | 'sell';
 
 export interface DeadlineRead {
   posture: Posture;
-  /** Chance of reaching the postseason, 0-1. */
+  /** Chance of reaching the postseason, 0-1. Certain once settled. */
   odds: number;
+  /**
+   * Set once the race is a result rather than a question — the season has been
+   * played out, or the arithmetic has closed either way. A card that offers to
+   * buy after the last game of the year is not reading the season, and the
+   * reader who reported this was looking at exactly that.
+   */
+  settled: 'in' | 'out' | null;
+  /** The word on the card: the posture, or IN / OUT once it is settled. */
+  verdict: string;
+  /** The line beside it, which used to be hardcoded in the page. */
+  caption: string;
   headline: string;
   /** The two or three facts doing the work, for the page to list. */
   reasons: string[];
@@ -36,6 +47,8 @@ export interface DeadlineRead {
   /** Wins the run differential says they should have, against what they do. */
   pythagoreanWins: number;
   actualWins: number;
+  /** False when the export gave nothing to work the figure out from. */
+  gamesLeftKnown: boolean;
   /** Null when the save has no deadline, or it has already passed. */
   daysToDeadline: number | null;
   deadlinePassed: boolean;
@@ -90,12 +103,30 @@ export function deadlineRead(teamId: number): DeadlineRead | null {
   const played = record.w + record.l;
   if (played === 0) return null;
 
-  const scheduled = tableExists('games')
-    ? Number((db
-        .prepare(`SELECT COUNT(*) AS n FROM games WHERE home_team = ? OR away_team = ?`)
-        .get(teamId, teamId) as { n: number }).n)
-    : 162;
-  const gamesLeft = Math.max(0, scheduled - played);
+  /*
+   * From the schedule, counting only regular-season games not yet played. The
+   * old reading counted every row in `games` — exhibition slate included — and
+   * subtracted the games played, which told a club that had finished its 162
+   * that it had 28 games left: its March exhibition games, to the game. Every
+   * odds calculation this card has ever made was run with those in it.
+   */
+  const schedule = regularSeasonSchedule(teamId);
+  // Only trusted when it covers the games already played — a partial schedule
+  // would otherwise read as a season with nothing left in it
+  /*
+   * The schedule first, then the length OOTP was configured with for the
+   * league, and only then a guess. The guess is kept for the odds — they need
+   * some horizon — but it is flagged, because a fabricated "132 games left to
+   * settle it" is the same fault as the 28 that started this: a number on the
+   * card that nothing in the export supports. Some independent and winter
+   * leagues in a save have records and no schedule at all.
+   */
+  const configured = configuredSeasonLength(team.league_id);
+  const fromSchedule = schedule !== null && schedule.total >= played;
+  const gamesLeft = fromSchedule
+    ? schedule!.left
+    : Math.max(0, (configured ?? 162) - played);
+  const gamesLeftKnown = fromSchedule || configured !== null;
 
   const { rs, ra } = runsFor(teamId);
   const talent = pythag(rs, ra);
@@ -146,8 +177,30 @@ export function deadlineRead(teamId: number): DeadlineRead | null {
   const pythagoreanWins = talent * played;
   const luck = record.w - pythagoreanWins;
 
+  /*
+   * Whether there is still a question. A season that has been played out, or a
+   * race the arithmetic has closed, is a result — and a result is not a
+   * posture. Reported separately from the verdict so the page can stop asking
+   * a settled question rather than answering it at 99%.
+   */
+  const seasonOver = picture?.seasonOver ?? false;
+  const reachedIt = seasonOver && picture !== null && picture.route !== 'out';
+  const settled: 'in' | 'out' | null =
+    seasonOver
+      ? reachedIt ? 'in' : 'out'
+      : picture?.clinched
+        ? 'in'
+        : picture?.eliminated
+          ? 'out'
+          : null;
+
+  // Certainty, not a model, once the race is decided either way
+  const settledOdds = settled === 'in' ? 1 : settled === 'out' ? 0 : odds;
+
   let posture: Posture;
-  if (odds >= 0.75) posture = 'buy';
+  if (settled === 'in') posture = 'buy';
+  else if (settled === 'out') posture = 'sell';
+  else if (odds >= 0.75) posture = 'buy';
   else if (odds >= 0.55) posture = 'lean-buy';
   else if (odds >= 0.25) posture = 'hold';
   else if (odds >= 0.10) posture = 'lean-sell';
@@ -166,22 +219,46 @@ export function deadlineRead(teamId: number): DeadlineRead | null {
     );
   }
   if (picture) reasons.push(picture.summary);
-  reasons.push(`${gamesLeft} games left to settle it.`);
-  if (deadlinePassed) reasons.push('The deadline has passed — this reads the season, not the market.');
-  else if (daysToDeadline !== null) reasons.push(`${daysToDeadline} days to the deadline.`);
+  if (seasonOver) reasons.push(`${played} games played — the regular season is over.`);
+  else if (gamesLeftKnown) reasons.push(`${gamesLeft} games left to settle it.`);
+  // The deadline is beside the point once the games have run out
+  if (!seasonOver) {
+    if (deadlinePassed) reasons.push('The deadline has passed — this reads the season, not the market.');
+    else if (daysToDeadline !== null) reasons.push(`${daysToDeadline} days to the deadline.`);
+  }
 
-  const chance = `${Math.round(odds * 100)}%`;
-  const headline = {
-    buy: `Buy — ${chance} to reach the postseason.`,
-    'lean-buy': `Lean buy — ${chance}, and the games left are enough.`,
-    hold: `Hold — ${chance}. The season has not decided yet.`,
-    'lean-sell': `Lean sell — ${chance}, and running out of road.`,
-    sell: `Sell — ${chance}. Play for next year.`,
-  }[posture];
+  const chance = `${Math.round(settledOdds * 100)}%`;
+  const headline = settled
+    ? seasonOver
+      ? settled === 'in'
+        ? 'Reached the postseason.'
+        : 'Missed the postseason.'
+      : settled === 'in'
+        ? 'A place is secured — the rest is seeding.'
+        : `Eliminated with ${gamesLeft} to play. Play for next year.`
+    : {
+        buy: `Buy — ${chance} to reach the postseason.`,
+        'lean-buy': `Lean buy — ${chance}, and the games left are enough.`,
+        hold: `Hold — ${chance}. The season has not decided yet.`,
+        'lean-sell': `Lean sell — ${chance}, and running out of road.`,
+        sell: `Sell — ${chance}. Play for next year.`,
+      }[posture];
+
+  /*
+   * The card's own words, so the wording travels with the reading. The page
+   * had "to reach the postseason" written into it, which is why the screenshot
+   * a reader sent in still read that under a season that had finished.
+   */
+  const verdict = settled ? (settled === 'in' ? 'in' : 'out') : posture.replace('-', ' ');
+  const caption = settled
+    ? seasonOver
+      ? settled === 'in' ? 'reached the postseason' : 'missed the postseason'
+      : settled === 'in' ? 'a postseason place is clinched' : 'eliminated from the race'
+    : 'to reach the postseason';
 
   return {
-    posture, odds, headline, reasons,
-    gamesPlayed: played, gamesLeft,
+    posture, odds: settledOdds, settled, verdict, caption, headline, reasons,
+    gamesPlayed: played, gamesLeft, gamesLeftKnown,
     runDiff: rs - ra,
     pythagoreanWins: Number(pythagoreanWins.toFixed(1)),
     actualWins: record.w,

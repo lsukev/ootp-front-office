@@ -23,9 +23,15 @@ interface Playoffs {
 interface DeadlineRead {
   posture: 'buy' | 'lean-buy' | 'hold' | 'lean-sell' | 'sell';
   odds: number;
+  /** Set once the race is a result rather than a question. */
+  settled?: 'in' | 'out' | null;
+  /** The word on the card and the line beside it, both from the server. */
+  verdict?: string;
+  caption?: string;
   headline: string;
   reasons: string[];
   gamesLeft: number;
+  gamesLeftKnown?: boolean;
   runDiff: number;
   daysToDeadline: number | null;
   deadlinePassed: boolean;
@@ -109,9 +115,16 @@ export function Dashboard({ orgId, onNavigate }: { orgId: number; onNavigate: (p
       {data.deadline && (
         <section className={`posture posture-${data.deadline.posture}`}>
           <div className="posture-head">
-            <span className="posture-verdict">{data.deadline.posture.replace('-', ' ')}</span>
-            <span className="posture-odds">{Math.round(data.deadline.odds * 100)}%</span>
-            <span className="muted">to reach the postseason</span>
+            <span className="posture-verdict">
+              {data.deadline.verdict ?? data.deadline.posture.replace('-', ' ')}
+            </span>
+            {/* A settled season has no odds to give. It reads "IN — reached the
+                postseason", not "BUY 99% to reach the postseason" under a year
+                that has been played out. */}
+            {!data.deadline.settled && (
+              <span className="posture-odds">{Math.round(data.deadline.odds * 100)}%</span>
+            )}
+            <span className="muted">{data.deadline.caption ?? 'to reach the postseason'}</span>
           </div>
           <ul className="posture-why">
             {data.deadline.reasons.map((r, i) => <li key={i}>{r}</li>)}

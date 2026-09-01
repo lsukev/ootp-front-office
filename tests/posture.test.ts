@@ -29,8 +29,25 @@ const setSeason = (w: number, l: number, rs: number, ra: number, scheduled = 162
   db.prepare(`INSERT INTO team_pitching_stats (team_id, year, split_id, level_id, g, r) VALUES (?,2026,0,1,?,?)`)
     .run(IDS.mlbTeam, w + l, ra);
   db.prepare(`DELETE FROM games`).run();
-  const g = db.prepare(`INSERT INTO games (game_id, home_team, away_team, date, played) VALUES (?,?,?,?,0)`);
-  for (let i = 0; i < scheduled; i++) g.run(9000 + i, IDS.mlbTeam, IDS.otherMlbTeam, '2026-6-1');
+  /*
+   * A real schedule marks the games already played, and the card now counts
+   * what is left rather than subtracting the record from the schedule length.
+   * Written the old way — every game unplayed — this helper described a state
+   * OOTP never exports, and a club 154 games into its season had a full 162
+   * still to play.
+   */
+  const g = db.prepare(
+    `INSERT INTO games (game_id, home_team, away_team, date, played, game_type) VALUES (?,?,?,?,?,0)`
+  );
+  for (let i = 0; i < scheduled; i++) {
+    g.run(9000 + i, IDS.mlbTeam, IDS.otherMlbTeam, '2026-6-1', i < w + l ? 1 : 0);
+  }
+  // The exhibition slate, which is exactly what used to be counted as games
+  // still to play — 28 of them, on a club that had finished its season
+  const ex = db.prepare(
+    `INSERT INTO games (game_id, home_team, away_team, date, played, game_type) VALUES (?,?,?,?,1,5)`
+  );
+  for (let i = 0; i < 28; i++) ex.run(9500 + i, IDS.mlbTeam, IDS.otherMlbTeam, '2026-3-1');
 };
 
 describe('reading the season', () => {
