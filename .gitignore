@@ -19,5 +19,11 @@ config.json
 .env.*
 !.env.example
 
+# Agent instructions — local to this machine and not part of the app. The repo
+# is public and these carry personal paths, so they stay out of it.
+CLAUDE.md
+AGENTS.md
+.claude/settings.local.json
+
 # OS
 .DS_Store
