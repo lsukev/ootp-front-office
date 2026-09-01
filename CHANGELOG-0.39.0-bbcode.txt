@@ -1,0 +1,7 @@
+[b][size=4]OOTP Front Office 0.39.0 — everything since 0.38.3[/size][/b]
+[list]
+[*][b]Fixed[/b] — [b]The app no longer stops at the end of the regular season.[/b] Up Next went empty the day the season ended, the Daily Recap stayed stuck on the last day of it, the schedule page ran out, and The Paper had nothing new to set. All four came from one filter: every screen that asked the schedule a question was asking only about regular-season games, which is correct where it started — a club's remaining games, its season stat line — and quietly ends the app's year in the fortnight a manager cares most about.
+[*][b]New[/b] — [b]The postseason bracket is on the dashboard.[/b] Every round, named as your league names them — Wildcard Series, Division Series, League Championship Series, World Series — with each series and where it stands: "New York Mets won 2-1", "Houston at New York, Mets lead 1-0", or "Yet to begin". It appears when your save reaches October and is not there the rest of the year.
+The recap and The Paper now know the season is over and write about the bracket instead of division races that were settled a week ago.
+None of this guesses at how OOTP marks a playoff game — my own save has none in it to learn from, and a guess would be wrong in somebody else's. A league's regular season has a last day, and a game after it is a playoff game. Spring training sits before the season and the All-Star game inside it, so neither is mistaken for one. Thanks to the reader who plays deep enough into October to find all four.
+[/list]
