@@ -29,7 +29,7 @@
     "chokidar": "^4.0.3",
     "csv-parse": "^5.6.0",
     "electron-updater": "^6.8.9",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "openai": "^6.49.0"
   },
   "devDependencies": {
