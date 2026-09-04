@@ -1,0 +1,7 @@
+[b][size=4]OOTP Front Office 0.40.0 — everything since 0.39.0[/size][/b]
+[list]
+[*][b]New[/b] — [b]Ollama.[/b] The AI features can now run on a model on your own machine, with no key, no account and no cost. Pick "Ollama (on this machine)" in Settings, give it the address if it is not the usual one, and the picker lists whatever models you have pulled.
+This suits the app: everything else here already runs locally against your own save, and the AI features were the one part that had to send a season's worth of your league to somebody else. Nothing leaves your machine now.
+Worth knowing before you switch. These prompts are long — the newspaper's runs to about twenty-six thousand characters — so a small model will write thinner copy than the paid services, and may fail to produce a usable answer at all. The app will say so rather than print filler. A larger model with a long context window is the one to reach for.
+Ollama is not installed on the machine this was built on, so it is tested against a server that speaks Ollama's protocol rather than against a hope. If something is off in real use, say so and I will fix it — that is a better way round than guessing.
+[/list]
