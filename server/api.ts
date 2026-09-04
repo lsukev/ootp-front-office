@@ -7,6 +7,7 @@ import { DATA_DIR, loadConfig, saveConfig } from './config.js';
 import { importCsvDir, type ImportProgress, type ImportResult } from './importer.js';
 import { clearPendingExport, pendingExport, startWatcher } from './watcher.js';
 import { getApiKey, loadSettings } from './settings.js';
+import { useOllamaUrl } from './providers.js';
 import { orgRoutes } from './org.js';
 import { contractRoutes } from './contracts.js';
 import { freeAgentRoutes } from './freeagents.js';
@@ -39,6 +40,13 @@ import { scheduleRoutes } from './schedule.js';
 import { payrollRoutes } from './payroll.js';
 import { trendsRoutes } from './trends.js';
 import { chatRoutes } from './chat.js';
+
+/*
+ * Where the local model server is, handed to the provider layer once. It reads
+ * the setting through this rather than importing settings.ts, which imports it
+ * — the reader is passed in here, where both modules are already in hand.
+ */
+useOllamaUrl(() => loadSettings().ollamaUrl);
 
 export const api = Router();
 api.use(logoRoutes);

@@ -7,7 +7,7 @@ import { FolderPicker } from '../FolderPicker';
 import { UpdatePanel } from '../Updater';
 import { ReleaseNotes } from '../ReleaseNotes';
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode' | 'ollama';
 
 interface ApiKeyStatus {
   configured: boolean;
@@ -38,6 +38,8 @@ export interface AppSettings {
   models: Partial<Record<ProviderId, string>>;
   roundRatingsToFive: boolean;
   autoGenerateAfterImport: boolean;
+  /** Where a local Ollama is listening. Ignored by every other provider. */
+  ollamaUrl: string;
 }
 interface SettingsResponse {
   settings: AppSettings;
@@ -52,6 +54,8 @@ const ENV_VAR: Record<ProviderId, string> = {
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
   opencode: 'OPENCODE_API_KEY',
+  // Never read: a local server asks for no credential
+  ollama: 'OLLAMA_API_KEY',
 };
 
 const KEY_PLACEHOLDER: Record<ProviderId, string> = {
@@ -60,6 +64,8 @@ const KEY_PLACEHOLDER: Record<ProviderId, string> = {
   gemini: 'AIza…',
   // Zen publishes no prefix, so nothing is implied about one
   opencode: 'Your Zen key',
+  // Never shown — the local server takes an address instead
+  ollama: '',
 };
 interface ModelChoice {
   id: string;
@@ -88,6 +94,7 @@ export function Settings({
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [providers, setProviders] = useState<ProvidersResponse | null>(null);
   const [keyInput, setKeyInput] = useState('');
+  const [ollamaUrl, setOllamaUrl] = useState('');
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [changingSave, setChangingSave] = useState(false);
@@ -99,9 +106,18 @@ export function Settings({
   const desktop = desktopBridge();
 
   /** The list belongs to a provider, so switching must fetch the new one. */
+  /* Returns what it found as well as storing it, so a caller can say how many. */
   const loadModels = (provider?: ProviderId) => {
     const q = provider ? `?provider=${provider}` : '';
-    apiGet<ModelsResponse>(`/api/models${q}`).then(setModels).catch(() => {});
+    return apiGet<ModelsResponse>(`/api/models${q}`)
+      .then((r) => {
+        setModels(r);
+        return r.models;
+      })
+      .catch((e: Error) => {
+        if (provider === 'ollama') throw e;
+        return undefined;
+      });
   };
 
   const loadProviders = () => {
@@ -111,7 +127,8 @@ export function Settings({
   useEffect(() => {
     apiGet<SettingsResponse>('/api/settings').then((r) => {
       setData(r);
-      loadModels(r.settings.provider);
+      setOllamaUrl(r.settings.ollamaUrl ?? '');
+      void loadModels(r.settings.provider);
     }).catch(() => {});
     loadProviders();
   }, []);
@@ -122,6 +139,34 @@ export function Settings({
     setData({ ...data, settings: next });
     onSettingsChanged(next);
     await apiPost('/api/settings', patch);
+  };
+
+  /*
+   * The address of a local server, saved and then proved. Saving alone would
+   * be a setting that looks accepted and answers nothing — the check asks the
+   * server for its models, which fails plainly when it is not running and
+   * tells the reader what to start.
+   */
+  const saveOllamaUrl = async () => {
+    if (!data) return;
+    setKeyBusy(true);
+    setKeyMessage(null);
+    try {
+      await update({ ollamaUrl: ollamaUrl.trim() });
+      const found = await loadModels('ollama');
+      setKeyMessage(
+        found && found.length > 0
+          ? { ok: true, text: `Ollama answered — ${found.length} model${found.length === 1 ? '' : 's'} installed.` }
+          : { ok: false, text: 'Ollama answered but has no models. Pull one first, for example: ollama pull llama3.1' }
+      );
+    } catch (e) {
+      setKeyMessage({
+        ok: false,
+        text: `${(e as Error).message} — check Ollama is running and the address is right.`,
+      });
+    } finally {
+      setKeyBusy(false);
+    }
   };
 
   const saveKey = async () => {
@@ -255,7 +300,34 @@ export function Settings({
           </select>
         </div>
 
-        {apiKey.configured ? (
+        {/* A local server reads no key. What it needs instead is an address,
+            and a wrong one is the first thing to check when nothing answers. */}
+        {settings.provider === 'ollama' ? (
+          <>
+            <p className="muted">
+              Ollama runs on your own machine and needs no key. Nothing about your save leaves it.
+              Pull a model first — <code>ollama pull llama3.1</code> — then pick it below. Bear in
+              mind that these prompts are long: a small model will produce thinner writing than the
+              paid services, and the app will say so rather than print filler.
+            </p>
+            <div className="folder-row">
+              <input
+                className="trade-search folder-input"
+                type="text"
+                placeholder="http://localhost:11434/v1"
+                value={ollamaUrl}
+                onChange={(e) => setOllamaUrl(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void saveOllamaUrl()}
+              />
+              <button className="btn-feature" onClick={saveOllamaUrl} disabled={keyBusy}>
+                {keyBusy ? 'Checking…' : 'Save and check'}
+              </button>
+            </div>
+            {keyMessage && (
+              <div className={`banner ${keyMessage.ok ? 'success' : 'error'}`}>{keyMessage.text}</div>
+            )}
+          </>
+        ) : apiKey.configured ? (
           <div className="key-state">
             <span className="badge promote">Key saved</span>
             <span className="muted">
@@ -279,7 +351,7 @@ export function Settings({
           </p>
         )}
 
-        {apiKey.source !== 'env' && (
+        {settings.provider !== 'ollama' && apiKey.source !== 'env' && (
           <div className="folder-row">
             <input
               className="trade-search folder-input"
@@ -295,7 +367,7 @@ export function Settings({
             </button>
           </div>
         )}
-        {keyMessage && (
+        {settings.provider !== 'ollama' && keyMessage && (
           <div className={`banner ${keyMessage.ok ? 'success' : 'error'}`}>{keyMessage.text}</div>
         )}
         <p className="muted hint-line">

@@ -60,6 +60,13 @@ export const FALLBACK_MODELS: Record<ProviderId, ModelChoice[]> = {
     { id: 'claude-haiku-4-5', name: 'claude-haiku-4-5', contextTokens: null, adaptiveThinking: null },
     { id: 'deepseek-v4-flash-free', name: 'deepseek-v4-flash-free', contextTokens: null, adaptiveThinking: null },
   ],
+  /*
+   * Empty on purpose. Every other provider has a catalogue worth naming in
+   * advance; a local server has whatever you have pulled, which the picker
+   * asks it for directly. A fallback name here would be a model most people
+   * do not have.
+   */
+  ollama: [],
 };
 
 export { DEFAULT_MODEL };

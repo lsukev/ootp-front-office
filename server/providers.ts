@@ -18,14 +18,33 @@ import { isUnusable, markUnusable } from './unusable.js';
  * upstream never learn which provider answered.
  */
 
-export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode';
+export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'opencode' | 'ollama';
 
 export const PROVIDERS: Array<{ id: ProviderId; label: string; keyLabel: string; console: string }> = [
   { id: 'anthropic', label: 'Anthropic (Claude)', keyLabel: 'Anthropic API key', console: 'console.claude.com' },
   { id: 'openai', label: 'OpenAI', keyLabel: 'OpenAI API key', console: 'platform.openai.com' },
   { id: 'gemini', label: 'Google Gemini', keyLabel: 'Gemini API key', console: 'aistudio.google.com' },
   { id: 'opencode', label: 'OpenCode Zen', keyLabel: 'OpenCode Zen API key', console: 'opencode.ai/auth' },
+  { id: 'ollama', label: 'Ollama (on this machine)', keyLabel: 'No key needed', console: 'ollama.com' },
 ];
+
+/**
+ * Where Ollama listens, unless told otherwise.
+ *
+ * "Is it possible for the tool to use Ollama and local LLMs for the AI
+ * functionality?"
+ *
+ * It is, and it suits this app better than it suits most: everything else here
+ * already runs on your own machine against your own save, and the AI features
+ * were the one part that had to phone somebody. A local model closes that.
+ *
+ * Ollama serves an OpenAI-shaped API, so it borrows that implementation whole
+ * and changes only where the request is posted — the same trick the Zen
+ * gateway uses. What it does not have is a key, because there is nobody to
+ * bill. The address is a setting rather than a constant since a fair number of
+ * people run it on a different port, or on the big machine in the other room.
+ */
+export const OLLAMA_DEFAULT_URL = 'http://localhost:11434/v1';
 
 /**
  * OpenCode Zen is a gateway rather than a laboratory: one key reaching Claude,
@@ -199,6 +218,76 @@ function openAiCompatible(
   async validateKey(key) {
     await connect(key).models.list();
   },
+  };
+}
+
+/**
+ * A model served from this machine.
+ *
+ * Two things differ from a paid service and both are handled here rather than
+ * upstream. There is no key, so the SDK is handed a placeholder that is never
+ * sent anywhere it could matter. And the structured-output request drops
+ * OpenAI's `strict` flag: Ollama honours a JSON schema but not the strict
+ * contract around it, and sending one it does not implement fails the call
+ * outright where leaving it off merely makes the schema advisory.
+ *
+ * Everything downstream already treats a model's answer as untrusted — the
+ * newspaper refuses an issue with no front page, the storylines page throws
+ * out filler — so an advisory schema degrades into a rejected answer rather
+ * than a bad one on the screen.
+ */
+export function ollamaProvider(baseURL: string): Provider {
+  const base = openAiCompatible(baseURL, () => true);
+  const connect = () => new OpenAI({ apiKey: 'ollama', baseURL });
+  return {
+    ...base,
+    async complete({ model, system, messages, maxTokens, schema }) {
+      /*
+       * A local server has no catalogue this app can name in advance, so there
+       * is no default to fall back on. Asked with an empty model, Ollama
+       * answers with something unhelpful; this says what to do instead.
+       */
+      if (!model.trim()) {
+        throw new Error('No local model chosen. Pick one in Settings — the list comes from Ollama.');
+      }
+      const response = await connect().chat.completions.create({
+        model,
+        max_completion_tokens: maxTokens,
+        messages: [{ role: 'system', content: system }, ...messages],
+        ...(schema
+          ? {
+              response_format: {
+                type: 'json_schema' as const,
+                json_schema: { name: 'response', schema },
+              },
+            }
+          : {}),
+      });
+      const choice = response.choices[0];
+      if (choice?.finish_reason === 'length') throw new TruncatedError();
+      const text = choice?.message?.content;
+      if (!text) throw new Error('Empty response from the local model');
+      return text;
+    },
+    async listModels() {
+      const out: ModelChoice[] = [];
+      for await (const m of connect().models.list()) out.push({ id: m.id, label: m.id });
+      return out;
+    },
+    /*
+     * There is no key to validate, so this asks the only question worth
+     * asking: is anything listening, and does it have a model pulled? Both
+     * failures are ones a reader can act on.
+     */
+    async validateKey() {
+      const models = await connect().models.list();
+      const first = await models[Symbol.asyncIterator]().next();
+      if (first.done) {
+        throw new Error(
+          'Ollama is running but has no models. Pull one first, for example: ollama pull llama3.1'
+        );
+      }
+    },
   };
 }
 
@@ -402,9 +491,22 @@ async function geminiComplete(
     return text;
 }
 
-const IMPLEMENTATIONS: Record<ProviderId, Provider> = { anthropic, openai, gemini, opencode };
+const IMPLEMENTATIONS: Record<Exclude<ProviderId, 'ollama'>, Provider> =
+  { anthropic, openai, gemini, opencode };
 
-export const providerFor = (id: ProviderId): Provider => IMPLEMENTATIONS[id];
+/*
+ * Where the local server is, asked for rather than imported. settings.ts reads
+ * this module for its own types, so reaching back into it here would be a
+ * cycle; api.ts hands the reader over at startup instead. The default stands
+ * until it does, which is what makes this module testable on its own.
+ */
+let ollamaUrl: () => string = () => OLLAMA_DEFAULT_URL;
+export function useOllamaUrl(read: () => string): void {
+  ollamaUrl = read;
+}
+
+export const providerFor = (id: ProviderId): Provider =>
+  id === 'ollama' ? ollamaProvider(ollamaUrl()) : IMPLEMENTATIONS[id];
 
 /**
  * The model each provider starts on, used until one is picked in Settings.
@@ -418,6 +520,13 @@ export const DEFAULT_MODEL: Record<ProviderId, string> = {
   // Every prompt in this app was written and tuned against Claude, and the
   // gateway carries it, so that is where a Zen key starts
   opencode: 'claude-sonnet-5',
+  /*
+   * Nothing, on purpose. Every other provider has a catalogue this app can
+   * name in advance; a local server has whatever you have pulled, which might
+   * be one model or none. Settings lists what is actually installed rather
+   * than defaulting to a name that may not be there.
+   */
+  ollama: '',
 };
 
 // ── The tool loop, for providers that are not Anthropic ─────────────────

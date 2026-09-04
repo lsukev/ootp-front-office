@@ -16,10 +16,21 @@ import { STORYLINE_SCHEMA } from '../server/storylines.js';
  */
 
 describe('the providers on offer', () => {
-  it('all have an implementation and a starting model', () => {
+  it('all have an implementation', () => {
+    for (const p of PROVIDERS) expect(providerFor(p.id), p.id).toBeTruthy();
+  });
+
+  /*
+   * Every service with a catalogue this app can name in advance starts on one,
+   * so the AI features work the moment a key is saved. A local server is the
+   * exception and deliberately starts on nothing: it has whatever you have
+   * pulled, which might be one model or none, and naming a default would name
+   * a model most people do not have. Settings lists what is installed instead.
+   */
+  it('starts on a model, unless the models are on your own machine', () => {
     for (const p of PROVIDERS) {
-      expect(providerFor(p.id), p.id).toBeTruthy();
-      expect(DEFAULT_MODEL[p.id], p.id).toMatch(/\S/);
+      if (p.id === 'ollama') expect(DEFAULT_MODEL[p.id]).toBe('');
+      else expect(DEFAULT_MODEL[p.id], p.id).toMatch(/\S/);
     }
   });
 
@@ -28,6 +39,7 @@ describe('the providers on offer', () => {
     expect(isProviderId('openai')).toBe(true);
     expect(isProviderId('gemini')).toBe(true);
     expect(isProviderId('opencode')).toBe(true);
+    expect(isProviderId('ollama')).toBe(true);
     expect(isProviderId('claude')).toBe(false);
     expect(isProviderId(undefined)).toBe(false);
     expect(isProviderId(null)).toBe(false);

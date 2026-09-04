@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, loadConfig } from './config.js';
 import {
-  DEFAULT_MODEL, PROVIDERS, isProviderId, providerFor, type ProviderId,
+  DEFAULT_MODEL, OLLAMA_DEFAULT_URL, PROVIDERS, isProviderId, providerFor, type ProviderId,
 } from './providers.js';
 import { forgetUnusable } from './unusable.js';
 import { startWatcher, stopWatcher } from './watcher.js';
@@ -67,6 +67,14 @@ export interface Settings {
    * one who knows which way the owner leans. Absent an entry, flat it stays.
    */
   nextSeasonBudget: Record<string, number>;
+  /**
+   * Where Ollama is listening, for anyone running a model on their own machine.
+   *
+   * A setting rather than a constant because people run it on another port, or
+   * on the big machine in the other room — and because a wrong address is the
+   * first thing to check when nothing answers.
+   */
+  ollamaUrl: string;
 }
 
 const DEFAULTS: Settings = {
@@ -81,6 +89,7 @@ const DEFAULTS: Settings = {
   defaultOrgId: null,
   theme: 'system',
   model: 'claude-opus-5',
+  ollamaUrl: OLLAMA_DEFAULT_URL,
 };
 
 /** Which service the AI features talk to. */
@@ -174,7 +183,22 @@ const ENV_VAR: Record<ProviderId, string> = {
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
   opencode: 'OPENCODE_API_KEY',
+  // Kept for the shape's sake; nothing reads it, because a local server has
+  // nobody to bill and asks for no credential
+  ollama: 'OLLAMA_API_KEY',
 };
+
+/**
+ * Providers that need no credential, because they run on your own machine.
+ *
+ * Every AI feature checks for a key before it will do anything, which is right
+ * for a service that bills for the call and wrong for one that does not. The
+ * placeholder below is what those checks see. It is not a credential, it is
+ * never sent anywhere but to your own machine, and it exists so that eight
+ * call sites did not have to learn about a fifth provider.
+ */
+export const needsNoKey = (provider: ProviderId): boolean => provider === 'ollama';
+const LOCAL_PLACEHOLDER = 'ollama';
 
 function readKeyFile(): KeyFile {
   let raw: unknown;
@@ -224,6 +248,7 @@ function decrypt(stored: StoredKey): string | null {
  * already using a .env file keeps working exactly as before.
  */
 export function getApiKey(provider: ProviderId = activeProvider()): string | null {
+  if (needsNoKey(provider)) return LOCAL_PLACEHOLDER;
   const fromEnv = process.env[ENV_VAR[provider]];
   if (fromEnv) return fromEnv;
   const stored = readKeyFile()[provider];
@@ -243,6 +268,10 @@ export function apiKeyStatus(provider: ProviderId = activeProvider()): KeyStatus
 }
 
 function statusOf(provider: ProviderId): KeyStatus {
+  // Nothing to configure, so the page has nothing to nag about
+  if (needsNoKey(provider)) {
+    return { configured: true, source: null, hint: null, encrypted: false };
+  }
   const fromEnv = process.env[ENV_VAR[provider]];
   if (fromEnv) {
     return { configured: true, source: 'env', hint: fromEnv.slice(-4), encrypted: false };
@@ -308,10 +337,37 @@ settingsRoutes.post('/settings', (req, res) => {
     next.theme = body.theme;
   }
   if (isProviderId(body.provider)) next.provider = body.provider;
-  // Model ids are validated by shape only. The catalogue comes from the API and
-  // grows over time, so refusing anything not on today's list would block a
-  // model released after this build shipped — the API rejects a bad id anyway.
-  const modelShape = /^[a-z0-9.\-]{3,64}$/i;
+  /*
+   * The address of a local server. Only http(s) is accepted and only a plain
+   * origin plus path — this is the one setting that decides where a prompt
+   * carrying a whole save's data gets posted, so a hand-edited settings file
+   * should not be able to point it at anything exotic.
+   */
+  if (typeof body.ollamaUrl === 'string') {
+    const trimmed = body.ollamaUrl.trim();
+    if (trimmed === '') {
+      next.ollamaUrl = OLLAMA_DEFAULT_URL;
+    } else {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+          next.ollamaUrl = trimmed.replace(/\/+$/, '');
+        }
+      } catch { /* leave the previous address in place */ }
+    }
+  }
+  /*
+   * Model ids are validated by shape only. The catalogue comes from the API and
+   * grows over time, so refusing anything not on today's list would block a
+   * model released after this build shipped — the API rejects a bad id anyway.
+   *
+   * The colon and the slash are here because local models carry them:
+   * "llama3.1:8b" is the ordinary form of an Ollama id and
+   * "hf.co/user/model" is how a pulled Hugging Face model is named. Without
+   * them the save silently did nothing, the setting sprang back to empty, and
+   * the request went out with no model at all.
+   */
+  const modelShape = /^[a-z0-9._:/-]{3,96}$/i;
   if (typeof body.model === 'string' && modelShape.test(body.model.trim())) {
     // Sent without a provider, this means "the one I am using"
     next.models = { ...next.models, [next.provider]: body.model.trim() };
@@ -343,6 +399,8 @@ const KEY_SHAPE: Record<ProviderId, { test: RegExp; hint: string }> = {
   openai: { test: /^sk-/, hint: 'OpenAI keys begin with "sk-".' },
   // Google's are a plain token with no prefix worth checking beyond length
   gemini: { test: /^.{20,}$/, hint: 'That looks too short for a Gemini key.' },
+  // A local server reads no key, so anything at all passes and nothing is asked for
+  ollama: { test: /^/, hint: '' },
   /*
    * Zen does not document a prefix, so nothing is asserted about one. A guess
    * here would reject a perfectly good key and the user would have no way to
