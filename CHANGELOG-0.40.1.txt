@@ -1,0 +1,7 @@
+OOTP Front Office 0.40.1 — everything since 0.40.0
+
+Fixed — Ollama support asks for its answer using the field Ollama actually documents. The 0.40.0 build used the newer OpenAI name for the same thing, which is not on Ollama's compatibility list, and a field a server does not recognise is a coin flip between being ignored and failing the call outright.
+
+New — A setup guide for running the AI features on your own machine, at docs/OLLAMA.md, covering Mac and Windows.
+
+It leads on the one thing that will otherwise spoil it: Ollama gives a model a 4,096-token window unless told otherwise, and these prompts are far bigger — the newspaper's is about 6,600 tokens and storylines about 7,000, before any room for the answer. At the default, most of your league is cut off before the model reads a word of it, and Ollama does that silently rather than complaining. It looks like a stupid model when it is really a small window. Set OLLAMA_CONTEXT_LENGTH to 32768 and restart Ollama, and it behaves. Settings now says so too, since that is where you are standing when it goes wrong.
