@@ -1,0 +1,32 @@
+Running OOTP Front Office's AI features on your own machine (Ollama)
+
+Version 0.40.0 added Ollama as a service option, so the AI features — the newspaper, the briefing, storylines, the recaps — can run on a model on your own computer. No key, no account, no cost per generation, and nothing about your save leaves the machine.
+
+1. INSTALL OLLAMA
+Download from ollama.com/download. Mac: open the .dmg, drag it to Applications, launch it once — it lives in the menu bar. Windows: run the installer — it lives in the system tray. Nothing to configure; it listens on localhost:11434.
+
+2. GIVE IT MORE ROOM (do this, or it will not work properly)
+Ollama defaults to a 4,096-token window, and this app's prompts are long — it hands the model your whole league. The newspaper prompt is about 6,600 tokens and storylines about 7,000, plus room for the answer. At the default, most of your league is cut off before the model sees it and you get thin writing or an error.
+
+Mac — in Terminal:
+    launchctl setenv OLLAMA_CONTEXT_LENGTH 32768
+Then quit Ollama from the menu bar and start it again. Add that line to ~/.zprofile to make it stick across reboots.
+
+Windows — Settings > System > About > Advanced system settings > Environment Variables. Under "User variables" click New, name OLLAMA_CONTEXT_LENGTH, value 32768. OK, then quit Ollama from the system tray and start it again.
+
+32k is comfortable on 16 GB of RAM. 16384 also covers every prompt if memory is tight.
+
+3. PULL A MODEL
+    ollama pull llama3.1:8b
+About 5 GB, 128k context, writes decent JSON — a good starting point. With 16 GB+ of RAM, qwen2.5:14b writes better. Avoid small-context models like gemma2 (8k) — they cannot hold these prompts however you set the above.
+
+4. POINT THE APP AT IT
+Settings > AI Features > Service > "Ollama (on this machine)". Leave the address as http://localhost:11434/v1, click "Save and check" — it should say Ollama answered and how many models you have. Pick your model from the list underneath. Done.
+
+WHAT TO EXPECT
+A local model will not write as well as Claude or GPT, and it is slower — tens of seconds to a few minutes per generation rather than a few seconds. What it will not do is quietly invent things in place of your data: the app checks what comes back and would rather tell you it could not produce an edition than print filler. If a generation fails, run it again or move up a model size.
+
+Everything else in the app — stats, lineups, recommendations, scouting — works with no model and no network at all. This only affects the writing.
+
+Full guide, including running Ollama on another computer on your network:
+https://github.com/lsukev/ootp-front-office/blob/main/docs/OLLAMA.md

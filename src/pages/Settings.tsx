@@ -306,9 +306,13 @@ export function Settings({
           <>
             <p className="muted">
               Ollama runs on your own machine and needs no key. Nothing about your save leaves it.
-              Pull a model first — <code>ollama pull llama3.1</code> — then pick it below. Bear in
-              mind that these prompts are long: a small model will produce thinner writing than the
-              paid services, and the app will say so rather than print filler.
+              Pull a model first — <code>ollama pull llama3.1:8b</code> — then pick it below.
+              {' '}
+              <strong>Raise Ollama&rsquo;s context window before you start:</strong> it defaults to
+              4,096 tokens and these prompts run to 7,000 before the answer, so at the default most
+              of your league is cut off before the model sees it. Set{' '}
+              <code>OLLAMA_CONTEXT_LENGTH=32768</code> and restart Ollama. Expect thinner writing
+              than the paid services either way — the app will say so rather than print filler.
             </p>
             <div className="folder-row">
               <input

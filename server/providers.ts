@@ -252,7 +252,13 @@ export function ollamaProvider(baseURL: string): Provider {
       }
       const response = await connect().chat.completions.create({
         model,
-        max_completion_tokens: maxTokens,
+        /*
+         * `max_tokens`, not the `max_completion_tokens` the OpenAI path uses.
+         * Ollama's compatibility layer documents the older name; the newer one
+         * is not in its list, and a field a server does not know is a coin
+         * flip between being ignored and failing the call.
+         */
+        max_tokens: maxTokens,
         messages: [{ role: 'system', content: system }, ...messages],
         ...(schema
           ? {

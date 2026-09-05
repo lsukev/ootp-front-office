@@ -97,6 +97,22 @@ describe('talking to a local model', () => {
     expect(format.json_schema).not.toHaveProperty('strict');
   });
 
+  /*
+   * Ollama documents `max_tokens`; `max_completion_tokens`, which the OpenAI
+   * path uses, is not on its list. A field a server does not know is a coin
+   * flip between being ignored and failing the call.
+   */
+  it('caps the answer with the field Ollama documents', async () => {
+    seen.length = 0;
+    await ollamaProvider(base).complete({
+      key: '', model: 'llama3.1:8b', system: 's',
+      messages: [{ role: 'user', content: 'u' }], maxTokens: 4096,
+    });
+    const body = seen.find((s) => s.path === '/v1/chat/completions')!.body;
+    expect(body.max_tokens).toBe(4096);
+    expect(body).not.toHaveProperty('max_completion_tokens');
+  });
+
   it('sends no credential of the reader’s to a local server', async () => {
     seen.length = 0;
     await ollamaProvider(base).complete({
