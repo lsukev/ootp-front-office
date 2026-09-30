@@ -46,8 +46,55 @@ jobs:
       - run: npm run abi:electron
       - run: npm run desktop:build
 
+      # What the runner is, and whether the certificate and its password agree.
+      # The signing failure below reports only "the user name or passphrase you
+      # entered is not correct", which could mean a wrong password, an expired
+      # certificate or the runner having a bad day, and there is no way to tell
+      # them apart from the outside. This prints the subject and the validity
+      # dates — never the key, never the password — so the next failure says
+      # which of the three it was.
+      - name: Check the signing certificate
+        if: env.CSC_LINK != ''
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          sw_vers
+          echo "image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          echo "$CSC_LINK" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          if openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -passin env:CSC_KEY_PASSWORD \
+               -nokeys -legacy 2>/dev/null \
+               | openssl x509 -noout -subject -dates; then
+            echo "certificate and password agree"
+          else
+            echo "::warning::the certificate could not be opened with the stored password"
+          fi
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      # Retried, because the signing step fails intermittently on the hosted
+      # runners and always in the same place: electron-builder creates a temp
+      # keychain, imports the certificate and then calls
+      # `security set-key-partition-list`, which returns 1 for no stated reason.
+      # It took out two of the last three releases (0.40.1 and 0.40.2) and a
+      # bare re-run of the same commit fixed both, which is what says the
+      # failure is the runner rather than us.
+      #
+      # A retry rather than a rebuilt keychain setup on purpose: the same
+      # command runs again, so nothing about how the app is signed changes, and
+      # the verify step below still refuses to publish anything Gatekeeper
+      # would reject.
       - name: Package (signed and notarized when secrets are present)
-        run: npx electron-builder --mac --publish never
+        run: |
+          for attempt in 1 2 3; do
+            if npx electron-builder --mac --publish never; then exit 0; fi
+            # Start clean, so a half-built app from the failed attempt can
+            # never be what the verify step below inspects
+            rm -rf release
+            echo "::warning::electron-builder failed (attempt $attempt of 3); retrying in 20s"
+            sleep 20
+          done
+          echo "::error::electron-builder failed three times — not a flake"
+          exit 1
         env:
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
