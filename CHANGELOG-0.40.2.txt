@@ -1,0 +1,9 @@
+OOTP Front Office 0.40.2 — everything since 0.40.1
+
+Fixed — Free agents who spent last season in the minors now appear on the Free Agents page. A reader could not find Jasson Dominguez, a genuine free agent he wanted to sign, however many times he re-exported: the list asked only for free agents whose last league was the major league, and Dominguez had spent the year at Triple-A.
+
+He was not an edge case. In my own save that single condition hid 2,515 of 4,689 free agents, and the best of the hidden ones were the sort of veteran you actually sign in the winter — a nine-year major leaguer, two seven-year ones, several more — all of whom simply finished the season on a Triple-A roster.
+
+The list now covers your organisation's whole league tree, majors down to rookie ball. The draft class and the international pool are still left out: they are free agents in the data, but they have their own page and adding 1,300 teenagers would bury the market you came to read.
+
+Anyone who did not finish in the top league now says where he was — "from AAA" in the Team column, which read "—" for every free agent before. Hover it for the league's own name.
