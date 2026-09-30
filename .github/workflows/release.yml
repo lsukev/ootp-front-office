@@ -34,7 +34,19 @@ jobs:
   macos:
     needs: test
     name: macOS
-    runs-on: macos-latest
+    # Pinned, not latest. `macos-latest` rolled onto macOS 26 in the image
+    # built 2026-09-07, and electron-builder's keychain setup fails there:
+    # `security set-key-partition-list` answers "the user name or passphrase
+    # you entered is not correct" for a certificate and password that are
+    # demonstrably correct — the step above opens the same p12 with the same
+    # password and prints its dates. It took out 0.40.1 and 0.40.2, and the
+    # rollout being gradual is why one re-run of the same commit passed and
+    # the next did not.
+    #
+    # Worth revisiting when electron-builder handles macOS 26, because a pin
+    # is a thing that rots: the image will be retired eventually, and the
+    # build should move deliberately rather than on the morning that happens.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
