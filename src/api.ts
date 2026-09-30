@@ -430,6 +430,8 @@ export interface FreeAgentRow {
   overallPct: number | null;
   talentPct: number | null;
   lastSalary: number | null;
+  /** Where he finished last season, when that was not the top league. */
+  lastSeen?: { league: string; level: string } | null;
 }
 
 export interface FreeAgentsResponse {

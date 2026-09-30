@@ -181,7 +181,11 @@ export function buildFixture(): string {
       personality_loyalty INTEGER DEFAULT 100,
       -- Player Search reads this to offer free agents, and had no coverage at
       -- all until the search filters were tested
-      free_agent INTEGER DEFAULT 0
+      free_agent INTEGER DEFAULT 0,
+      -- Where he last played. The free-agent list reads it to decide whose
+      -- market a man is on, and asked for the top league alone until a reader
+      -- could not find a Triple-A free agent he wanted to sign
+      last_league_id INTEGER DEFAULT 0
     );
     CREATE TABLE players_roster_status (
       player_id INTEGER, is_active INTEGER, is_on_dl INTEGER, is_on_dl60 INTEGER,

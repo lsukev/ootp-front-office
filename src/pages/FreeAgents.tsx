@@ -80,7 +80,17 @@ function FATable({
             <td className="num"><Pct value={p.overallPct} /></td>
             <td className="num"><Pct value={p.talentPct} /></td>
             <td className="num">{money(p.lastSalary)}</td>
-            <td>{p.team ?? '—'}</td>
+            {/* A free agent has no club. Where he was last seen answers the
+                question his presence raises — a nine-year major leaguer who
+                finished the season at Triple-A belongs on this list, and it
+                should say why he reads as a minor leaguer. */}
+            <td>
+              {p.team ?? (p.lastSeen
+                ? <span className="muted" title={`Last played in the ${p.lastSeen.league}`}>
+                    from {p.lastSeen.level}
+                  </span>
+                : '—')}
+            </td>
             <td>{holeSet.has(p.positionName) && <span className="badge promote">fills hole</span>}</td>
           </tr>
         ))}
