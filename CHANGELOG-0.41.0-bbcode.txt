@@ -1,0 +1,7 @@
+[b][size=4]OOTP Front Office 0.41.0 — everything since 0.40.2[/size][/b]
+[list]
+[*][b]Fixed[/b] — [b]The first and third base coaches are on the Coaching Staff page.[/b] A reader asked where they were, and the answer was unflattering: the page named seven seats and your export carries nine. OOTP has always written both coaches out like every other role; nothing here ever read them.
+They are shown on what OOTP rates them on — teach running, teach IF, teach OF, handle players. In most saves the base coaches hold the teaching roles for catchers, infielders and outfielders, so those are the numbers you are reading them for.
+[*][b]New[/b] — [b]Value and Talent on the Development page.[/b] The same percentiles the Prospects and Free Agents pages show, sortable like every other column there. A gain of four points on potential reads completely differently on a man already in the top decile and on one nowhere near it, and this was the one page showing the change without showing who it happened to.
+[*][b]On where coach ratings come from[/b], since that came up in the same post: they are in the export. OOTP writes every coach's teaching, scouting, healing and handling numbers into coaches.csv on a 1-200 scale even though the game shows them to you as bars. This app reads them straight through — nothing is modelled or inferred.
+[/list]
