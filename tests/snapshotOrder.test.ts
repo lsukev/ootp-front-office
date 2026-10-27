@@ -178,6 +178,13 @@ describe('the position names', () => {
      * was copied the same way and the copies did drift.
      */
     expect(read('server/valuation.ts')).toMatch(/export const POSITION_NAMES/);
-    expect(read('server/history.ts')).toMatch(/import \{ POSITION_NAMES \} from '\.\/valuation\.js'/);
+    /*
+     * The import is matched by what it imports and where from, not by its
+     * exact punctuation: adding a second name to the same import is not a
+     * copy coming back, and pinning the line verbatim failed on one.
+     */
+    const history = read('server/history.ts');
+    expect(history).toMatch(/import \{[^}]*\bPOSITION_NAMES\b[^}]*\} from '\.\/valuation\.js'/);
+    expect(history, 'a local copy came back').not.toMatch(/const POSITION_NAMES/);
   });
 });

@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiGet } from '../api';
-import { PlayerLink } from '../playerModal';
+import { PlayerLink, Tip, TIP_TALENT, TIP_VALUE } from '../playerModal';
 import { Th, SortableTh } from '../Th';
+import { Pct } from './Contracts';
 
 interface DevChange {
   player_id: number; name: string; age: number; position: number; positionName: string; level: number;
   cur: number | null; pot: number | null; curDelta: number; potDelta: number;
+  /** The same percentiles Prospects and Free Agents show, so they compare. */
+  overallPct: number | null; talentPct: number | null;
   details: Array<{ rating: string; from: number; to: number }>;
 }
 interface DevData { snapshots: number; dates: string[]; from?: string; to?: string; changes: DevChange[] | null }
@@ -115,13 +118,19 @@ export function Development({ orgId }: { orgId: number }) {
  * The columns worth ordering by. "What changed" is prose and sorts to nothing
  * useful, so it is left out rather than offered and disappointing.
  */
-const SORTS: Array<{ key: string; label: string; of: (c: DevChange) => number | string }> = [
+const SORTS: Array<{ key: string; label: ReactNode; of: (c: DevChange) => number | string }> = [
   { key: 'name', label: 'Player', of: (c) => c.name },
   { key: 'age', label: 'Age', of: (c) => c.age },
   { key: 'pos', label: 'Pos', of: (c) => c.positionName },
   { key: 'level', label: 'Level', of: (c) => c.level },
   { key: 'cur', label: 'Cur Δ', of: (c) => c.curDelta },
   { key: 'pot', label: 'Pot Δ', of: (c) => c.potDelta },
+  // Nulls sort last either way: a man the export gave no value for should not
+  // head a list ordered by value
+  // Explained on hover like every other column here, and from the same text
+  // the Contracts and Free Agents pages use, so one number means one thing
+  { key: 'value', label: <Tip label="Value" tip={TIP_VALUE} />, of: (c) => c.overallPct ?? -1 },
+  { key: 'talent', label: <Tip label="Talent" tip={TIP_TALENT} />, of: (c) => c.talentPct ?? -1 },
 ];
 
 function DevTable({ changes }: { changes: DevChange[] }) {
@@ -184,6 +193,8 @@ function DevTable({ changes }: { changes: DevChange[] }) {
             <td className={`num ${c.potDelta > 0 ? 'good-text' : c.potDelta < 0 ? 'bad-text' : ''}`}>
               {c.potDelta > 0 ? '+' : ''}{c.potDelta || '—'}
             </td>
+            <td className="num"><Pct value={c.overallPct} /></td>
+            <td className="num"><Pct value={c.talentPct} /></td>
             <td className="reasons">
               {c.details.map((d) => `${d.rating} ${d.from}→${d.to}`).join('; ')}
             </td>

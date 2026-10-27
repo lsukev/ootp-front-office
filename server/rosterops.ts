@@ -187,6 +187,25 @@ const COACH_FIELDS: Record<string, Array<[string, string]>> = {
   pitching_coach: [['teach_pitching', 'Teach Pitching'], ['handle_players', 'Handle Players']],
   hitting_coach: [['teach_hitting', 'Teach Hitting'], ['handle_players', 'Handle Players']],
   bench_coach: [['teach_hitting', 'Teach Hitting'], ['teach_pitching', 'Teach Pitching']],
+  /*
+   * The base coaches, which this page left out until a reader asked where
+   * they were: "Why no 1B or 3B coaches in listing?" Their seats are columns
+   * on team_roster_staff like every other, and both are filled in every
+   * export I have looked at — they were simply never named here.
+   *
+   * What they are shown on is what OOTP gives them. In the save that prompted
+   * this the base coaches held the teaching roles for catchers, infielders
+   * and outfielders, which is the usual arrangement, and teach_running is the
+   * rating that is actually about coaching a base.
+   */
+  first_base_coach: [
+    ['teach_running', 'Teach Running'], ['teach_if', 'Teach IF'],
+    ['teach_of', 'Teach OF'], ['handle_players', 'Handle Players'],
+  ],
+  third_base_coach: [
+    ['teach_running', 'Teach Running'], ['teach_if', 'Teach IF'],
+    ['teach_of', 'Teach OF'], ['handle_players', 'Handle Players'],
+  ],
   head_scout: [
     ['scout_major', 'Scout Majors'], ['scout_minor', 'Scout Minors'],
     ['scout_amateur', 'Scout Amateurs'], ['scout_international', 'Scout Intl'],
@@ -198,7 +217,10 @@ const COACH_FIELDS: Record<string, Array<[string, string]>> = {
 };
 const ROLE_LABELS: Record<string, string> = {
   manager: 'Manager', general_manager: 'General Manager', pitching_coach: 'Pitching Coach',
-  hitting_coach: 'Hitting Coach', bench_coach: 'Bench Coach', head_scout: 'Head Scout', doctor: 'Team Doctor',
+  hitting_coach: 'Hitting Coach', bench_coach: 'Bench Coach',
+  // Field staff sit with the rest of the field staff, ahead of the office
+  first_base_coach: 'First Base Coach', third_base_coach: 'Third Base Coach',
+  head_scout: 'Head Scout', doctor: 'Team Doctor',
 };
 
 rosterOpsRoutes.get('/staff/:orgId', (req, res) => {

@@ -27,7 +27,8 @@ const OCCUPATION = {
    * guessed: occupation 12 is the only one carrying doctor_value and the heal
    * and prevent ratings, and it teaches and scouts nothing. Codes 14 and 15
    * look similar in the roster but are base coaches — high basecoach_value,
-   * no medical ratings at all.
+   * no medical ratings at all. Which is which is settled by team_roster_staff:
+   * its first_base_coach column points at a 14 and third_base_coach at a 15.
    */
   trainer: 12,
   scout: 6,

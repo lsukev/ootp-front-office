@@ -4,7 +4,7 @@ import path from 'node:path';
 import { db as leagueDb, tableExists } from './db.js';
 import { DATA_DIR, loadConfig } from './config.js';
 import { DATE_KEY } from './dashboard.js';
-import { POSITION_NAMES } from './valuation.js';
+import { POSITION_NAMES, mlbPercentiler, valuesByPlayer } from './valuation.js';
 
 /**
  * Persistent store that SURVIVES reimports (league.db is rebuilt on every
@@ -327,6 +327,18 @@ historyRoutes.get('/development/:orgId', (req, res) => {
     )
     .all(to, saveName, from, orgId) as Array<Record<string, number | string | null>>;
 
+  /*
+   * What a man is worth, beside what he gained. "Would be appropriate and
+   * convenient to have Value and Talent columns shown on the Development
+   * page" — and it is the obvious pairing: a +4 on potential reads completely
+   * differently on a man already in the top decile and on one who is not.
+   *
+   * The same percentiles the Prospects and Free Agents pages show, from the
+   * same percentiler, so a number means one thing everywhere in the app.
+   */
+  const values = valuesByPlayer();
+  const { overallPct, talentPct } = mlbPercentiler(values);
+
   const changes = rows
     .map((r) => {
       const details: Array<{ rating: string; from: number; to: number }> = [];
@@ -355,6 +367,8 @@ historyRoutes.get('/development/:orgId', (req, res) => {
         pot: r.pot_to,
         curDelta: Number(curDelta.toFixed(1)),
         potDelta: Number(potDelta.toFixed(1)),
+        overallPct: overallPct(r.player_id as number),
+        talentPct: talentPct(r.player_id as number),
         details,
       };
     })

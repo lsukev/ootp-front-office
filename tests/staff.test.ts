@@ -62,9 +62,14 @@ describe('staff read from the save', () => {
   it('leaves an unfilled seat empty rather than inventing someone', () => {
     const ids = personasFor(IDS.mlbTeam).map((p) => p.id);
     expect(ids).toContain('manager');
-    // The fixture hires nobody else, and a club cannot consult a scout it lacks
-    expect(ids).not.toContain('scout');
+    /*
+     * The owner's chair and the training room are empty in the fixture, and a
+     * club cannot consult somebody it has not hired. The scout used to stand
+     * here too and no longer can — the staff page's promotion list needs a
+     * real one to rank against, so the fixture employs one now.
+     */
     expect(ids).not.toContain('owner');
+    expect(ids).not.toContain('trainer');
   });
 
   it('still offers Peter on a club with no staff at all', () => {

@@ -209,9 +209,22 @@ export function buildFixture(): string {
       former_player_id INTEGER, contract_salary INTEGER, contract_years INTEGER,
       teach_hitting INTEGER, teach_pitching INTEGER, scout_amateur INTEGER, scout_major INTEGER,
       handle_players INTEGER, personality INTEGER, player_loyalty INTEGER,
+      -- What the base coaches are shown on. OOTP gives every coach these and
+      -- the staff page left both seats out entirely until a reader asked
+      teach_running INTEGER DEFAULT 0, teach_if INTEGER DEFAULT 0, teach_of INTEGER DEFAULT 0,
+      -- OOTP's own composite per seat, which the staff page ranks the
+      -- "ready for a job up here" list on
+      manager_value INTEGER DEFAULT 0, pitching_coach_value INTEGER DEFAULT 0,
+      hitting_coach_value INTEGER DEFAULT 0, basecoach_value INTEGER DEFAULT 0,
       bunt INTEGER, opener INTEGER, stealing INTEGER, shift_if INTEGER,
       favor_pitching_to_hitting INTEGER, value_stats INTEGER, ratings_value INTEGER,
       trade_aggressiveness INTEGER
+    );
+    -- Who holds each seat. Every column here is a role the staff page lists.
+    CREATE TABLE team_roster_staff (
+      team_id INTEGER, manager INTEGER, general_manager INTEGER, pitching_coach INTEGER,
+      hitting_coach INTEGER, bench_coach INTEGER, head_scout INTEGER, doctor INTEGER,
+      owner INTEGER, first_base_coach INTEGER, third_base_coach INTEGER
     );
     CREATE TABLE players_value (
       player_id INTEGER, overall_value REAL, talent_value REAL, offensive_value REAL,
@@ -487,21 +500,50 @@ export function buildFixture(): string {
 
   // A manager with a playing career and firm opinions, so the persona built
   // from him can be checked against facts rather than vibes
-  db.prepare(
-    `INSERT INTO coaches VALUES (900, 'Skip', 'Ratchet', 58, 0, 0, 2, ?, 12, ?, 1500000, 2,
-                                 130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 8, -2, 0)`
-  ).run(IDS.mlbTeam, IDS.starter);
+  /*
+   * Columns named rather than positional, for the reason the leagues insert
+   * above carries: adding one to the table broke every one of these at once.
+   */
+  const coach = db.prepare(
+    `INSERT INTO coaches
+       (coach_id, first_name, last_name, age, occupation, team_id, experience,
+        former_player_id, contract_salary, contract_years, teach_hitting, teach_pitching,
+        scout_amateur, scout_major, handle_players, personality, player_loyalty,
+        bunt, opener, stealing, shift_if, favor_pitching_to_hitting,
+        teach_running, teach_if, teach_of, value_stats, ratings_value, trade_aggressiveness)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  coach.run(900, 'Skip', 'Ratchet', 58, 2, IDS.mlbTeam, 12, IDS.starter, 1500000, 2,
+            130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 0, 0, 0, 8, -2, 0);
 
   // The front office, so the voice the trade desk answers in can be checked.
   // The general manager is somebody else here; the assistant is the fallback
   // for a save where the human took the job himself.
+  coach.run(901, 'Web', 'Ivey', 55, 1, IDS.mlbTeam, 20, 0, 900000, 3,
+            0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 0, 7, -1, 6);
+  coach.run(902, 'Del', 'Faraday', 44, 3, IDS.mlbTeam, 6, 0, 400000, 2,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 3);
+  /*
+   * The base coaches, occupations 14 and 15 — which the staff page did not
+   * list at all until a reader asked where they were. Their teaching ratings
+   * are what it shows them on.
+   */
+  coach.run(903, 'Waves', 'Hendry', 51, 14, IDS.mlbTeam, 9, 0, 300000, 1,
+            0, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 123, 114, 120, 0, 0, 0);
+  coach.run(904, 'Windmill', 'Alfonzo', 59, 15, IDS.mlbTeam, 17, 0, 350000, 2,
+            0, 0, 0, 0, 102, 0, 0, 0, 0, 0, 0, 0, 133, 142, 141, 0, 0, 0);
+
+  // A scout, so the order the seats are listed in can be checked against a
+  // seat that comes after the field staff rather than against an empty one
+  coach.run(905, 'Birddog', 'Toussaint', 47, 6, IDS.mlbTeam, 11, 0, 250000, 2,
+            0, 0, 150, 158, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+  // Who holds each seat, the row the staff page reads the roles from
   db.prepare(
-    `INSERT INTO coaches VALUES (901, 'Web', 'Ivey', 55, 0, 0, 1, ?, 20, 0, 900000, 3,
-                                 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 7, -1, 6)`
-  ).run(IDS.mlbTeam);
-  db.prepare(
-    `INSERT INTO coaches VALUES (902, 'Del', 'Faraday', 44, 0, 0, 3, ?, 6, 0, 400000, 2,
-                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 3)`
+    `INSERT INTO team_roster_staff
+       (team_id, manager, general_manager, pitching_coach, hitting_coach, bench_coach,
+        head_scout, doctor, owner, first_base_coach, third_base_coach)
+     VALUES (?, 900, 901, 0, 0, 0, 905, 0, 0, 903, 904)`
   ).run(IDS.mlbTeam);
   db.prepare(`INSERT INTO human_managers VALUES (1, 'Sam', 'Player', ?, ?)`)
     .run(IDS.mlbTeam, IDS.mlbTeam);
