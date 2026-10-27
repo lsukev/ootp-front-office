@@ -27,7 +27,7 @@
     "@google/genai": "^2.16.0",
     "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
-    "csv-parse": "^5.6.0",
+    "csv-parse": "^7.0.2",
     "electron-updater": "^6.8.9",
     "express": "^4.21.2",
     "openai": "^6.49.0"
