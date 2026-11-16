@@ -110,12 +110,58 @@ export function Draft({ orgId }: { orgId: number }) {
   const [sortKey, setSortKey] = useState<string>('pot');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [limit, setLimit] = useState(PAGE);
+  /*
+   * Men already taken in a round that has not reached an export yet.
+   *
+   * "Maybe also add a check box to identify that the prospect has been drafted
+   * so we don't have to refresh every round?"
+   *
+   * A draft runs for forty rounds in an afternoon and the board only learns
+   * who is gone when the save is exported again, so between exports it keeps
+   * offering men who were taken an hour ago. These marks are the reader's own
+   * and live in the browser; they are keyed to this draft, so next year's
+   * board starts clean, and the moment a real export arrives those men leave
+   * the pool on their own and the marks stop mattering.
+   */
+  const [taken, setTaken] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     setData(null);
     setError(null);
     apiGet<DraftData>(`/api/draft/${orgId}`).then(setData).catch((e) => setError(e.message));
   }, [orgId]);
+
+  /** This club, this draft — so last year's marks never shadow this year's board. */
+  const takenKey = data ? `ootp-draft-taken:${orgId}:${data.draftDate ?? data.leagueName}` : null;
+
+  useEffect(() => {
+    if (!takenKey) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(takenKey) ?? '[]') as number[];
+      setTaken(new Set(Array.isArray(saved) ? saved : []));
+    } catch {
+      setTaken(new Set());
+    }
+  }, [takenKey]);
+
+  const toggleTaken = (playerId: number) => {
+    setTaken((cur) => {
+      const next = new Set(cur);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      if (takenKey) {
+        try { localStorage.setItem(takenKey, JSON.stringify([...next])); } catch { /* fine */ }
+      }
+      return next;
+    });
+  };
+
+  const clearTaken = () => {
+    setTaken(new Set());
+    if (takenKey) {
+      try { localStorage.removeItem(takenKey); } catch { /* fine */ }
+    }
+  };
 
   const setSort = (key: string) => {
     if (key === sortKey) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -173,14 +219,17 @@ export function Draft({ orgId }: { orgId: number }) {
    */
   const shortlist = useMemo(() => {
     if (!data?.prospects) return { best: [] as DraftProspect[], fits: [] as DraftProspect[] };
-    const best = data.prospects.slice(0, 5);
+    // A man somebody has already taken is not who to take, which is the whole
+    // point of marking him
+    const available = data.prospects.filter((p) => !taken.has(p.player_id));
+    const best = available.slice(0, 5);
     const thin = new Set((data.needs ?? []).slice(0, 3).map((h) => h.positionName));
     const chosen = new Set(best.map((p) => p.player_id));
-    const fits = data.prospects
+    const fits = available
       .filter((p) => thin.has(p.positionName) && !chosen.has(p.player_id))
       .slice(0, 3);
     return { best, fits };
-  }, [data]);
+  }, [data, taken]);
 
   if (error) return <div className="banner error">{error}</div>;
   if (!data) return <p className="muted">Reading the scouting reports…</p>;
@@ -228,7 +277,15 @@ export function Draft({ orgId }: { orgId: number }) {
   return (
     <div>
       <section>
-        <h2>Who to take</h2>
+        <h2>
+          Who to take
+          {taken.size > 0 && (
+            <span className="muted taken-note">
+              {' '}· {taken.size} marked as gone{' '}
+              <button className="link-button" onClick={clearTaken}>clear</button>
+            </span>
+          )}
+        </h2>
         <div className="two-col">
           <div>
             <strong className="muted">Best available</strong>
@@ -345,6 +402,9 @@ export function Draft({ orgId }: { orgId: number }) {
       <table>
         <thead>
           <tr>
+            {/* Tick a man off as the round goes, so the board keeps up with a
+                draft that is hours ahead of the next export */}
+            <Th>Taken</Th>
             <th onClick={() => setSort('boardRank')}>Rk{arrow('boardRank')}</th>
             <th onClick={() => setSort('name')}>Player{arrow('name')}</th>
             <th onClick={() => setSort('age')}>Age{arrow('age')}</th>
@@ -367,7 +427,16 @@ export function Draft({ orgId }: { orgId: number }) {
         </thead>
         <tbody>
           {shown.map((p) => (
-            <tr key={p.player_id}>
+            <tr key={p.player_id} className={taken.has(p.player_id) ? 'taken' : ''}>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={taken.has(p.player_id)}
+                  onChange={() => toggleTaken(p.player_id)}
+                  aria-label={`Mark ${p.name} as drafted`}
+                  title="Mark as drafted — he drops out of the recommendations above"
+                />
+              </td>
               <td className="num muted">{p.boardRank}</td>
               <td className="name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
               <td>{p.age}</td>

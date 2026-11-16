@@ -5,6 +5,8 @@ import { Th } from '../Th';
 interface StaffMember {
   role: string; coach_id: number; name: string; age: number; experience: number;
   salary: number; yearsLeft: number; formerPlayer: boolean;
+  /** OOTP's composite for this seat. Absent for seats it does not publish one for. */
+  seatRating?: { label: string; value: number } | null;
   ratings: Array<{ label: string; value: number }>;
 }
 interface FarmCoach {
@@ -62,6 +64,14 @@ export function Staff({ orgId }: { orgId: number }) {
               Age {s.age} · {s.experience} yrs exp{s.formerPlayer ? ' · former player' : ''}
               {s.salary ? ` · ${money(s.salary)}/yr, ${s.yearsLeft} yr${s.yearsLeft === 1 ? '' : 's'} left` : ''}
             </span>
+            {/* The one number OOTP keeps and never shows, above the components
+                it is made of. A seat it publishes nothing for says nothing. */}
+            {s.seatRating && (
+              <div className="seat-rating" title={`${s.seatRating.label}, as OOTP rates him in this seat`}>
+                <span className="seat-rating-value">{s.seatRating.value}</span>
+                <span className="seat-rating-label">{s.seatRating.label}</span>
+              </div>
+            )}
             <div className="rating-rows">
               {s.ratings.map((r) => (
                 <div key={r.label} className="rating-row">

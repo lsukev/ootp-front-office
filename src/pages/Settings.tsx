@@ -37,6 +37,7 @@ export interface AppSettings {
   provider: ProviderId;
   models: Partial<Record<ProviderId, string>>;
   roundRatingsToFive: boolean;
+  hideOverallRatings: boolean;
   autoGenerateAfterImport: boolean;
   /** Where a local Ollama is listening. Ignored by every other provider. */
   ollamaUrl: string;
@@ -567,6 +568,26 @@ export function Settings({
               onChange={(e) => void update({ autoGenerateAfterImport: e.target.checked })}
             />
             <span>{settings.autoGenerateAfterImport ? 'On' : 'Off'}</span>
+          </label>
+        </div>
+
+        <div className="settings-row">
+          <div>
+            <strong>Hide overall and potential</strong>
+            <div className="muted">
+              For leagues that play without the scouted composite. The two headline grades read
+              &mdash; everywhere they appear; every component rating is untouched, so speed, power,
+              eye and the position grades are still there to read. Display only: the app still
+              ranks and sorts on what the export says.
+            </div>
+          </div>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={settings.hideOverallRatings}
+              onChange={(e) => void update({ hideOverallRatings: e.target.checked })}
+            />
+            <span>{settings.hideOverallRatings ? 'Hidden' : 'Shown'}</span>
           </label>
         </div>
 

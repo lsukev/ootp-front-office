@@ -44,11 +44,17 @@ describe('showing a grade', () => {
     const offenders = files.filter((path) => {
       const text = readFileSync(path, 'utf8');
       if (path.endsWith('ratingScale.ts')) return false;
-      return GRADE.test(text) && !text.includes('formatRating');
+      /*
+       * Either formatter counts. formatOverallPair is the composite one — it
+       * carries the hide-overall setting as well as the rounding — and a page
+       * that calls it is as safe as one calling formatRating. Matching only
+       * the older name failed three pages the day the second one arrived.
+       */
+      return GRADE.test(text) && !/\bformat(Rating|OverallPair)\b/.test(text);
     });
     expect(
       offenders.map((f) => f.replace(SRC, '')),
-      'these render a grade without the rounding setting'
+      'these render a grade without going through a formatter'
     ).toEqual([]);
   });
 

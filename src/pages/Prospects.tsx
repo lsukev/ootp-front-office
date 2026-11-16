@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { getProspects, type Prospect, type ProspectsResponse } from '../api';
 import { PlayerLink, Tip, TIP_CURPOT } from '../playerModal';
 import { Th } from '../Th';
-import { formatRatingPair } from '../ratingScale';
+import { formatOverallPair } from '../ratingScale';
 
 export function Prospects({ orgId }: { orgId: number }) {
   const [data, setData] = useState<ProspectsResponse | null>(null);
@@ -103,7 +103,7 @@ function ProspectTable({ prospects, kind }: { prospects: Prospect[]; kind: 'batt
             )}
             <td className="num">{p.war?.toFixed(1)}</td>
             <td className="num">
-              {formatRatingPair(p.cur, p.pot)}
+              {formatOverallPair(p.cur, p.pot)}
             </td>
             <td className="reasons">
               {p.signal === 'promote' || p.signal === 'blocked' ? p.move?.note ?? '—' : ''}

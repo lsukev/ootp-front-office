@@ -18,7 +18,8 @@ import { IDS } from './fixture.js';
  */
 
 const staff = async () => (await request(`/api/staff/${IDS.mlbTeam}`)).staff as Array<{
-  role: string; name: string; ratings: Array<{ label: string; value: number }>;
+  role: string; name: string; seatRating: { label: string; value: number } | null;
+  ratings: Array<{ label: string; value: number }>;
 }>;
 
 describe('the staff a club actually has', () => {
@@ -62,5 +63,56 @@ describe('the staff a club actually has', () => {
     expect(roles.indexOf('First Base Coach')).toBeLessThan(roles.indexOf('Head Scout'));
     expect(roles.indexOf('Third Base Coach')).toBeLessThan(roles.indexOf('Head Scout'));
     expect(roles.indexOf('First Base Coach')).toBeGreaterThan(roles.indexOf('Manager'));
+  });
+});
+
+
+/**
+ * The number OOTP keeps and never shows.
+ *
+ * "I do like the rating system that is not in OOTP but in the data base. A
+ * nice addition would be to add the rating to each personnel."
+ *
+ * It is already in the export, on the 1-200 scale every coach rating uses —
+ * the same composite the promotion list has always ranked on. Each seat gets
+ * the one for THAT seat: a hitting coach's worth as a scout is not what he
+ * was hired for.
+ */
+describe('what OOTP thinks of a man in his seat', () => {
+  it('gives the manager his manager rating', async () => {
+    const him = (await staff()).find((s) => s.role === 'Manager')!;
+    expect(him.seatRating).toEqual({ label: 'Manager rating', value: 157 });
+  });
+
+  /*
+   * Asserted on the number, not the label. The label is written in the map and
+   * would go on reading "Base coach rating" over whatever field it was pointed
+   * at — this coach is deliberately rated 184 as a manager and 134 on a base,
+   * so only the right field gives the right answer.
+   */
+  it('gives a base coach the base-coach composite, not the manager one', async () => {
+    const him = (await staff()).find((s) => s.role === 'Third Base Coach')!;
+    expect(him.seatRating).toEqual({ label: 'Base coach rating', value: 134 });
+  });
+
+  it('gives a bench coach his manager rating, which is the seat he understudies', async () => {
+    const roles = await staff();
+    const bench = roles.find((s) => s.role === 'Bench Coach');
+    if (bench) expect(bench.seatRating?.label).toBe('Rating as a manager');
+  });
+
+  /*
+   * OOTP publishes no composite for a general manager at all. Showing a
+   * different seat's number under his name would be inventing a rating.
+   */
+  it('says nothing for a seat OOTP publishes no rating for', async () => {
+    const him = (await staff()).find((s) => s.role === 'General Manager')!;
+    expect(him.seatRating).toBeNull();
+  });
+
+  it('says nothing rather than zero where the value is missing', async () => {
+    for (const s of await staff()) {
+      if (s.seatRating) expect(s.seatRating.value).toBeGreaterThan(0);
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { setRatingRounding, setRatingScaleMax } from './ratingScale';
+import { setHideOverall, setRatingRounding, setRatingScaleMax } from './ratingScale';
 import {
   getOrgs, getSaves, getStatus, isStaticSite, setConfig, setStaticSite, triggerImport,
   type Org, type SaveInfo, type Status,
@@ -180,6 +180,7 @@ export function App() {
   // Set during render rather than in an effect: the player card and hover card
   // read it as they draw, and an effect would land a paint too late
   setRatingRounding(appSettings?.roundRatingsToFive === true);
+  setHideOverall(appSettings?.hideOverallRatings === true);
   const [chatOpen, setChatOpen] = useState(false);
   // Once opened, the panel stays mounted for the rest of the session
   const [chatUsed, setChatUsed] = useState(false);

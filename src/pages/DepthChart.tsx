@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getDepthChart, type DepthPlayer, type DepthTeam } from '../api';
-import { formatRatingPair } from '../ratingScale';
+import { formatOverallPair } from '../ratingScale';
 import { PlayerLink } from '../playerModal';
 import { Th } from '../Th';
 
@@ -102,7 +102,7 @@ export function DepthChart({ orgId }: { orgId: number }) {
                     >
                       <span className="depth-name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></span>
                       <span className="depth-meta">
-                        {p.age} · {formatRatingPair(p.cur, p.pot)}
+                        {p.age} · {formatOverallPair(p.cur, p.pot)}
                       </span>
                     </div>
                   ))}

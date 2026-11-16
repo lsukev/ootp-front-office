@@ -45,6 +45,8 @@ const readable = (raw: string): string => {
 export function Development({ orgId }: { orgId: number }) {
   const [data, setData] = useState<DevData | null>(null);
   const [from, setFrom] = useState<string | null>(null);
+  /** "It would've been fantastic to be able to filter players by level." */
+  const [level, setLevel] = useState<number | 'all'>('all');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,8 +71,15 @@ export function Development({ orgId }: { orgId: number }) {
     );
   }
 
-  const risers = data.changes.filter((c) => c.curDelta + c.potDelta > 0);
-  const fallers = data.changes.filter((c) => c.curDelta + c.potDelta < 0);
+  /*
+   * Levels the report actually has somebody at, in the order a system runs —
+   * offering Triple-A on a page with nobody at Triple-A is a filter that can
+   * only disappoint.
+   */
+  const levels = [...new Set(data.changes.map((c) => c.level))].sort((a, b) => a - b);
+  const shown = level === 'all' ? data.changes : data.changes.filter((c) => c.level === level);
+  const risers = shown.filter((c) => c.curDelta + c.potDelta > 0);
+  const fallers = shown.filter((c) => c.curDelta + c.potDelta < 0);
 
   return (
     <div>
@@ -92,10 +101,24 @@ export function Development({ orgId }: { orgId: number }) {
         <span className="muted">
           — measured against your current export of {readable(data.to ?? '')} ({data.snapshots} snapshots kept)
         </span>
+        {levels.length > 1 && (
+          <select
+            value={String(level)}
+            onChange={(e) => setLevel(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+          >
+            <option value="all">All levels</option>
+            {levels.map((l) => (
+              <option key={l} value={l}>{levelName(l)}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {data.changes.length === 0 && (
         <p className="muted">No scout-rating changes between these snapshots.</p>
+      )}
+      {data.changes.length > 0 && shown.length === 0 && (
+        <p className="muted">Nobody at {levelName(level as number)} changed between these snapshots.</p>
       )}
 
       {risers.length > 0 && (

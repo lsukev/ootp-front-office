@@ -510,33 +510,36 @@ export function buildFixture(): string {
         former_player_id, contract_salary, contract_years, teach_hitting, teach_pitching,
         scout_amateur, scout_major, handle_players, personality, player_loyalty,
         bunt, opener, stealing, shift_if, favor_pitching_to_hitting,
-        teach_running, teach_if, teach_of, value_stats, ratings_value, trade_aggressiveness)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        teach_running, teach_if, teach_of, value_stats, ratings_value, trade_aggressiveness,
+        manager_value, basecoach_value)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
+  // The composite OOTP keeps for the seat, which its own screens never show
   coach.run(900, 'Skip', 'Ratchet', 58, 2, IDS.mlbTeam, 12, IDS.starter, 1500000, 2,
-            130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 0, 0, 0, 8, -2, 0);
+            130, 40, 0, 0, 140, 3, 5, -4, -5, 4, 0, 5, 0, 0, 0, 8, -2, 0, 157, 60);
 
   // The front office, so the voice the trade desk answers in can be checked.
   // The general manager is somebody else here; the assistant is the fallback
   // for a save where the human took the job himself.
+  // A general manager, for whom OOTP publishes no composite at all
   coach.run(901, 'Web', 'Ivey', 55, 1, IDS.mlbTeam, 20, 0, 900000, 3,
-            0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 0, 7, -1, 6);
+            0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 0, 7, -1, 6, 0, 0);
   coach.run(902, 'Del', 'Faraday', 44, 3, IDS.mlbTeam, 6, 0, 400000, 2,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 3);
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 3, 0, 0);
   /*
    * The base coaches, occupations 14 and 15 — which the staff page did not
    * list at all until a reader asked where they were. Their teaching ratings
    * are what it shows them on.
    */
   coach.run(903, 'Waves', 'Hendry', 51, 14, IDS.mlbTeam, 9, 0, 300000, 1,
-            0, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 123, 114, 120, 0, 0, 0);
+            0, 0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 123, 114, 120, 0, 0, 0, 156, 116);
   coach.run(904, 'Windmill', 'Alfonzo', 59, 15, IDS.mlbTeam, 17, 0, 350000, 2,
-            0, 0, 0, 0, 102, 0, 0, 0, 0, 0, 0, 0, 133, 142, 141, 0, 0, 0);
+            0, 0, 0, 0, 102, 0, 0, 0, 0, 0, 0, 0, 133, 142, 141, 0, 0, 0, 184, 134);
 
   // A scout, so the order the seats are listed in can be checked against a
   // seat that comes after the field staff rather than against an empty one
   coach.run(905, 'Birddog', 'Toussaint', 47, 6, IDS.mlbTeam, 11, 0, 250000, 2,
-            0, 0, 150, 158, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            0, 0, 150, 158, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 75, 12);
 
   // Who holds each seat, the row the staff page reads the roles from
   db.prepare(

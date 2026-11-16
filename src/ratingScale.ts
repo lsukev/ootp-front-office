@@ -38,6 +38,32 @@ export function setRatingRounding(on: boolean): void {
   roundToFive = on;
 }
 
+/**
+ * Whether to write the overall and potential grades at all.
+ *
+ * "For those of us who play no ratings except speed/defense, is there a way
+ * you can toggle/select to hide overall/potential rating, and only display
+ * potentials for others like power, eye etc?"
+ *
+ * Plenty of leagues hide the scouted composite and play off the component
+ * grades, and in those the two headline numbers are not an aid — they are the
+ * answer to a question the league has decided not to ask.
+ *
+ * It hides the composite ONLY. Speed, power, eye, the position grades and
+ * every other component stay exactly as they were, which is the half of the
+ * request that is easy to lose: a man who plays no ratings except speed and
+ * defence still wants to read speed and defence.
+ */
+let hideOverall = false;
+
+export function setHideOverall(on: boolean): void {
+  hideOverall = on;
+}
+
+export function overallHidden(): boolean {
+  return hideOverall;
+}
+
 export function ratingRounding(): boolean {
   return roundToFive;
 }
@@ -69,4 +95,20 @@ export function formatRatingPair(
   if (potential === null || potential === undefined) return oa;
   const pot = formatRating(potential);
   return pot === oa ? oa : `${oa}${arrow}${pot}`;
+}
+
+/**
+ * The overall → potential pair, which the setting above can suppress.
+ *
+ * Separate from {@link formatRatingPair} rather than a flag on it, because
+ * that one also writes the per-position defensive grades — and hiding those
+ * would take away the very ratings the reader who asked for this plays by.
+ */
+export function formatOverallPair(
+  overall: number | null | undefined,
+  potential: number | null | undefined,
+  arrow = '→'
+): string {
+  if (hideOverall) return '—';
+  return formatRatingPair(overall, potential, arrow);
 }

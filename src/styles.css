@@ -2412,3 +2412,33 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
    right field when it is one deep and three men can stand there. */
 .depth-player.secondary .depth-name { opacity: 0.72; }
 .depth-player.secondary .depth-meta { opacity: 0.6; font-style: italic; }
+
+/* The seat composite on a staff card: one number, read before the bars it is
+   made of, so it reads as the headline rather than another rating row. */
+.seat-rating {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 6px 0 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.seat-rating-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+}
+.seat-rating-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* A man ticked off during the draft: still on the board, visibly gone. He is
+   not removed, because a reader who mis-taps should be able to see what he
+   did and undo it. */
+tr.taken td { opacity: 0.45; }
+tr.taken .name { text-decoration: line-through; }
+.taken-note { font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; }

@@ -3,7 +3,7 @@ import { getRoster, getTeams, type RosterPlayer, type RosterResponse, type Team 
 import { PlayerLink, Tip, TIP_OA } from '../playerModal';
 import { daysLong, daysShort } from '../injury';
 import { ColumnPicker } from '../ColumnPicker';
-import { formatRatingPair } from '../ratingScale';
+import { formatOverallPair } from '../ratingScale';
 import {
   DEFAULT_BATTING, DEFAULT_PITCHING, findStat, formatStat, isContactStat, isFieldingStat, loadColumns,
   plusColor, saveColumns, type StatGroup,
@@ -180,7 +180,7 @@ function RosterTable({
               </td>
               <td className="num muted">
                 {p.oaRating !== null
-                  ? formatRatingPair(p.oaRating, p.potRating)
+                  ? formatOverallPair(p.oaRating, p.potRating)
                   : ''}
               </td>
               {ratingCols.map((k) => (

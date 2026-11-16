@@ -43,6 +43,12 @@ export interface Settings {
    */
   roundRatingsToFive: boolean;
   /**
+   * Hide the scouted overall and potential grades, for leagues that do not
+   * play with them. Components — speed, power, eye, the position grades —
+   * are untouched; they are what such a league reads instead.
+   */
+  hideOverallRatings: boolean;
+  /**
    * Keep pitchers on the injured list in the bullpen table.
    *
    * Off unless asked for. That page answers one question — who can throw
@@ -84,6 +90,7 @@ const DEFAULTS: Settings = {
   useTeamColors: true,
   nextSeasonBudget: {},
   roundRatingsToFive: false,
+  hideOverallRatings: false,
   showUnavailablePitchers: false,
   autoGenerateAfterImport: false,
   defaultOrgId: null,

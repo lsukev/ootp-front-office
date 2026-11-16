@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db, tableExists } from './db.js';
+import { db, hasColumns, tableExists } from './db.js';
 import { LEVEL_NAMES, rosterHoles, seasonYear } from './valuation.js';
 import { DATE_KEY } from './dashboard.js';
 
@@ -215,6 +215,34 @@ const COACH_FIELDS: Record<string, Array<[string, string]>> = {
     ['prevent_arms', 'Prevent Arm Inj.'], ['prevent_legs', 'Prevent Leg Inj.'],
   ],
 };
+/**
+ * OOTP's own composite for the seat a man holds, which the game shows nowhere.
+ *
+ * "I do like the rating system that is not in OOTP but in the data base. A
+ * nice addition would be to add the rating to each personnel."
+ *
+ * It is already in the export — the same number the promotion list below
+ * ranks on — on the 1-200 scale every coach rating uses. Each seat gets the
+ * composite for THAT seat and no other: a hitting coach's worth as a scout is
+ * not what you hired him for.
+ *
+ * Two seats get nothing. OOTP publishes no composite for a general manager at
+ * all, and rather than show a different seat's number under his name the card
+ * says nothing. A bench coach is the exception that proves it: his rating IS
+ * the manager one, because the seat is an understudy's, and the promotion list
+ * has always ranked him that way.
+ */
+const ROLE_VALUE: Record<string, { field: string; label: string }> = {
+  manager: { field: 'manager_value', label: 'Manager rating' },
+  pitching_coach: { field: 'pitching_coach_value', label: 'Pitching coach rating' },
+  hitting_coach: { field: 'hitting_coach_value', label: 'Hitting coach rating' },
+  bench_coach: { field: 'manager_value', label: 'Rating as a manager' },
+  first_base_coach: { field: 'basecoach_value', label: 'Base coach rating' },
+  third_base_coach: { field: 'basecoach_value', label: 'Base coach rating' },
+  head_scout: { field: 'scout_value', label: 'Scout rating' },
+  doctor: { field: 'doctor_value', label: 'Team doctor rating' },
+};
+
 const ROLE_LABELS: Record<string, string> = {
   manager: 'Manager', general_manager: 'General Manager', pitching_coach: 'Pitching Coach',
   hitting_coach: 'Hitting Coach', bench_coach: 'Bench Coach',
@@ -250,6 +278,13 @@ rosterOpsRoutes.get('/staff/:orgId', (req, res) => {
         salary: c.contract_salary,
         yearsLeft: c.contract_years,
         formerPlayer: !!c.former_player_id,
+        /** What OOTP thinks of him in this seat, which its own screens never say. */
+        seatRating: (() => {
+          const spec = ROLE_VALUE[role];
+          if (!spec || !hasColumns('coaches', spec.field)) return null;
+          const value = Number(c[spec.field] ?? 0);
+          return value > 0 ? { label: spec.label, value } : null;
+        })(),
         ratings: COACH_FIELDS[role].map(([field, label]) => ({ label, value: c[field] as number })),
       };
     })
