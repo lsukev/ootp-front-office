@@ -550,39 +550,50 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
   }
 
   /*
-   * How this save marks the class, which is not the same in every save.
+   * Who is in THIS year's class, which is not what the eligibility flag says.
    *
-   * A league whose amateurs are free-floating players — the ordinary case —
-   * has them flagged draft_eligible, and that is what to read. A league that
-   * runs its own high-school and college competitions does not: its amateurs
-   * are rostered players on school clubs, OOTP works eligibility out from
-   * their class when the draft comes round, and the flag stays at zero.
+   * Two readers found the same wrong answer from opposite ends. "The draft
+   * feature does not filter players by year of eligibility... many of the
+   * players listed were not eligible for that draft, but were future draft
+   * prospects (i.e., 2028 or 2029 for the 2027 draft)." And: "the draft board
+   * function aren't including the JuCo prospect."
    *
-   * A reader's export settled it. His pool players carried draft_eligible = 0
-   * with hsc_status 4 and his own league in draft_league_id, while the 123 the
-   * flag did pick out belonged, every one, to a second league's draft. So the
-   * flag is used where it says something and the school class where it does
-   * not — 4 is a high-school senior, 9 and 10 the college upperclassmen.
+   * draft_eligible does not mean eligible this year. In my own save it is set
+   * on every school class at once — all 300 high-school freshmen carry it, the
+   * youngest of them fourteen — so reading it put 2,177 players on the board
+   * when the class is 908. A fourteen-year-old is not a 2027 draft pick; he is
+   * a 2031 one.
    *
-   * The class rule reproduced his published pool exactly: 298 men in those
-   * classes, two of them with a career-ending injury, and OOTP's own screen
-   * said 296.
+   * The school class is what carries the year, because a man moves through it:
+   * high-school seniors, junior-college players in either year, and college
+   * juniors and seniors. Underclassmen are not eligible and age out into the
+   * class in their own time, so the year takes care of itself.
+   *
+   * Junior college is 5 and 6, which the old list missed entirely — seventeen
+   * men in my save, every one of them with a school and a college flag, aged
+   * nineteen to twenty-three. JuCo players are draftable in either year, which
+   * is why both codes are here and why college 7 and 8 are not.
+   *
+   * The flag is kept as a fallback and nothing more. A save whose amateurs are
+   * free-floating rather than rostered on school clubs carries no class at
+   * all, and there the flag is the only thing left to read — but where a class
+   * exists it is the better answer, and this had the preference backwards.
    */
-  const eligibleByFlag = (db
-    .prepare(
-      `SELECT COUNT(*) AS n FROM players
-       WHERE draft_eligible = 1 AND retired = 0 AND hidden = 0
-         AND COALESCE(picked_in_draft, 0) != 1
-         AND COALESCE(draft_league_id, 0) IN (0, ?)`
-    )
-    .get(league.league_id) as { n: number }).n;
-
   const classRule =
-    `COALESCE(p.draft_league_id, 0) = ? AND p.hsc_status IN (4, 9, 10)
+    `COALESCE(p.draft_league_id, 0) = ? AND p.hsc_status IN (4, 5, 6, 9, 10)
      AND COALESCE(p.injury_career_ending, 0) != 1`;
   const flagRule =
     `p.draft_eligible = 1 AND COALESCE(p.draft_league_id, 0) IN (0, ?)`;
-  const poolRule = eligibleByFlag > 0 ? flagRule : classRule;
+
+  const inClass = (db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM players p
+       WHERE ${classRule} AND p.retired = 0 AND p.hidden = 0
+         AND COALESCE(p.picked_in_draft, 0) != 1`
+    )
+    .get(league.league_id) as { n: number }).n;
+
+  const poolRule = inClass > 0 ? classRule : flagRule;
 
   const rows = db
     .prepare(
@@ -686,18 +697,18 @@ rosterOpsRoutes.get('/draft/:orgId', (req, res) => {
     excluded: {
       alreadyPicked: excluded.alreadyPicked ?? 0,
       /*
-       * Only meaningful while the flag is what the board reads. Once it has
-       * fallen back to the school class, the men the flag picked out belong to
-       * another league's draft by definition, and saying so on this page would
-       * be reporting a fact about somebody else's club.
+       * Only meaningful while the flag is what the board reads. Where the
+       * school class answered, the men the flag picked out are a different
+       * question — other leagues' drafts and future classes both — and saying
+       * so on this page would be reporting somebody else's business.
        */
-      otherDraft: eligibleByFlag > 0 ? excluded.otherDraft ?? 0 : 0,
+      otherDraft: inClass > 0 ? 0 : excluded.otherDraft ?? 0,
       // Eligible, unpicked, in this draft, but carrying no scouted ceiling —
       // there is nothing to rank him on
       unrated: rows.length - prospects.length,
     },
     /** Which rule found this class, so the page can say when it is the class. */
-    poolRule: eligibleByFlag > 0 ? 'flag' : 'class',
+    poolRule: inClass > 0 ? 'class' : 'flag',
     prospects: withAdvice,
   });
 });

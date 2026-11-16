@@ -113,10 +113,48 @@ const VALUE_POT = tableExists('players_value') && tableColumns('players_value').
   ? 'v.pot'
   : 'v.pot_rating';
 
+/**
+ * Every position a man is rated to play, his primary first.
+ *
+ * "The depth chart does not include players who play multiple positions. I
+ * have only one player with a primary position of RF, but two others list it
+ * as a secondary position. The app always says I only have one."
+ *
+ * He is right, and the chart was reading one column where OOTP keeps nine.
+ * `players.position` is the primary and nothing else; the fielding table rates
+ * a man separately at every position and leaves a zero where he is not rated —
+ * which is OOTP's own way of saying he does not play there. In my own save
+ * fourteen men in one organisation are primary right fielders and another
+ * forty-four are rated for it, so the column was showing under a quarter of
+ * the cover a club actually has.
+ *
+ * Most players come out at one to three positions and a handful at five or
+ * six, so this widens the chart without turning it to soup.
+ */
+const RATED_POSITIONS = [2, 3, 4, 5, 6, 7, 8, 9] as const;
+
+export function positionsRatedSql(alias = 'f'): string {
+  return RATED_POSITIONS.map(
+    (n) => `CASE WHEN COALESCE(${alias}.fielding_rating_pos${n}, 0) > 0 THEN '${n},' ELSE '' END`
+  ).join(' || ');
+}
+
+/** The packed list the SQL above builds, back as numbers with the primary first. */
+export function positionsFrom(packed: unknown, primary: number): number[] {
+  const rated = String(packed ?? '')
+    .split(',')
+    .map((n) => Number(n))
+    .filter((n) => n > 0 && n !== primary);
+  return [primary, ...rated];
+}
+
 function orgPlayers(orgId: number): OrgPlayer[] {
   return db
     .prepare(
       `SELECT p.player_id, p.team_id, p.first_name, p.last_name, p.age, p.position, p.role,
+              ${hasColumns('players_fielding', 'fielding_rating_pos2')
+                ? `(${positionsRatedSql('fl')})`
+                : `''`} AS ratedPositions,
               b.batting_ratings_overall_contact AS con, b.batting_ratings_overall_gap AS gap,
               b.batting_ratings_overall_power AS pow, b.batting_ratings_overall_eye AS eye,
               b.batting_ratings_overall_strikeouts AS avk,
@@ -144,6 +182,7 @@ function orgPlayers(orgId: number): OrgPlayer[] {
        LEFT JOIN players_batting b ON b.player_id = p.player_id
        LEFT JOIN players_pitching pi ON pi.player_id = p.player_id
        LEFT JOIN players_value v ON v.player_id = p.player_id
+       LEFT JOIN players_fielding fl ON fl.player_id = p.player_id
        WHERE p.organization_id = ? AND p.team_id > 0 AND p.retired = 0`
     )
     .all(orgId) as OrgPlayer[];
@@ -214,6 +253,8 @@ orgRoutes.get('/depth-chart/:orgId', (req, res) => {
       name: `${p.first_name} ${p.last_name}`,
       age: p.age,
       position: p.position,
+      /** Primary first, then every other position OOTP rates him at. */
+      positions: positionsFrom((p as unknown as { ratedPositions?: string }).ratedPositions, p.position),
       role: p.role,
       cur,
       pot,

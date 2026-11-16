@@ -2406,3 +2406,9 @@ tr.ours td:first-child { border-left: 3px solid var(--accent); }
    the round being played */
 .series.done .series-teams { color: var(--muted); }
 .series.done .series-line { color: var(--muted); }
+
+/* A man filling in at a position that is not his own reads as available, not
+   as the answer — the chart would otherwise suggest a club is four deep in
+   right field when it is one deep and three men can stand there. */
+.depth-player.secondary .depth-name { opacity: 0.72; }
+.depth-player.secondary .depth-meta { opacity: 0.6; font-style: italic; }

@@ -342,6 +342,8 @@ export interface DepthPlayer {
   name: string;
   age: number;
   position: number;
+  /** Primary first, then every other position OOTP rates him at. */
+  positions?: number[];
   role: number;
   cur: number | null;
   pot: number | null;
