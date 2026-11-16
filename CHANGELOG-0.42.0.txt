@@ -1,0 +1,9 @@
+OOTP Front Office 0.42.0 — everything since 0.41.0
+
+Fixed — The draft board shows this year's class and nobody else's. A reader found it offering 2028 and 2029 prospects for the 2027 draft, and another found it missing junior-college players entirely. Both came from the same line: the board trusted OOTP's draft-eligible flag, which is set on every school class at once — in my own save all three hundred high-school freshmen carry it, the youngest of them fourteen. It was offering 2,177 men for a class of 908.
+
+The board now reads the school class instead, which is what carries the year: high-school seniors, junior college in either year, college juniors and seniors. Underclassmen age into it on their own. Junior college was never in the old list at all and is now.
+
+Fixed — The depth chart counts everyone who can cover a position, not only the men listed at it. A reader had one right fielder on his chart and three in his organisation. OOTP rates every player at every position and leaves a zero where he cannot play there; the chart was reading the single primary position on his card instead. In my own save that was showing fourteen right fielders where the club has fifty-eight who are rated for it.
+
+A fill-in reads as a fill-in: the men whose position it is come first, the rest below them in grey italics with a note on hover. The chart should not claim four right fielders where there is one and three who can stand there.
