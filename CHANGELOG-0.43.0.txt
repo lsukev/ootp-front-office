@@ -1,0 +1,9 @@
+OOTP Front Office 0.43.0 — everything since 0.42.0
+
+New — Hide overall and potential. For leagues that play without the scouted composite: Settings → Display → Hide overall and potential, and the two headline grades read "—" wherever they appear. Every component rating is untouched, which is the point — speed, power, eye and the position grades are exactly what a league that hides the composite reads instead. Display only: the app still ranks and sorts on what your export says.
+
+New — Each staff card shows OOTP's own rating for the seat. The composite it keeps for every coach and never shows you, on the same 1-200 scale as the rest of his ratings. Each man gets the one for his own seat: a hitting coach's worth as a scout is not what you hired him for. A general manager gets none, because OOTP publishes none, and putting another seat's number under his name would be inventing a rating. A bench coach gets his manager rating, which is the seat he is understudying.
+
+New — The Development screen filters by level. It offers only the levels somebody actually changed at.
+
+New — Mark a prospect as drafted. A draft runs forty rounds in an afternoon and the board only learns who is gone when you export again; tick a man off and he drops out of the recommendations and is struck through on the board. The marks are yours, kept in the browser per draft, and stop mattering the moment a fresh export says who was really taken.
