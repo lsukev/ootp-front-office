@@ -51,8 +51,27 @@ function parkFactors(leagueId: number): Map<number, number> {
  * Baselines are per league AND level — a Double-A hitter is measured against
  * Double-A, not the majors, so his OPS+ means what it should.
  */
-export function leagueBaseline(leagueId: number, year: number, level = 1): LeagueBaseline {
-  const key = `${leagueId}:${year}:${level}`;
+/**
+ * The league a player is measured against.
+ *
+ * `battingSplit` picks which league that is. A batter's line against
+ * left-handed pitching belongs against the league's line against left-handed
+ * pitching, not against the league as a whole — comparing a split to the
+ * overall environment quietly shifts every rate in one direction. The two are
+ * close in my own save (.3154 against .3164 on-base, .4002 against .4140
+ * slugging) but close is not the same as right, and getting it right costs a
+ * parameter.
+ *
+ * OOTP's split ids, established from 537,000 plate appearances rather than
+ * assumed: 1 is everything, 2 is against left-handed pitching, 3 is against
+ * right-handed. Right-handed batters hit .251/.319 in split 2 and .244/.307 in
+ * split 3; left-handed batters .239/.312 and .250/.325. The platoon advantage
+ * falls exactly where it should, which is what settles which id is which.
+ */
+export function leagueBaseline(
+  leagueId: number, year: number, level = 1, battingSplit = 1
+): LeagueBaseline {
+  const key = `${leagueId}:${year}:${level}:${battingSplit}`;
   const hit = baselineCache.get(key);
   if (hit) return hit;
 
@@ -62,10 +81,17 @@ export function leagueBaseline(leagueId: number, year: number, level = 1): Leagu
               SUM(s.hr) AS hr, SUM(s.bb) AS bb, SUM(s.ibb) AS ibb, SUM(s.hp) AS hp,
               SUM(s.sf) AS sf, SUM(s.r) AS r
        FROM players_career_batting_stats s
-       WHERE s.year = ? AND s.split_id = 1 AND s.level_id = ? AND s.league_id = ?`
+       WHERE s.year = ? AND s.split_id = ? AND s.level_id = ? AND s.league_id = ?`
     )
-    .get(year, level, leagueId) as Record<string, number | null>;
+    .get(year, battingSplit, level, leagueId) as Record<string, number | null>;
 
+  /*
+   * The pitching half stays whole whatever the batting split is. A pitcher's
+   * split 2 is his line against left-handed BATTERS, which is a different
+   * question from the one a batter's split asks — flipping it here would make
+   * the league ERA on this baseline mean something nobody asked for. Nothing
+   * that reads a batting split reads lgERA anyway.
+   */
   const pit = db
     .prepare(
       `SELECT SUM(s.outs) AS outs, SUM(s.er) AS er, SUM(s.hra) AS hra,

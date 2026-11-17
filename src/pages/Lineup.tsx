@@ -18,6 +18,27 @@ const TIP_OFF_VALUE =
 const TIP_OPS_PLUS = findStat('batting', 'opsPlus')?.desc ?? '';
 const TIP_WRC_PLUS = findStat('batting', 'wrcPlus')?.desc ?? '';
 
+/**
+ * The four columns that follow the matchup, and the one that does not.
+ *
+ * "Off Value correctly changes when switching between vs RHP and vs LHP, but
+ * PA, OPS, OPS+ and wRC+ appear to remain full-season stats... WAR could
+ * probably remain full-season."
+ *
+ * He was right on both counts. The card is built for one hand of pitching and
+ * was showing whole-season production beside it, so the numbers a reader would
+ * check the order against were not the numbers the order was about. WAR stays
+ * whole: it counts a year's value, and a third of a year is not a smaller
+ * version of it.
+ */
+const vsHand = (vs: 'r' | 'l'): string => (vs === 'r' ? 'vs R' : 'vs L');
+const vsHandLong = (vs: 'r' | 'l'): string =>
+  vs === 'r' ? 'right-handed pitching' : 'left-handed pitching';
+const splitTip = (vs: 'r' | 'l', stat: string): string =>
+  `${stat} against ${vsHandLong(vs)} this season, and the plate appearances beside it are the ` +
+  `same split — a line over forty trips is worth reading as forty trips. Switching the toggle ` +
+  `above switches these columns with it. WAR is the only one that stays whole-season.`;
+
 const plusColor = (value: number | null): string | undefined => {
   const def = findStat('batting', 'opsPlus');
   return def ? statPlusColor(def, value) : undefined;
@@ -165,9 +186,10 @@ export function Lineup({ teamId }: { teamId: number }) {
               </>
             ) : (
               <>
-                Ranked on this season's wRC+, regressed toward league average on plate appearances so a
-                hot twenty at-bats does not lead off. Not platoon-split: the production sort reads the
-                whole season, so the vs-LHP/RHP choice only moves the defensive assignment.{' '}
+                Ranked on this season's wRC+ against {vsHandLong(vs)}, pulled toward his own
+                full-season line on how many plate appearances he has had against that hand, and
+                that toward league average on the season — so neither a hot twenty at-bats nor
+                forty trips against left-handers decides who leads off.{' '}
               </>
             )}
             {/* Said out loud because it is a claim the reader can check, and
@@ -212,11 +234,27 @@ export function Lineup({ teamId }: { teamId: number }) {
                 <th>
                   <Tip label="Off Value" tip={TIP_OFF_VALUE} />
                 </th>
-                <Th>PA</Th>
-                <Th>OPS</Th>
-                <th><Tip label="OPS+" tip={TIP_OPS_PLUS} /></th>
-                <th><Tip label="wRC+" tip={TIP_WRC_PLUS} /></th>
-                <Th>WAR</Th>
+                {/* The hand is on each header rather than in a note above
+                    the table: a reader scanning a column should not have to
+                    remember which way the toggle is set. */}
+                <th className="num">
+                  <Tip label={`PA ${vsHand(vs)}`} tip={splitTip(vs, 'Plate appearances')} />
+                </th>
+                <th className="num">
+                  <Tip label={`OPS ${vsHand(vs)}`} tip={splitTip(vs, 'On-base plus slugging')} />
+                </th>
+                <th className="num">
+                  <Tip label={`OPS+ ${vsHand(vs)}`} tip={`${TIP_OPS_PLUS}\n\n${splitTip(vs, 'OPS+')}`} />
+                </th>
+                <th className="num">
+                  <Tip label={`wRC+ ${vsHand(vs)}`} tip={`${TIP_WRC_PLUS}\n\n${splitTip(vs, 'wRC+')}`} />
+                </th>
+                <th className="num">
+                  <Tip
+                    label="WAR"
+                    tip="Wins above replacement over the whole season, not the platoon split — it counts a year's value, and a third of a year is not a smaller version of it."
+                  />
+                </th>
                 <Th>Why here</Th>
               </tr>
             </thead>

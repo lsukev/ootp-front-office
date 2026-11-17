@@ -407,31 +407,73 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
   let searchNote: {
     seededRuns: number; optimisedRuns: number; gain: number; evaluations: number; moved: boolean;
   } | null = null;
+  /*
+   * OOTP's batting split ids. Established from the export rather than assumed:
+   * across 537,000 plate appearances, right-handed batters hit .251/.319 in
+   * split 2 against .244/.307 in split 3, and left-handed batters .239/.312
+   * against .250/.325. The platoon advantage lands exactly where it must, so 2
+   * is against left-handed pitching and 3 against right-handed. Split 1 is
+   * everything, and 2 + 3 add back to it man by man.
+   */
+  const SPLIT = { l: 2, r: 3 } as const;
+  const split = SPLIT[vs];
+
+  /**
+   * The line shown in the card's columns, which is this batter against the
+   * hand he is about to face.
+   *
+   * "Off Value correctly changes when switching between vs RHP and vs LHP, but
+   * PA, OPS, OPS+ and wRC+ appear to remain full-season stats... Since the
+   * lineup recommendation is matchup-specific, showing the corresponding
+   * vs-RHP/vs-LHP production would make the suggested order easier to
+   * evaluate. Keeping split PA visible would also provide useful sample-size
+   * context."
+   *
+   * Shown raw, with its own plate appearances beside it, because the point of
+   * the column is for the reader to judge the sample himself. The regression
+   * belongs to the ordering below, not to the number on the page.
+   */
   const statsById = new Map<number, Record<string, number | null>>();
+  /** The same men over the whole season, which is the prior the split leans on. */
+  const seasonStatsById = new Map<number, Record<string, number | null>>();
   /** Raw season lines and the league's, for the expected-runs search below. */
   const rawById = new Map<number, BattingLine>();
   let leagueLine: BattingLine | null = null;
   if (teamRow && statYear !== null) {
+    const lines = db.prepare(
+      `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3,
+              SUM(hr) AS hr, SUM(bb) AS bb, SUM(ibb) AS ibb, SUM(hp) AS hp, SUM(sf) AS sf,
+              SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
+              SUM(war) AS war
+       FROM players_career_batting_stats
+       WHERE year = ? AND split_id = ? AND level_id = ?
+       GROUP BY player_id`
+    );
+
+    // Measured against the league in the same split: a vs-LHP line compared
+    // with the league's overall environment is a rate shifted for no reason
     const base = leagueBaseline(teamRow.league_id, statYear, teamRow.level);
-    const rows = db
-      .prepare(
-        `SELECT player_id, SUM(pa) AS pa, SUM(ab) AS ab, SUM(h) AS h, SUM(d) AS d, SUM(t) AS t3,
-                SUM(hr) AS hr, SUM(bb) AS bb, SUM(ibb) AS ibb, SUM(hp) AS hp, SUM(sf) AS sf,
-                SUM(k) AS k, SUM(sb) AS sb, SUM(cs) AS cs, SUM(r) AS r, SUM(rbi) AS rbi,
-                SUM(war) AS war
-         FROM players_career_batting_stats
-         WHERE year = ? AND split_id = 1 AND level_id = ?
-         GROUP BY player_id`
-      )
-      .all(statYear, teamRow.level) as Array<Record<string, number>>;
-    for (const row of rows) {
-      statsById.set(row.player_id, computeBatting(row, base, teamId));
-      // The raw line as well, because the run model needs events per plate
-      // appearance rather than the rate stats computed from them
+    const splitBase = leagueBaseline(teamRow.league_id, statYear, teamRow.level, split);
+
+    for (const row of lines.all(statYear, 1, teamRow.level) as Array<Record<string, number>>) {
+      seasonStatsById.set(row.player_id, computeBatting(row, base, teamId));
+      /*
+       * The raw season line as well, because the run model needs events per
+       * plate appearance rather than the rate stats computed from them — and
+       * it stays the SEASON line whichever hand is selected. Its floor of 900
+       * plate appearances was calibrated on whole seasons; a split holds about
+       * a third of that, so feeding it one would set the search going on a
+       * third of the evidence it was built to need. The split picks the men
+       * and seeds the order; the run model then sorts them on what they are
+       * over a season, which is the only scale its answer is quoted in.
+       */
       rawById.set(row.player_id, {
         pa: row.pa ?? 0, h: row.h ?? 0, d: row.d ?? 0, t: row.t3 ?? 0,
         hr: row.hr ?? 0, bb: row.bb ?? 0, hp: row.hp ?? 0,
       });
+    }
+    for (const row of lines.all(statYear, split, teamRow.level) as Array<Record<string, number>>) {
+      statsById.set(row.player_id, computeBatting(row, splitBase, teamId));
     }
     leagueLine = db
       .prepare(
@@ -454,12 +496,40 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
    * comes out at exactly average, which is the honest reading of no evidence.
    */
   const PRIOR_PA = 150;
-  const productionScore = (playerId: number): number => {
-    const s = statsById.get(playerId);
+  /*
+   * And the split is read on top of that, toward the man's own season rather
+   * than toward the league.
+   *
+   * This is the half that is easy to get wrong. Regressing a vs-LHP line
+   * toward 100 would drag a good hitter with forty trips against left-handers
+   * down to average and hand the spot to a worse one who happened to have
+   * faced more of them — the sample size would be doing the ranking. His own
+   * season line is the honest prior: it is what he is, and the split says how
+   * far from it this matchup has pushed him.
+   *
+   * Two hundred is the weight. A regular has four hundred-odd plate
+   * appearances against right-handers by September and is then read mostly on
+   * them; against left-handers he has perhaps a hundred and fifty and is read
+   * mostly on himself, nudged. Platoon splits are the noisiest thing in a
+   * batting line and this errs toward not believing them. At zero split plate
+   * appearances the score is exactly his season score, which is what the card
+   * did before any of this.
+   */
+  const PRIOR_SPLIT_PA = 200;
+  const seasonScore = (playerId: number): number => {
+    const s = seasonStatsById.get(playerId);
     const rate = s?.wrcPlus ?? s?.opsPlus ?? null;
     const pa = s?.pa ?? 0;
     if (rate === null || pa <= 0) return 100;
     return (rate * pa + 100 * PRIOR_PA) / (pa + PRIOR_PA);
+  };
+  const productionScore = (playerId: number): number => {
+    const season = seasonScore(playerId);
+    const s = statsById.get(playerId);
+    const rate = s?.wrcPlus ?? s?.opsPlus ?? null;
+    const pa = s?.pa ?? 0;
+    if (rate === null || pa <= 0) return season;
+    return (rate * pa + season * PRIOR_SPLIT_PA) / (pa + PRIOR_SPLIT_PA);
   };
   /*
    * Applied to the starters as well, and that is the whole of it: `starters`
@@ -578,6 +648,8 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
     style,
     /** Null when the search was skipped, or moved nobody worth moving. */
     runSearch: searchNote,
+    /** Which hand the PA/OPS/OPS+/wRC+ columns are against. WAR is the season. */
+    statsVs: vs,
     usesDH: dh,
     leagueUsesDH,
     dhOverridden: dh !== leagueUsesDH,
@@ -599,7 +671,10 @@ lineupRoutes.get('/lineup/:teamId', (req, res) => {
         ops: s?.ops ?? null,
         opsPlus: s?.opsPlus ?? null,
         wrcPlus: s?.wrcPlus ?? null,
-        war: s?.war ?? null,
+        // "WAR could probably remain full-season" — and it must: it is a
+        // counting stat of a whole year's value, and a third of one is not a
+        // smaller version of it
+        war: seasonStatsById.get(l.player.player_id)?.war ?? null,
       };
     }),
     bench: bench.map((c) => ({

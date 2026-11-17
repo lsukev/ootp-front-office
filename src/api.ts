@@ -471,6 +471,12 @@ export interface LineupSlot {
 
 export interface LineupResponse {
   vs: 'r' | 'l';
+  /**
+   * Which hand the PA, OPS, OPS+ and wRC+ columns are against. The same as
+   * `vs`; named separately because WAR deliberately is not, and a page that
+   * prints four split columns and one season one has to say which is which.
+   */
+  statsVs?: 'r' | 'l';
   style: 'saber' | 'trad';
   /** Whether this card was built with a DH — the league rule unless overridden. */
   usesDH?: boolean;
