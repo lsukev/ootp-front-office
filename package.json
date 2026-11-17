@@ -18,7 +18,7 @@
     "dist:mac": "npm run abi:electron && npm run desktop:build && electron-builder --mac",
     "dist:win": "npm run abi:electron && npm run desktop:build && electron-builder --win",
     "abi:electron": "electron-builder install-app-deps",
-    "abi:node": "npm rebuild better-sqlite3",
+    "abi:node": "node -e \"require('fs').rmSync('node_modules/better-sqlite3/build/Release/.forge-meta',{force:true})\" && npm rebuild better-sqlite3",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -27,7 +27,7 @@
     "@google/genai": "^2.16.0",
     "better-sqlite3": "^12.11.1",
     "chokidar": "^4.0.3",
-    "csv-parse": "^5.6.0",
+    "csv-parse": "^7.0.3",
     "electron-updater": "^6.8.9",
     "express": "^4.21.2",
     "openai": "^6.49.0"
@@ -40,7 +40,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
-    "electron": "^41.10.4",
+    "electron": "^43.8.10",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "react": "^18.3.1",
@@ -51,6 +51,7 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "minimatch@>=7": "^11.0.9"
   }
 }
