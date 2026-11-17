@@ -294,7 +294,11 @@ export interface PlayerDossier {
 export const getPlayer = (id: number) => json<PlayerDossier>(`/api/player/${id}`);
 export interface IssueCache {
   generatedAt?: string;
+  /** The last day the edition covers. */
   gameDate?: string | null;
+  /** The first. Absent, or the same day, in a league simmed a day at a time. */
+  from?: string | null;
+  days?: number;
   leagueName?: string;
   /** Null before an edition has been set for this club. */
   issue: {
@@ -309,8 +313,11 @@ export interface IssueCache {
 
 export interface RecapCache {
   generatedAt?: string;
-  /** The day the recap covers — the last one the league played, not the save's today. */
+  /** The last day the recap covers — the last one the league played, not the save's today. */
   gameDate?: string | null;
+  /** The first. Absent, or the same day, in a league simmed a day at a time. */
+  from?: string | null;
+  days?: number;
   leagueName?: string;
   /** Null before one has been written for this club. */
   recap: {

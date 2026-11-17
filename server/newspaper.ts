@@ -6,7 +6,7 @@ import { DATA_DIR } from './config.js';
 import { activeProvider, aiModel, getApiKey } from './settings.js';
 import { describeError, providerFor, type FallbackNotice } from './providers.js';
 import { jobStatus, startJob } from './jobs.js';
-import { assembleDay } from './recap.js';
+import { assembleWindow } from './recap.js';
 import { assembleContext } from './storylines.js';
 import { recentTransactions } from './transactions.js';
 import { computeProspects } from './org.js';
@@ -58,7 +58,11 @@ interface Issue {
 
 interface IssueCache {
   generatedAt: string;
+  /** The last day the issue covers. */
   gameDate: string | null;
+  /** The first. The same day as gameDate in a league simmed a day at a time. */
+  from?: string | null;
+  days?: number;
   leagueName: string;
   issue: Issue | null;
   notice?: FallbackNotice | null;
@@ -74,7 +78,7 @@ const cachePath = (orgId: number) => path.join(DATA_DIR, `newspaper-${orgId}.jso
  * scores would be worse than no newspaper.
  */
 export function assembleIssue(orgId: number) {
-  const day = assembleDay(orgId);
+  const day = assembleWindow(orgId);
   const club = assembleContext(orgId);
   const prospects = computeProspects(orgId) as {
     batters: Array<Record<string, unknown>>;
@@ -97,8 +101,17 @@ export function assembleIssue(orgId: number) {
     league: day.league,
     seasonYear: day.seasonYear,
     date: day.date,
+    /*
+     * The stretch this issue covers. An online league that sims a week between
+     * exports was getting a paper about the seventh day of it and nothing
+     * about the other six.
+     */
+    from: day.from,
+    to: day.to,
+    days: day.days,
+    clipped: day.clipped,
     readersClub: day.readersClub,
-    /** Yesterday's scores and the tables they moved. */
+    /** The scores in the window and the tables they moved, each with its date. */
     results: day.games,
     /** The bracket, once October arrives. Null for the rest of the year. */
     postseason: day.postseason,
@@ -106,7 +119,7 @@ export function assembleIssue(orgId: number) {
     idleDivisions: day.idleDivisions,
     leaders: day.leaders,
     /** The wire: everything the league did off the field lately. */
-    transactions: recentTransactions(orgId, 25).map((t) => ({
+    transactions: recentTransactions(orgId, Math.min(150, 25 * day.days)).map((t) => ({
       date: t.date,
       kind: t.kind,
       what: t.plain,
@@ -283,6 +296,20 @@ async function generateIssue(orgId: number): Promise<IssueCache> {
       `then a column of shorts. Write like a sports desk: plain, quick, specific. Every claim ` +
       `carries the figure it rests on — a race is so many games, a run is so many starts, a deal ` +
       `is who for whom.\n\n` +
+      (context.days > 1
+        ? `THIS IS A WEEKLY PAPER, not a daily one. The league sims several days between ` +
+          `editions, and this issue covers ${context.from} to ${context.to} — ${context.days} ` +
+          `days. Every result and every deal carries the date it happened on. Write the period: ` +
+          `how clubs went over the stretch, which way the races moved across it, who had the ` +
+          `week. A single game belongs in the paper only where it decided something, and then ` +
+          `with its date on it. Do not write as though all of this happened yesterday.` +
+          (context.clipped
+            ? ` More time than this has passed since the last edition; these are the most ` +
+              `recent ${context.days} days and the only ones you have. Do not refer to days ` +
+              `before ${context.from}.`
+            : '') +
+          `\n\n`
+        : '') +
       (context.postseason
         ? `THE REGULAR SEASON IS OVER and the postseason is being played. The postseason block is ` +
           `the bracket — the rounds, the series and where each one stands. That is the paper now. ` +
@@ -301,9 +328,13 @@ async function generateIssue(orgId: number): Promise<IssueCache> {
       {
         role: 'user',
         content:
-          `Today is ${context.date} of the ${context.seasonYear} season. The reader manages the ` +
-          `${context.readersClub}. Here is the desk:\n\n${JSON.stringify(context, null, 1)}\n\n` +
-          `Write today's issue.`,
+          (context.days > 1
+            ? `This edition covers ${context.from} to ${context.to} of the ${context.seasonYear} ` +
+              `season. `
+            : `Today is ${context.date} of the ${context.seasonYear} season. `) +
+          `The reader manages the ${context.readersClub}. Here is the desk:` +
+          `\n\n${JSON.stringify(context, null, 1)}\n\n` +
+          `Write ${context.days > 1 ? "this edition" : "today's issue"}.`,
       },
     ],
   }).catch((err: unknown) => {
@@ -323,6 +354,8 @@ async function generateIssue(orgId: number): Promise<IssueCache> {
   const cache: IssueCache = {
     generatedAt: new Date().toISOString(),
     gameDate: context.date,
+    from: context.from,
+    days: context.days,
     leagueName: context.league,
     issue: composeIssue(parsed, context.league),
     notice,

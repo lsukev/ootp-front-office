@@ -172,11 +172,17 @@ describe('what the AI can see', () => {
     expect(chat).toMatch(/case 'get_transactions':/);
   });
 
-  it('is handed the day\'s deals when writing the recap', () => {
-    // A deal is the biggest thing that can happen on a quiet day
+  it('is handed the deals of the period when writing the recap', () => {
+    /*
+     * A deal is the biggest thing that can happen on a quiet day. This matches
+     * the rule rather than the arithmetic: the count went from a flat 40 to a
+     * figure that scales with the window the moment the recap learned to cover
+     * more than one day, and a test pinned to the literal failed for a change
+     * that was entirely correct.
+     */
     const recap = read('server/recap.ts');
-    expect(recap).toMatch(/recentTransactions\(orgId, 40\)/);
-    expect(recap).toMatch(/Never invent a ` \+\s*`deal/s);
+    expect(recap).toMatch(/recentTransactions\(orgId,/);
+    expect(recap).toMatch(/Never invent a\b[\s\S]{0,60}?deal/);
   });
 });
 

@@ -11,6 +11,7 @@ import { describeError, providerFor, type FallbackNotice } from './providers.js'
 import { rulesBriefing, seasonYear } from './valuation.js';
 import { jobStatus, startJob } from './jobs.js';
 import { recentTransactions } from './transactions.js';
+import { snapshotDates } from './history.js';
 
 export const recapRoutes = Router();
 
@@ -43,8 +44,11 @@ interface Recap {
 
 interface RecapCache {
   generatedAt: string;
-  /** The day the recap covers, which is the last one played, not the save's today. */
+  /** The last day the recap covers, which is the last one played, not the save's today. */
   gameDate: string | null;
+  /** The first day it covers. The same as gameDate in a league simmed a day at a time. */
+  from?: string | null;
+  days?: number;
   leagueName: string;
   recap: Recap | null;
   notice?: FallbackNotice | null;
@@ -54,6 +58,83 @@ const cachePath = (orgId: number) => path.join(DATA_DIR, `daily-recap-${orgId}.j
 
 const teamLabel = (alias: string) =>
   `CASE WHEN ${alias}.name = ${alias}.nickname THEN ${alias}.name ELSE ${alias}.name || ' ' || ${alias}.nickname END`;
+
+/**
+ * How many days one issue can hold.
+ *
+ * A reader who leaves a save alone for two months should not come back to
+ * sixty days of box scores in a single prompt. Past this the window covers the
+ * most recent stretch and says so, rather than silently writing up a fortnight
+ * and calling it the week.
+ */
+const MAX_WINDOW_DAYS = 10;
+
+/** OOTP's padded date as a real one. Built in UTC so no timezone can shift a day. */
+const asDate = (iso: string): Date => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+const addDays = (iso: string, n: number): string => {
+  const d = asDate(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const daysApart = (a: string, b: string): number =>
+  Math.round((asDate(b).getTime() - asDate(a).getTime()) / 86_400_000);
+const dateKey = (iso: string): number => Number(iso.replace(/-/g, ''));
+
+export interface RecapWindow {
+  /** First day covered, inclusive. */
+  from: string;
+  /** Last day covered, inclusive — the last one the league actually played. */
+  to: string;
+  days: number;
+  /** The gap since the last export was longer than one issue can hold. */
+  clipped: boolean;
+}
+
+/**
+ * The stretch of days a news page covers: everything since the reader last had
+ * data in front of him.
+ *
+ * "Many OOTP online leagues use a 7-day schedule. So, rather than the
+ * newspaper showing the last day's news/results, show the prior week's."
+ *
+ * The app can work this out without being told. Every import takes a ratings
+ * snapshot stamped with the save's game date, so the one before the current
+ * export is the day the reader last looked: sim a day at a time and the window
+ * is a day, sim a week and it is a week, and nobody has to declare which kind
+ * of league this is. A setting would have been one more thing to get wrong,
+ * and wrong in the direction of a reader quietly missing six days of his own
+ * season.
+ *
+ * It opens the day AFTER that snapshot, because those games were in the last
+ * issue, and clamps shut if that would run past the last day played — an
+ * export taken before the day's games have been simmed carries no new ones at
+ * all, and the window is then the single day it has always been.
+ */
+export function recapWindow(leagueId: number): RecapWindow | null {
+  const to = lastPlayedDate(leagueId);
+  if (!to) return null;
+
+  // The export being read is itself the latest snapshot, so the reader's
+  // previous look is the one before it. One snapshot means a first import,
+  // which has no previous issue to have covered anything.
+  const dates = snapshotDates();
+  const previous = dates.length >= 2 ? padDate(dates[dates.length - 2]) : null;
+
+  let from = previous ? addDays(previous, 1) : to;
+  if (dateKey(from) > dateKey(to)) from = to;
+
+  let days = daysApart(from, to) + 1;
+  let clipped = false;
+  if (days > MAX_WINDOW_DAYS) {
+    from = addDays(to, -(MAX_WINDOW_DAYS - 1));
+    days = MAX_WINDOW_DAYS;
+    clipped = true;
+  }
+  return { from, to, days, clipped };
+}
 
 /** The last day this league actually played, which is the day worth writing up. */
 export function lastPlayedDate(leagueId: number): string | null {
@@ -70,13 +151,15 @@ export function lastPlayedDate(leagueId: number): string | null {
 }
 
 /**
- * Everything that happened on one day, and what the table looked like after it.
+ * Everything that happened in the window, and what the table looked like after.
  *
  * Deliberately compact. The recap is a page of prose, and handing a model
  * thirty box scores' worth of detail buys nothing it can use — the scores, the
- * records and the standings are what the sentences are made of.
+ * records and the standings are what the sentences are made of. A week's worth
+ * is the same shape, seven times over, with each game carrying the day it was
+ * played so the writing can run in order instead of in a heap.
  */
-export function assembleDay(orgId: number) {
+export function assembleWindow(orgId: number) {
   const org = db
     .prepare(`SELECT team_id, league_id, name, nickname FROM teams WHERE team_id = ?`)
     .get(orgId) as { team_id: number; league_id: number; name: string; nickname: string } | undefined;
@@ -86,8 +169,9 @@ export function assembleDay(orgId: number) {
     | { name: string }
     | undefined;
 
-  const date = lastPlayedDate(org.league_id);
-  if (!date) throw new Error('No completed games in this league yet — nothing to recap.');
+  const window = recapWindow(org.league_id);
+  if (!window) throw new Error('No completed games in this league yet — nothing to recap.');
+  const date = window.to;
 
   /*
    * The day's results. Scores come back as away-then-home because that is how
@@ -96,7 +180,7 @@ export function assembleDay(orgId: number) {
    */
   const games = db
     .prepare(
-      `SELECT ${teamLabel('at2')} AS away, ${teamLabel('ht')} AS home,
+      `SELECT g.date, ${teamLabel('at2')} AS away, ${teamLabel('ht')} AS home,
               g.runs0 AS awayRuns, g.runs1 AS homeRuns, g.innings,
               at2.team_id AS awayId, ht.team_id AS homeId
        FROM games g
@@ -104,11 +188,12 @@ export function assembleDay(orgId: number) {
        JOIN teams at2 ON at2.team_id = g.away_team
        WHERE g.league_id = ? AND g.played = 1
          AND ${competitiveGamesSql('g', org.league_id as number)}
-         AND ${DATE_KEY('g.date')} = ?`
+         AND ${DATE_KEY('g.date')} BETWEEN ? AND ?
+       ORDER BY ${DATE_KEY('g.date')}, g.game_id`
     )
-    // padDate has already normalised the date, so the same key the SQL builds
-    // per row can simply be computed once here rather than six placeholders deep
-    .all(org.league_id, Number(date.replace(/-/g, ''))) as Array<Record<string, unknown>>;
+    // padDate has already normalised both ends, so the same key the SQL builds
+    // per row can simply be computed here rather than six placeholders deep
+    .all(org.league_id, dateKey(window.from), dateKey(window.to)) as Array<Record<string, unknown>>;
 
   /*
    * The table, division by division, named as the league names them. A recap
@@ -138,9 +223,9 @@ export function assembleDay(orgId: number) {
     const list = standings.get(name) ?? [];
     list.push({
       team: r.team, w: r.w, l: r.l, gb: r.gb, streak: r.streak,
-      // Whether this club played on the day being written about, so the model
-      // is not left guessing why a team is missing from the scores
-      playedToday: games.some((g) => g.homeId === r.team_id || g.awayId === r.team_id),
+      // Whether this club played at all in the stretch being written about, so
+      // the model is not left guessing why a team is missing from the scores
+      played: games.some((g) => g.homeId === r.team_id || g.awayId === r.team_id),
     });
     standings.set(name, list);
   }
@@ -149,8 +234,20 @@ export function assembleDay(orgId: number) {
     league: league?.name ?? 'the league',
     seasonYear: seasonYear(org.league_id),
     date,
+    /*
+     * The stretch this issue covers. `from` and `to` are the same day in a
+     * league simmed a day at a time, which is most of them; in a weekly league
+     * they are a week apart and the writing has to say so.
+     */
+    from: window.from,
+    to: window.to,
+    days: window.days,
+    clipped: window.clipped,
     readersClub: org.name === org.nickname ? org.name : `${org.name} ${org.nickname}`,
     games: games.map((g) => ({
+      // Carried on every game, not just when the window is long: a model told
+      // the date of each result can run the piece in order without being asked
+      date: padDate(g.date) ?? g.date,
       away: g.away, awayRuns: g.awayRuns, home: g.home, homeRuns: g.homeRuns,
       // Only worth a mention when it was not nine
       innings: g.innings === 9 ? undefined : g.innings,
@@ -162,7 +259,7 @@ export function assembleDay(orgId: number) {
      * omission, and "the NL East was idle" is a fact the games table settles.
      */
     idleDivisions: [...standings.entries()]
-      .filter(([, clubs]) => clubs.every((c) => !c.playedToday))
+      .filter(([, clubs]) => clubs.every((c) => !c.played))
       .map(([name]) => name),
     /*
      * Anything the league did off the field on the day being written up. A
@@ -170,9 +267,14 @@ export function assembleDay(orgId: number) {
      * a deal is the biggest thing that can happen on a quiet day and it was
      * the one thing the recap could not see.
      */
-    transactions: recentTransactions(orgId, 40)
-      .filter((t) => t.date === date)
-      .map((t) => ({ kind: t.kind, what: t.plain, involvesTheReadersClub: t.yours })),
+    transactions: recentTransactions(orgId, Math.min(200, 40 * window.days))
+      .filter((t) => {
+        // Compared as keys rather than strings: OOTP writes dates unpadded, so
+        // "2027-5-9" and "2027-05-09" are the same day and never match as text
+        const key = dateKey(padDate(t.date) ?? '');
+        return key >= dateKey(window.from) && key <= dateKey(window.to);
+      })
+      .map((t) => ({ date: padDate(t.date) ?? t.date, kind: t.kind, what: t.plain, involvesTheReadersClub: t.yours })),
     leaders: seasonLeaders(org.league_id),
     /*
      * The bracket, once there is one. Null all season, and in October it is
@@ -328,7 +430,7 @@ export function usableSection(s: RecapSection): boolean {
 }
 
 async function generateRecap(orgId: number): Promise<RecapCache> {
-  const context = assembleDay(orgId);
+  const context = assembleWindow(orgId);
   const provider = activeProvider();
   const key = getApiKey(provider);
   if (!key) throw Object.assign(new Error('missing-api-key'), { status: 401 });
@@ -352,8 +454,16 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
       `the standings and the statistics are outcomes the simulation generated, and they do not ` +
       `correspond to real events. The names come from the game's database. Write about the ` +
       `simulated season only, entirely from the numbers provided.\n\n` +
-      `Write the morning recap of yesterday's action across the whole league, the way a wire ` +
-      `service would: one short paragraph per division, saying who won, what it did to the race, ` +
+      (context.days > 1
+        ? `This league sims several days between exports, so you are writing the week in review ` +
+          `rather than one morning's recap: the games below run from ${context.from} to ` +
+          `${context.to}, ${context.days} days of them, and every game carries the date it was ` +
+          `played. Write each division as the stretch it was — who went what over the week, where ` +
+          `the race moved, not a list of every score. Reach for a particular game only where it ` +
+          `decided something, and give its date when you do.\n\n`
+        : `Write the morning recap of yesterday's action across the whole league, the way a wire ` +
+          `service would.\n\n`) +
+      `One short paragraph per division, saying who won, what it did to the race, ` +
       `and where the clubs stand now. Name the score of a game you mention. Use the division names ` +
       `exactly as they appear in the data. Cover every division that had a game. The divisions named ` +
       `in idleDivisions had none at all — leave those out entirely rather than writing that ` +
@@ -366,9 +476,9 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
           `the standings are settled history now, and a recap that leads on them in October is ` +
           `reading the wrong month. Name the round as the data names it.\n\n`
         : '') +
-      `Where the transactions list is not empty, those are the day's deals — say what happened and ` +
-      `who it involves, and lead with one if it is the biggest thing that happened. Never invent a ` +
-      `deal that is not in that list.\n\n` +
+      `Where the transactions list is not empty, those are the deals of the period — say what ` +
+      `happened and who it involves, and lead with one if it is the biggest thing that happened. ` +
+      `Each carries its date. Never invent a deal that is not in that list.\n\n` +
       `Then a handful of one-sentence notes on the individual leaders — always with the figure, ` +
       `as in "Paul James hit his league-leading 30th home run". Every category carries ` +
       `sharedByCount: where it is above one, that many men are level at the top, and you must ` +
@@ -382,7 +492,8 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
       {
         role: 'user',
         content:
-          `Recap the games of ${context.date}, ${context.seasonYear} season. The reader manages the ` +
+          `Recap the games of ${context.days > 1 ? `${context.from} to ${context.to}` : context.date}, ` +
+          `${context.seasonYear} season. The reader manages the ` +
           `${context.readersClub}, so mention them where they played, but this is a league-wide ` +
           `recap and not a team page.\n\n${JSON.stringify(context, null, 1)}\n\nWrite the recap.`,
       },
@@ -426,6 +537,8 @@ async function generateRecap(orgId: number): Promise<RecapCache> {
   const cache: RecapCache = {
     generatedAt: new Date().toISOString(),
     gameDate: context.date,
+    from: context.from,
+    days: context.days,
     leagueName: context.league,
     recap: {
       summary: typeof parsed.summary === 'string' ? parsed.summary : '',

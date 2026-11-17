@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import { db } from '../server/db.js';
 import { ISSUE_SCHEMA, assembleIssue, composeIssue, storyFault, usableStory } from '../server/newspaper.js';
-import { assembleDay } from '../server/recap.js';
+import { assembleWindow } from '../server/recap.js';
 import { IDS } from './fixture.js';
 
 /**
@@ -46,7 +46,7 @@ beforeAll(() => {
 describe("the editor's desk", () => {
   it('reports the same day the recap does, from the same gatherer', () => {
     const issue = assembleIssue(IDS.mlbTeam);
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(issue.date).toBe(day.date);
     expect(issue.results).toEqual(day.games);
     expect(issue.standings).toEqual(day.standings);
@@ -64,7 +64,7 @@ describe("the editor's desk", () => {
   });
 
   it('carries the league rules, because this may not be the modern game', () => {
-    expect(assembleIssue(IDS.mlbTeam).leagueRules).toEqual(assembleDay(IDS.mlbTeam).leagueRules);
+    expect(assembleIssue(IDS.mlbTeam).leagueRules).toEqual(assembleWindow(IDS.mlbTeam).leagueRules);
   });
 });
 

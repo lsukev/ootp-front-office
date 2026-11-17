@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll } from 'vitest';
 import { db } from '../server/db.js';
 import request from './request.js';
-import { assembleDay, lastPlayedDate, sectionFault, usableSection } from '../server/recap.js';
+import { assembleWindow, lastPlayedDate, sectionFault, usableSection } from '../server/recap.js';
 import { IDS, SEASON } from './fixture.js';
 
 /**
@@ -72,7 +72,7 @@ describe('the day worth writing up', () => {
      * recap a fortnight-old day for half of every September and give no sign
      * of it, since the recap would be perfectly coherent — about the wrong day.
      */
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(day.date).toBe('2027-10-01');
     expect(day.games.length, 'picked up games from another day').toBe(1);
     expect(day.games[0].awayRuns).toBe(5);
@@ -81,7 +81,7 @@ describe('the day worth writing up', () => {
 
   it('leaves out exhibitions', async () => {
     // Same day, not league action; counting it would put a club in two games
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(day.games.map((g) => g.home)).not.toContain('Idle Nine');
   });
 });
@@ -89,7 +89,7 @@ describe('the day worth writing up', () => {
 describe('the tables behind the day', () => {
   it('names divisions as the league names them', async () => {
     // "In the NL East" has to have been told what the NL East is
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(Object.keys(day.standings).join(' ')).toMatch(/East Division/);
     expect(Object.keys(day.standings).join(' ')).toMatch(/West Division/);
   });
@@ -100,7 +100,7 @@ describe('the tables behind the day', () => {
      * vanishes from a recap reads as an omission, and whether anybody played
      * is something the games table settles.
      */
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(day.idleDivisions.join(' ')).toMatch(/West Division/);
     expect(day.idleDivisions.join(' '), 'the division that played was called idle')
       .not.toMatch(/East Division/);
@@ -143,7 +143,7 @@ describe('the league leaders', () => {
     bat.run(9811, SEASON, IDS.mlbTeam, IDS.league, 60, 1, 35);
     bat.run(9812, SEASON, IDS.mlbTeam, IDS.league, 4, 99, 20);
     try {
-      const leaders = assembleDay(IDS.mlbTeam).leaders as Record<string, {
+      const leaders = assembleWindow(IDS.mlbTeam).leaders as Record<string, {
         top: Array<{ name: string; value: number }>; sharedByCount: number;
       }>;
       expect(leaders.homeRuns.top[0].value).toBe(60);

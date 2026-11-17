@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../server/db.js';
 import { nextGames } from '../server/dashboard.js';
-import { assembleDay, lastPlayedDate } from '../server/recap.js';
+import { assembleWindow, lastPlayedDate } from '../server/recap.js';
 import { competitiveGamesSql, postseason, regularSeasonEnd } from '../server/postseason.js';
 import { IDS } from './fixture.js';
 
@@ -115,7 +115,7 @@ describe('the four things that stopped in October', () => {
   });
 
   it('writes up the postseason games played that day', () => {
-    const day = assembleDay(IDS.mlbTeam);
+    const day = assembleWindow(IDS.mlbTeam);
     expect(day.date).toBe('2027-10-03');
     expect(day.games.length).toBe(1);
     // runs0 is the away club's, which is OOTP's own order and not the obvious one
@@ -124,7 +124,7 @@ describe('the four things that stopped in October', () => {
   });
 
   it('gives the recap and the paper the bracket to write from', () => {
-    expect(assembleDay(IDS.mlbTeam).postseason).not.toBeNull();
+    expect(assembleWindow(IDS.mlbTeam).postseason).not.toBeNull();
   });
 });
 

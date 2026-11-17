@@ -2,15 +2,18 @@ import { FallbackNotice } from '../FallbackNotice';
 import { useJob } from '../useJob';
 import { type RecapCache } from '../api';
 import { PlayerNames } from '../PlayerNames';
+import { coveredShort } from '../coverage';
 
 /**
- * Yesterday, around the league.
+ * Lately, around the league.
  *
  * Every other page here is about the reader's own club. This is the morning
  * paper: who won, what it did to the races, and who is out in front of the
- * league in something. It covers the last day the league actually played
+ * league in something. It ends on the last day the league actually played
  * rather than the save's today, because a save exported mid-morning has not
- * played today's games yet.
+ * played today's games yet — and it begins where the reader's last export
+ * left off, so an online league simmed a week at a time gets the week rather
+ * than the seventh day of it.
  */
 export function LeagueRecap({ orgId }: { orgId: number }) {
   const { data, error, running: generating, start: generate } = useJob<RecapCache>(
@@ -26,8 +29,9 @@ export function LeagueRecap({ orgId }: { orgId: number }) {
           <h2 className="masthead-title">{data?.leagueName ?? 'League'} Recap</h2>
           <span className="muted">
             {recap && data?.gameDate
-              ? `Games of ${data.gameDate} · written ${new Date(data.generatedAt ?? '').toLocaleString()}`
-              : "Yesterday's games across the whole league, written up"}
+              ? `Games of ${coveredShort(data.gameDate, data.from, data.days)} · ` +
+                `written ${new Date(data.generatedAt ?? '').toLocaleString()}`
+              : 'Every game across the league since your last export, written up'}
           </span>
         </div>
         <button className="btn-feature" onClick={() => void generate()} disabled={generating}>
@@ -45,8 +49,8 @@ export function LeagueRecap({ orgId }: { orgId: number }) {
       */}
       {recap && data?.stale && !generating && (
         <div className="banner">
-          This covers {data.gameDate}. The league has played through {data.latestPlayed} since —
-          write a fresh one for the latest day.
+          This covers {coveredShort(data.gameDate, data.from, data.days)}. The league has played
+          through {data.latestPlayed} since — write a fresh one for the latest games.
         </div>
       )}
 

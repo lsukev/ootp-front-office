@@ -2,6 +2,7 @@ import { FallbackNotice } from '../FallbackNotice';
 import { useJob } from '../useJob';
 import { type IssueCache } from '../api';
 import { PlayerNames } from '../PlayerNames';
+import { coveredShort, coveredSpan } from '../coverage';
 
 /**
  * The league, as a paper.
@@ -15,17 +16,6 @@ import { PlayerNames } from '../PlayerNames';
  * The controls live outside the sheet. A real front page has no buttons on it,
  * and every one left inside it was the thing the eye went to first.
  */
-
-/** "2027-05-16" the way a paper prints it, and unpadded dates are OOTP's own. */
-function printDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  // Constructed as local rather than parsed as UTC — new Date('2027-05-16')
-  // is midnight GMT, which is the day before for anybody west of London
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-}
 
 export function Newspaper({ orgId }: { orgId: number }) {
   const { data, error, running: writing, start: write } = useJob<IssueCache>(
@@ -41,8 +31,9 @@ export function Newspaper({ orgId }: { orgId: number }) {
           <h2 className="masthead-title">The Paper</h2>
           <span className="muted">
             {issue && data?.gameDate
-              ? `Edition of ${data.gameDate} · set ${new Date(data.generatedAt ?? '').toLocaleString()}`
-              : 'A daily paper for your league, written from your save'}
+              ? `Edition of ${coveredShort(data.gameDate, data.from, data.days)} · ` +
+                `set ${new Date(data.generatedAt ?? '').toLocaleString()}`
+              : 'A paper for your league, written from your save'}
           </span>
         </div>
         <button className="btn-feature" onClick={() => void write()} disabled={writing}>
@@ -55,7 +46,7 @@ export function Newspaper({ orgId }: { orgId: number }) {
 
       {writing && (
         <p className="muted generating">
-          The desk is going through last night's results, the tables, the wire and the farm
+          The desk is going through the results, the tables, the wire and the farm
           reports. This runs on the server, so you can go elsewhere in the app — the edition will
           be here when you come back.
         </p>
@@ -83,7 +74,10 @@ export function Newspaper({ orgId }: { orgId: number }) {
             <h1 className="paper-name">{issue.masthead}</h1>
             <div className="folio">
               <span>{data?.leagueName ?? ''}</span>
-              <span className="folio-date">{data?.gameDate ? printDate(data.gameDate) : ''}</span>
+              {/* A week's worth of league reads "May 11 – Monday, May 17" on the
+                  folio, because that is what the edition is about. A league
+                  simmed a day at a time still reads as one date. */}
+              <span className="folio-date">{coveredSpan(data?.gameDate, data?.from, data?.days)}</span>
               <span>Front Office</span>
             </div>
           </header>
