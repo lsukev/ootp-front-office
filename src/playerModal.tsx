@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { apiDelete, apiGet, apiPost, getPlayer, type PlayerDossier } from './api';
 import { PlayerHover } from './playerHover';
 import { PlayerTrend } from './PlayerTrend';
-import { formatOverallPair, formatRatingPair, ratingFraction } from './ratingScale';
+import { formatOverallPair, formatRatingPair, overallHidden, ratingFraction } from './ratingScale';
 import { daysLong } from './injury';
 
 // Tiny pub/sub so any table cell can open the player card without prop drilling
@@ -261,7 +261,9 @@ function Dossier({ d }: { d: PlayerDossier }) {
           <WatchControls playerId={d.player_id} name={d.name} />
         </div>
         <div className="dossier-pcts">
-          {d.oaRating !== null && (
+          {/* Value and Talent carry this row on their own, so the card goes
+              rather than standing there labelled OA → POT with a dash in it. */}
+          {d.oaRating !== null && !overallHidden() && (
             <div className="card">
               <span className="card-label"><Tip label="OA → POT" tip={TIP_OA} /></span>
               <span className="card-value">{formatOverallPair(d.oaRating, d.potRating, ' → ')}</span>

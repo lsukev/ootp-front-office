@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { getPlayer, type PlayerDossier } from './api';
-import { formatRating } from './ratingScale';
+import { formatRating, overallHidden } from './ratingScale';
 import { daysShort } from './injury';
 
 /**
@@ -119,7 +119,13 @@ function Card({ id, anchor }: { id: number; anchor: DOMRect }) {
           {data.team && <div className="muted phover-team">{data.team}</div>}
 
           <div className="phover-grid">
-            {data.oaRating !== null && (
+            {/*
+              The hover fires on every name on every page, so a composite left
+              here is the one leak that undoes the setting everywhere at once.
+              The chip goes rather than reading "OA —": this grid is four short
+              facts, and a dash is not one of them.
+            */}
+            {data.oaRating !== null && !overallHidden() && (
               <span>
                 OA <b>{formatRating(data.oaRating)}</b>
                 {data.potRating !== null && data.potRating !== data.oaRating && (

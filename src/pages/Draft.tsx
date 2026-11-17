@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api';
 import { PlayerLink, Tip, TIP_CURPOT } from '../playerModal';
 import { Th } from '../Th';
-import { formatRating, formatRatingPair } from '../ratingScale';
+import { formatOverallPair, formatRating, overallHidden } from '../ratingScale';
 
 interface DraftProspect {
   player_id: number; name: string; age: number; positionName: string; bats: string; throws: string;
@@ -125,6 +125,18 @@ export function Draft({ orgId }: { orgId: number }) {
    */
   const [taken, setTaken] = useState<Set<number>>(new Set());
 
+  /*
+   * Leagues that play without the composite.
+   *
+   * This board is three quarters scouting grade — Cur, Pot, Upside, a ceiling
+   * filter and a default sort on potential — so honouring the setting here is
+   * not a matter of dashing one cell. The grades go, the controls that set a
+   * floor on them go, and the ordering falls back to the board's own rank.
+   * What stays is the ranking and the recommendation, which is the whole of
+   * what a reader with no grades came for.
+   */
+  const hidden = overallHidden();
+
   useEffect(() => {
     setData(null);
     setError(null);
@@ -187,11 +199,20 @@ export function Draft({ orgId }: { orgId: number }) {
       if (group !== 'all' && !GROUPS[group].includes(p.positionName)) return false;
       if (school !== 'all' && p.school !== school) return false;
       if (p.age > maxAge) return false;
-      if ((p.pot ?? 0) < minPot) return false;
+      if (!hidden && (p.pot ?? 0) < minPot) return false;
       return true;
     });
+    /*
+     * The board opens sorted by potential. With the grades hidden that is an
+     * order taken from a column nobody can see, so it falls back to the app's
+     * own ranking — low first, the way a rank reads.
+     */
+    const key = hidden && (sortKey === 'cur' || sortKey === 'pot' || sortKey === 'upside')
+      ? 'boardRank'
+      : sortKey;
+    const dir = key === sortKey ? sortDir : 1;
     const val = (p: DraftProspect): number | string => {
-      switch (sortKey) {
+      switch (key) {
         case 'name': return p.name;
         case 'age': return p.age;
         case 'pos': return p.positionName;
@@ -206,11 +227,11 @@ export function Draft({ orgId }: { orgId: number }) {
       const x = val(a);
       const y = val(b);
       if (typeof x === 'string' || typeof y === 'string') {
-        return sortDir * String(x).localeCompare(String(y));
+        return dir * String(x).localeCompare(String(y));
       }
-      return sortDir * (x - y);
+      return dir * (x - y);
     });
-  }, [data, q, group, school, maxAge, minPot, sortKey, sortDir]);
+  }, [data, q, group, school, maxAge, minPot, sortKey, sortDir, hidden]);
 
   /**
    * A short list to actually act on. Best available is the honest first answer;
@@ -296,7 +317,7 @@ export function Draft({ orgId }: { orgId: number }) {
                     <td className="num muted">{p.boardRank}</td>
                     <td className="name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
                     <td>{p.positionName}</td>
-                    <td className="num">{formatRatingPair(p.cur, p.pot)}</td>
+                    <td className="num">{formatOverallPair(p.cur, p.pot)}</td>
                     <td className="muted">{p.recommendation?.label ?? ''}</td>
                   </tr>
                 ))}
@@ -315,7 +336,7 @@ export function Draft({ orgId }: { orgId: number }) {
                       <td className="num muted">{p.boardRank}</td>
                       <td className="name"><PlayerLink id={p.player_id}>{p.name}</PlayerLink></td>
                       <td>{p.positionName}</td>
-                      <td className="num">{formatRatingPair(p.cur, p.pot)}</td>
+                      <td className="num">{formatOverallPair(p.cur, p.pot)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -375,14 +396,16 @@ export function Draft({ orgId }: { orgId: number }) {
             onChange={(e) => { setMaxAge(Number(e.target.value) || 30); setLimit(PAGE); }}
           />
         </label>
-        <label className="muted">
-          Ceiling ≥{' '}
-          <input
-            type="number" min={0} max={80} step={5} value={minPot}
-            onChange={(e) => { setMinPot(Number(e.target.value) || 0); setLimit(PAGE); }}
-          />
-        </label>
-        {(q || group !== 'all' || school !== 'all' || maxAge !== 30 || minPot !== 0) && (
+        {!hidden && (
+          <label className="muted">
+            Ceiling ≥{' '}
+            <input
+              type="number" min={0} max={80} step={5} value={minPot}
+              onChange={(e) => { setMinPot(Number(e.target.value) || 0); setLimit(PAGE); }}
+            />
+          </label>
+        )}
+        {(q || group !== 'all' || school !== 'all' || maxAge !== 30 || (!hidden && minPot !== 0)) && (
           <button
             className="link-button"
             onClick={() => { setQ(''); setGroup('all'); setSchool('all'); setMaxAge(30); setMinPot(0); setLimit(PAGE); }}
@@ -411,17 +434,24 @@ export function Draft({ orgId }: { orgId: number }) {
             <th onClick={() => setSort('pos')}>Pos{arrow('pos')}</th>
             <Th>B/T</Th>
             <th onClick={() => setSort('school')}>From{arrow('school')}</th>
-            <th className="num" onClick={() => setSort('cur')}>Cur{arrow('cur')}</th>
-            <th className="num" onClick={() => setSort('pot')}>
-              <Tip label="Pot" tip={TIP_CURPOT} />{arrow('pot')}
-            </th>
-            <th className="num" onClick={() => setSort('upside')}>
-              <Tip
-                label="Upside"
-                tip="Ceiling minus current ability — how much of the projection has yet to happen. A big number is upside and risk in the same breath."
-              />
-              {arrow('upside')}
-            </th>
+            {/* Upside is the ceiling minus the current grade, so it goes with
+                them: showing the gap between two numbers nobody can see is
+                still printing the scouting report. */}
+            {!hidden && (
+              <>
+                <th className="num" onClick={() => setSort('cur')}>Cur{arrow('cur')}</th>
+                <th className="num" onClick={() => setSort('pot')}>
+                  <Tip label="Pot" tip={TIP_CURPOT} />{arrow('pot')}
+                </th>
+                <th className="num" onClick={() => setSort('upside')}>
+                  <Tip
+                    label="Upside"
+                    tip="Ceiling minus current ability — how much of the projection has yet to happen. A big number is upside and risk in the same breath."
+                  />
+                  {arrow('upside')}
+                </th>
+              </>
+            )}
             <Th>Read</Th>
           </tr>
         </thead>
@@ -443,14 +473,18 @@ export function Draft({ orgId }: { orgId: number }) {
               <td>{p.positionName}</td>
               <td>{p.bats}/{p.throws}</td>
               <td>{p.school}</td>
-              <td className="num">{formatRating(p.cur)}</td>
-              <td className="num">{formatRating(p.pot)}</td>
-              <td className="num">{p.upside === null ? '' : `+${p.upside}`}</td>
+              {!hidden && (
+                <>
+                  <td className="num">{formatRating(p.cur)}</td>
+                  <td className="num">{formatRating(p.pot)}</td>
+                  <td className="num">{p.upside === null ? '' : `+${p.upside}`}</td>
+                </>
+              )}
               <td className="muted">{p.recommendation?.label ?? ''}</td>
             </tr>
           ))}
           {shown.length === 0 && (
-            <tr><td colSpan={10} className="muted">Nothing matches those filters.</td></tr>
+            <tr><td colSpan={hidden ? 8 : 11} className="muted">Nothing matches those filters.</td></tr>
           )}
         </tbody>
       </table>
